@@ -1,4 +1,4 @@
-# AICO-001 — Complete task management core
+# AICO-001 - Complete task management core
 
 ## Metadata
 
@@ -108,7 +108,7 @@ git diff
 
 ## Evidence
 
-- 2026-09-22T17:00:00Z — Initial scripts and task documentation added directly to GitHub.
+- 2026-09-22T17:00:00Z - Initial scripts and task documentation added directly to GitHub.
 
 ---
 
@@ -127,7 +127,7 @@ Next agent: engineering-manager
 
 ## Transition Log
 
-- 2026-09-22T17:00:00Z — SYSTEM — CREATED — Task created in ACTIVE because implementation had already started with user authorization.
+- 2026-09-22T17:00:00Z - SYSTEM - CREATED - Task created in ACTIVE because implementation had already started with user authorization.
 
 ---
 
