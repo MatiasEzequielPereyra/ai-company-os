@@ -13,7 +13,8 @@ $tests = @(
     "test-review-engine.ps1",
     "test-final-gates.ps1",
     "test-dependency-refresh.ps1",
-    "test-orchestrator.ps1"
+    "test-orchestrator.ps1",
+    "test-agent-runtime-contract.ps1"
 )
 
 $results = @()
