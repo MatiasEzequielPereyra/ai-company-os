@@ -108,11 +108,12 @@ elseif ($Status -eq "BLOCKED") {
     $content = Replace-LineValue -Content $content -Key "Workflow phase" -Value "BLOCKED"
 }
 
-$logLine = "$now — $Actor — $currentStatus -> $Status — $Reason"
+$logLine = "$now - $Actor - $currentStatus -> $Status - $Reason"
 $content = Append-SectionLine -Content $content -Section "Transition Log" -Line $logLine
 
 if (-not [string]::IsNullOrWhiteSpace($Evidence)) {
-    $content = Append-SectionLine -Content $content -Section "Evidence" -Line "$now — $Evidence"
+    $evidenceLine = "$now - $Evidence"
+    $content = Append-SectionLine -Content $content -Section "Evidence" -Line $evidenceLine
 }
 
 Set-Content -Path $filePath -Value $content -Encoding UTF8
