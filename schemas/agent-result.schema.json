@@ -1,0 +1,37 @@
+{
+  "type": "object",
+  "properties": {
+    "outcome": {
+      "type": "string",
+      "enum": ["COMPLETED", "BLOCKED"]
+    },
+    "summary": {
+      "type": "string"
+    },
+    "report_markdown": {
+      "type": "string"
+    },
+    "verification": {
+      "type": "string"
+    },
+    "decisions": {
+      "type": "string"
+    },
+    "blockers": {
+      "type": "string"
+    },
+    "recommended_next": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "outcome",
+    "summary",
+    "report_markdown",
+    "verification",
+    "decisions",
+    "blockers",
+    "recommended_next"
+  ],
+  "additionalProperties": false
+}
