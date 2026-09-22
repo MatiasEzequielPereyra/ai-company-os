@@ -109,20 +109,24 @@ $args = @("exec","--sandbox","read-only","--output-schema",$schemaPath,"-o",$jso
 if (-not [string]::IsNullOrWhiteSpace($Model)) {
     $args += @("--model",$Model)
 }
-$args += $prompt
+# Explicit stdin prompt sentinel avoids Codex CLI hanging in non-TTY Windows automation.
+$args += "-"
 
 Write-Host "Running agent: $owner -> $Id" -ForegroundColor Cyan
 Push-Location $root
 try {
-    $codexOutput = @(& codex @args 2>&1)
-    $exitCode = $LASTEXITCODE
+    $codexOutput = New-Object System.Collections.Generic.List[string]
 
-    foreach ($line in $codexOutput) {
+    $prompt | & codex @args 2>&1 | ForEach-Object {
+        $line = $_.ToString()
+        [void]$codexOutput.Add($line)
         Write-Host $line
     }
 
+    $exitCode = $LASTEXITCODE
+
     if ($exitCode -ne 0) {
-        $joinedOutput = ($codexOutput | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+        $joinedOutput = ($codexOutput.ToArray()) -join [Environment]::NewLine
 
         if ($joinedOutput -match "(?i)usage limit|hit your usage limit|purchase more credits|try again at") {
             if ($effectiveAuth -eq "ChatGPT") {
