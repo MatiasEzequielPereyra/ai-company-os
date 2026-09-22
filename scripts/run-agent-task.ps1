@@ -51,37 +51,38 @@ New-Item -ItemType Directory -Force -Path $reportsDir | Out-Null
 $jsonPath = Join-Path $runtimeDir ($Id + "-result.json")
 $reportPath = Join-Path $reportsDir ($Id + ".md")
 
-$prompt = @("
-"You are executing an AI Company OS task inside this repository.",
-"",
-"Role: $owner",
-"Task: $Id",
-"",
-"Read and obey these repository files before doing the task:",
-"- AGENTS.md",
-"- .codex/agents/$owner.md",
-"- tasks/$Id.md",
-"- docs/engineering/dispatch/$Id.md",
-"- .codex/state/current-sprint.md",
-"- docs/engineering/project-intake.md",
-"- docs/product/product-intake.md",
-"- docs/architecture/architecture-intake.md",
-"- docs/operations/operations-intake.md",
-"",
-"This execution is AUDIT/ANALYSIS ONLY.",
-"Do not edit, create, delete, rename or format project files.",
-"Do not run destructive commands.",
-"Do not change Git state.",
-"Inspect the repository deeply enough to support your role-owned conclusions.",
-"Separate verified evidence from assumptions.",
-"Reference concrete repository-relative files and relevant symbols where useful.",
-"If required evidence is unavailable, return BLOCKED rather than inventing it.",
-"",
-"The report_markdown field must contain the complete role report, with findings, evidence, risks and recommended actions.",
-"The summary field should be concise.",
-"The changed_artifacts concept is NONE because this execution is read-only.",
-"Return only the structured result required by the supplied JSON schema."
-") -join [Environment]::NewLine
+$promptLines = @(
+    "You are executing an AI Company OS task inside this repository.",
+    "",
+    "Role: $owner",
+    "Task: $Id",
+    "",
+    "Read and obey these repository files before doing the task:",
+    "- AGENTS.md",
+    "- .codex/agents/$owner.md",
+    "- tasks/$Id.md",
+    "- docs/engineering/dispatch/$Id.md",
+    "- .codex/state/current-sprint.md",
+    "- docs/engineering/project-intake.md",
+    "- docs/product/product-intake.md",
+    "- docs/architecture/architecture-intake.md",
+    "- docs/operations/operations-intake.md",
+    "",
+    "This execution is AUDIT/ANALYSIS ONLY.",
+    "Do not edit, create, delete, rename or format project files.",
+    "Do not run destructive commands.",
+    "Do not change Git state.",
+    "Inspect the repository deeply enough to support your role-owned conclusions.",
+    "Separate verified evidence from assumptions.",
+    "Reference concrete repository-relative files and relevant symbols where useful.",
+    "If required evidence is unavailable, return BLOCKED rather than inventing it.",
+    "",
+    "The report_markdown field must contain the complete role report, with findings, evidence, risks and recommended actions.",
+    "The summary field should be concise.",
+    "The changed_artifacts concept is NONE because this execution is read-only.",
+    "Return only the structured result required by the supplied JSON schema."
+)
+$prompt = $promptLines -join [Environment]::NewLine
 
 $args = @("exec","--sandbox","read-only","--output-schema",$schemaPath,"-o",$jsonPath)
 if (-not [string]::IsNullOrWhiteSpace($Model)) {
