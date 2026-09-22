@@ -98,6 +98,32 @@ try {
         }
     }
 
+
+    $tasksByOwner = @{}
+    foreach ($task in $tasks) {
+        $taskContent = Get-Content $task.FullName -Raw
+        $owner = Read-Field $taskContent "Owner"
+        $tasksByOwner[$owner] = @{
+            Id = Read-Field $taskContent "ID"
+            Content = $taskContent
+        }
+    }
+
+    foreach ($parallelOwner in @("pm","cto","qa","security","devops")) {
+        $parallelContent = $tasksByOwner[$parallelOwner].Content
+        if ($parallelContent -match '(?ms)^## Dependencies\s*\r?\n\s*\r?\n-\s+AICO-') {
+            throw "AUDIT task should be parallel and dependency-free: $parallelOwner"
+        }
+    }
+
+    $emContent = $tasksByOwner["engineering-manager"].Content
+    foreach ($dependencyOwner in @("pm","cto","qa","security","devops")) {
+        $dependencyId = $tasksByOwner[$dependencyOwner].Id
+        if ($emContent -notmatch [regex]::Escape("- " + $dependencyId)) {
+            throw "Engineering Manager audit task missing dependency: $dependencyOwner ($dependencyId)"
+        }
+    }
+
     Write-Host "PASS: planning engine smoke test" -ForegroundColor Green
 }
 finally {
