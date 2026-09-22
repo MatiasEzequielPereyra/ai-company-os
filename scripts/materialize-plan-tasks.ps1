@@ -176,7 +176,14 @@ if ($existingForRequest.Count -gt 0) {
 $created = @()
 $taskByRole = @{}
 
-foreach ($role in $roles) {
+if ($type -eq "AUDIT") {
+    $orderedRoles = @("pm","cto","qa","security","devops","engineering-manager") | Where-Object { $roles -contains $_ }
+}
+else {
+    $orderedRoles = $roles
+}
+
+foreach ($role in $orderedRoles) {
     $title = switch ($role) {
         "pm" { "Define product scope for $WorkRequestId" }
         "cto" { "Define technical architecture for $WorkRequestId" }
