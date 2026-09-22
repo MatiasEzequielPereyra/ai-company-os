@@ -2,7 +2,9 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Id,
     [string]$ProjectPath = ".",
-    [string]$Model = ""
+    [string]$Model = "",
+    [ValidateSet("Auto","ChatGPT","ApiKey")]
+    [string]$AuthMode = "Auto"
 )
 
 $ErrorActionPreference = "Stop"
@@ -84,6 +86,25 @@ $promptLines = @(
 )
 $prompt = $promptLines -join [Environment]::NewLine
 
+$effectiveAuth = "ChatGPT"
+$savedApiKey = $env:CODEX_API_KEY
+
+if ($AuthMode -eq "ApiKey") {
+    if ([string]::IsNullOrWhiteSpace($env:CODEX_API_KEY)) {
+        throw "AuthMode ApiKey requires CODEX_API_KEY to be set in the environment."
+    }
+    $effectiveAuth = "ApiKey"
+}
+elseif ($AuthMode -eq "ChatGPT") {
+    $env:CODEX_API_KEY = $null
+    $effectiveAuth = "ChatGPT"
+}
+elseif (-not [string]::IsNullOrWhiteSpace($env:CODEX_API_KEY)) {
+    $effectiveAuth = "ApiKey"
+}
+
+Write-Host "Codex authentication: $effectiveAuth" -ForegroundColor DarkGray
+
 $args = @("exec","--sandbox","read-only","--output-schema",$schemaPath,"-o",$jsonPath)
 if (-not [string]::IsNullOrWhiteSpace($Model)) {
     $args += @("--model",$Model)
@@ -93,10 +114,30 @@ $args += $prompt
 Write-Host "Running agent: $owner -> $Id" -ForegroundColor Cyan
 Push-Location $root
 try {
-    & codex @args
-    if ($LASTEXITCODE -ne 0) { throw "Codex exec failed with exit code $LASTEXITCODE" }
+    $codexOutput = @(& codex @args 2>&1)
+    $exitCode = $LASTEXITCODE
+
+    foreach ($line in $codexOutput) {
+        Write-Host $line
+    }
+
+    if ($exitCode -ne 0) {
+        $joinedOutput = ($codexOutput | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine
+
+        if ($joinedOutput -match "(?i)usage limit|hit your usage limit|purchase more credits|try again at") {
+            if ($effectiveAuth -eq "ChatGPT") {
+                throw "Codex ChatGPT usage limit reached. Wait for the displayed reset, add eligible Codex credits, or set CODEX_API_KEY and re-run with -AuthMode ApiKey."
+            }
+            throw "Codex API execution was rejected for usage/billing. Check the API project billing, limits and CODEX_API_KEY."
+        }
+
+        throw "Codex exec failed with exit code $exitCode"
+    }
 }
 finally {
+    if ($AuthMode -eq "ChatGPT") {
+        $env:CODEX_API_KEY = $savedApiKey
+    }
     Pop-Location
 }
 
