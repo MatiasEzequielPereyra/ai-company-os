@@ -40,8 +40,33 @@ try {
     $owners = @()
     foreach ($task in $tasks) {
         $taskContent = Get-Content $task.FullName -Raw
-        if ($taskContent -notmatch "(?m)^Status:\s*BACKLOG$") { throw "Materialized task is not BACKLOG: $($task.Name)" }
-        if ($taskContent -match "(?m)^Owner:\s*(.+)$") { $owners += $Matches[1].Trim() }
+        $taskStatus = "UNKNOWN"
+        if ($taskContent -match '(?m)^Status:\s*(.+)
+    }
+    foreach ($owner in @("pm","cto","engineering-manager","qa","security","devops")) {
+        if ($owners -notcontains $owner) { throw "Missing materialized owner: $owner" }
+    }
+
+    Write-Host "PASS: planning engine smoke test" -ForegroundColor Green
+}
+finally {
+    if (Test-Path $tempRoot) { Remove-Item $tempRoot -Recurse -Force }
+}
+) { $taskStatus = $Matches[1].Trim() }
+        if ($taskStatus -ne "BACKLOG") { throw "Materialized task is not BACKLOG: $($task.Name) ($taskStatus)" }
+
+        if ($taskContent -match '(?m)^Owner:\s*(.+)
+    }
+    foreach ($owner in @("pm","cto","engineering-manager","qa","security","devops")) {
+        if ($owners -notcontains $owner) { throw "Missing materialized owner: $owner" }
+    }
+
+    Write-Host "PASS: planning engine smoke test" -ForegroundColor Green
+}
+finally {
+    if (Test-Path $tempRoot) { Remove-Item $tempRoot -Recurse -Force }
+}
+) { $owners += $Matches[1].Trim() }
     }
     foreach ($owner in @("pm","cto","engineering-manager","qa","security","devops")) {
         if ($owners -notcontains $owner) { throw "Missing materialized owner: $owner" }
