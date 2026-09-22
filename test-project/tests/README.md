@@ -20,3 +20,14 @@ The intake smoke test creates an isolated temporary Node/Vite/React/Supabase fix
 - Engineering task delegation
 - Review, QA and security gates
 - End-to-end execution
+
+
+## Run the full smoke suite
+
+From the repository root:
+
+```powershell
+.\test-project\tests\run-all-smoke-tests.ps1
+```
+
+The runner executes the PowerShell smoke tests in lifecycle order, stops on the first failure, and prints a final pass/fail summary.
