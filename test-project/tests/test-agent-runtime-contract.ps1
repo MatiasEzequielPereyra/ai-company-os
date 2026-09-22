@@ -36,4 +36,25 @@ if ($runner -notmatch 'submit-task-result\.ps1') {
     throw "Agent runner must feed the Result Intake Engine"
 }
 
+
+$parseErrors = $null
+[void][System.Management.Automation.Language.Parser]::ParseFile(
+    (Join-Path $repoRoot "scripts\run-agent-task.ps1"),
+    [ref]$null,
+    [ref]$parseErrors
+)
+if ($parseErrors.Count -gt 0) {
+    throw ("run-agent-task.ps1 has PowerShell parse errors: " + (($parseErrors | ForEach-Object { $_.Message }) -join "; "))
+}
+
+$parseErrors = $null
+[void][System.Management.Automation.Language.Parser]::ParseFile(
+    (Join-Path $repoRoot "scripts\run-active-agents.ps1"),
+    [ref]$null,
+    [ref]$parseErrors
+)
+if ($parseErrors.Count -gt 0) {
+    throw ("run-active-agents.ps1 has PowerShell parse errors: " + (($parseErrors | ForEach-Object { $_.Message }) -join "; "))
+}
+
 Write-Host "PASS: agent runtime contract test" -ForegroundColor Green
