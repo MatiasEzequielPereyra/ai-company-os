@@ -1,40 +1,36 @@
 # Current Sprint
 
-Generated: 2026-09-22T17:00:00Z
+Generated: 2026-09-22T17:26:39Z
 
 ## Sprint Goal
 
 Complete the AI Company OS task management core and make project work persistent.
 
-## Start Date
-
-2026-09-22
-
-## End Date
-
--
-
 ## Priorities
 
 ### P0
 
--
+
 
 ### P1
 
-- AICO-001 [ACTIVE/P1] AICO-001 — Complete task management core — Owner: engineering-manager
+
 
 ### P2
 
--
+
+
+### P3
+
+
 
 ## Active Work
 
-- AICO-001 [ACTIVE/P1] AICO-001 — Complete task management core — Owner: engineering-manager
+-
 
 ## Completed Work
 
--
+- AICO-001 [DONE/P1] AICO-001 ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â Complete task management core - Owner: engineering-manager
 
 ## Blocked Work
 
@@ -46,11 +42,10 @@ Complete the AI Company OS task management core and make project work persistent
 
 ## Decisions
 
-- Use flat `tasks/*.md` files. The `Status:` field is the source of truth.
+- Use flat tasks/*.md files. The Status field is the source of truth.
 - Keep transition history inside each task.
-- Do not rely on empty status folders because Git does not persist empty directories.
 
 ## Risks
 
 - Scripts are filesystem-based and should be run from the repository root.
-- Local PowerShell smoke test still needs to be run after pulling the latest `main`.
+- Manual edits can break metadata if required fields are removed.
