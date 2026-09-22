@@ -60,6 +60,10 @@ $lines = @(
 "",
 (Format-TaskLines ($tasks | Where-Object { $_.Priority -eq "P2" -and $_.Status -ne "DONE" })),
 "",
+"### P3",
+"",
+(Format-TaskLines ($tasks | Where-Object { $_.Priority -eq "P3" -and $_.Status -ne "DONE" })),
+"",
 "## Active Work",
 "",
 (Format-TaskLines $active),
@@ -90,6 +94,6 @@ $lines = @(
 $content = $lines -join [Environment]::NewLine
 $dir = Split-Path -Parent $SprintPath
 if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
-Set-Content -Path $SprintPath -Value $content -Encoding UTF8
+[System.IO.File]::WriteAllText($SprintPath, $content, (New-Object System.Text.UTF8Encoding($false)))
 Write-Host "Company sprint state synced:" -ForegroundColor Green
 Write-Host $SprintPath
