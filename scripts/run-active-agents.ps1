@@ -1,7 +1,9 @@
 param(
     [string]$ProjectPath = ".",
     [switch]$Parallel,
-    [string]$Model = ""
+    [string]$Model = "",
+    [ValidateSet("Auto","ChatGPT","ApiKey")]
+    [string]$AuthMode = "Auto"
 )
 
 $ErrorActionPreference = "Stop"
@@ -40,7 +42,7 @@ $active | Sort-Object ID | Format-Table ID, Owner -AutoSize
 
 if (-not $Parallel) {
     foreach ($task in ($active | Sort-Object ID)) {
-        & $runner -ProjectPath $root -Id $task.ID -Model $Model
+        & $runner -ProjectPath $root -Id $task.ID -Model $Model -AuthMode $AuthMode
     }
 }
 else {
@@ -48,9 +50,9 @@ else {
 
     foreach ($task in ($active | Sort-Object ID)) {
         $id = $task.ID
-        $jobs += Start-Job -Name $id -ArgumentList $runner,$root,$id,$Model -ScriptBlock {
-            param($runnerPath,$projectRoot,$taskId,$modelName)
-            & $runnerPath -ProjectPath $projectRoot -Id $taskId -Model $modelName
+        $jobs += Start-Job -Name $id -ArgumentList $runner,$root,$id,$Model,$AuthMode -ScriptBlock {
+            param($runnerPath,$projectRoot,$taskId,$modelName,$authModeName)
+            & $runnerPath -ProjectPath $projectRoot -Id $taskId -Model $modelName -AuthMode $authModeName
         }
     }
 
