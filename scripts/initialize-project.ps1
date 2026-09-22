@@ -100,6 +100,126 @@ function Format-Items {
     return (($a | ForEach-Object { "- " + $_ }) -join [Environment]::NewLine)
 }
 
+
+$readmePath = Join-Path $resolved "README.md"
+$readmeExcerpt = "-"
+if (Test-Path $readmePath) {
+    try {
+        $readmeRaw = Get-Content $readmePath -Raw
+        if ($readmeRaw.Length -gt 4000) { $readmeExcerpt = $readmeRaw.Substring(0, 4000) } else { $readmeExcerpt = $readmeRaw }
+    }
+    catch {
+        $readmeExcerpt = "README could not be read."
+    }
+}
+
+$evidenceDocs = Get-RelativeList $resolved @(
+    "README.md",
+    "docs/PROJECT-BRIEF.md",
+    "docs/product/product-context.md",
+    "docs/architecture/architecture-context.md",
+    "docs/engineering/engineering-context.md",
+    "docs/operations/operations-context.md",
+    "AGENTS.md"
+)
+
+$opsSignals = Get-RelativeList $resolved @(
+    ".github/workflows",
+    "vercel.json",
+    "Dockerfile",
+    "docker-compose.yml",
+    "docker-compose.yaml",
+    "supabase",
+    ".env.example",
+    ".env.local.example"
+)
+
+$productDir = Join-Path $docsDir "product"
+$architectureDir = Join-Path $docsDir "architecture"
+$operationsDir = Join-Path $docsDir "operations"
+foreach ($dirPath in @($productDir, $architectureDir, $operationsDir)) {
+    if (-not (Test-Path $dirPath)) { New-Item -ItemType Directory -Force -Path $dirPath | Out-Null }
+}
+
+$productIntakePath = Join-Path $productDir "product-intake.md"
+$productLines = @(
+    "# Product Intake",
+    "",
+    "Generated: $now",
+    "",
+    "## Evidence Sources",
+    "",
+    (Format-Items $evidenceDocs),
+    "",
+    "## README Evidence",
+    "",
+    "The following content is source evidence and is not automatically approved product scope.",
+    "",
+    $readmeExcerpt,
+    "",
+    "## PM Review Required",
+    "",
+    "- Confirm product vision and target users.",
+    "- Separate confirmed requirements from assumptions.",
+    "- Define scope, non-goals and acceptance criteria.",
+    "- Record unresolved product questions.",
+    "- Update canonical product documentation after validation."
+)
+Write-Utf8NoBom $productIntakePath ($productLines -join [Environment]::NewLine)
+
+$architectureIntakePath = Join-Path $architectureDir "architecture-intake.md"
+$architectureLines = @(
+    "# Architecture Intake",
+    "",
+    "Generated: $now",
+    "",
+    "## Detected Languages",
+    "",
+    (Format-Items $languages),
+    "",
+    "## Detected Frameworks and Services",
+    "",
+    (Format-Items $frameworks),
+    "",
+    "## Repository Structure",
+    "",
+    (Format-Items $structure),
+    "",
+    "## CTO Review Required",
+    "",
+    "- Validate architecture style and component boundaries.",
+    "- Confirm database, authentication and external service boundaries.",
+    "- Identify scalability, reliability and migration risks.",
+    "- Record architecture decisions in canonical architecture docs or ADRs.",
+    "- Treat all automated detections as evidence, not decisions."
+)
+Write-Utf8NoBom $architectureIntakePath ($architectureLines -join [Environment]::NewLine)
+
+$operationsIntakePath = Join-Path $operationsDir "operations-intake.md"
+$operationsLines = @(
+    "# Operations Intake",
+    "",
+    "Generated: $now",
+    "",
+    "## Detected Operational Signals",
+    "",
+    (Format-Items $opsSignals),
+    "",
+    "## Git",
+    "",
+    "Branch: $branch",
+    "Commit: $commit",
+    "Origin: $remote",
+    "",
+    "## Operations Review Required",
+    "",
+    "- Identify deployment environments and CI/CD.",
+    "- Confirm secret-management mechanisms without recording secret values.",
+    "- Identify monitoring, logging, backup and rollback requirements.",
+    "- Validate release and migration procedures before production work."
+)
+Write-Utf8NoBom $operationsIntakePath ($operationsLines -join [Environment]::NewLine)
+
 $intakePath = Join-Path $engineeringDir "project-intake.md"
 $lines = @(
     "# Project Intake",
@@ -157,6 +277,9 @@ Write-Utf8NoBom $intakePath ($lines -join [Environment]::NewLine)
 
 Write-Host ""
 Write-Host "[OK] Project intake generated" -ForegroundColor Green
+Write-Host "[OK] Product intake generated" -ForegroundColor Green
+Write-Host "[OK] Architecture intake generated" -ForegroundColor Green
+Write-Host "[OK] Operations intake generated" -ForegroundColor Green
 Write-Host $intakePath
 Write-Host ""
 Write-Host "Detected languages: $($languages -join ', ')"
