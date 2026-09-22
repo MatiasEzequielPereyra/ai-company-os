@@ -48,19 +48,44 @@
 # lint
 
 # build
-Code Organization
-Coding Conventions
-Git Conventions
-Branch Strategy
-Pull Request Strategy
-Testing Strategy
-Known Technical Debt
-Common Failure Modes
-Engineering Decisions
-Last Updated
+```
 
----
+## Code Organization
 
-# 5. Memoria de operaciones
+-
 
-```powershell
+## Coding Conventions
+
+-
+
+## Git Conventions
+
+-
+
+## Branch Strategy
+
+-
+
+## Pull Request Strategy
+
+-
+
+## Testing Strategy
+
+-
+
+## Known Technical Debt
+
+-
+
+## Common Failure Modes
+
+-
+
+## Engineering Decisions
+
+-
+
+## Last Updated
+
+-
