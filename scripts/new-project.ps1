@@ -145,7 +145,8 @@ $ScriptFiles = @(
     "sync-company-state.ps1",
     "new-work-request.ps1",
     "generate-plan.ps1",
-    "materialize-plan-tasks.ps1"
+    "materialize-plan-tasks.ps1",
+    "evaluate-readiness.ps1"
 )
 
 foreach ($ScriptFile in $ScriptFiles) {
