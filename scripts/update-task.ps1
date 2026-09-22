@@ -2,9 +2,6 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Id,
 
-    [ValidateSet("BACKLOG", "READY", "ACTIVE", "REVIEW", "QA", "SECURITY", "DONE", "BLOCKED")]
-    [string]$Status,
-
     [ValidateSet("P0", "P1", "P2", "P3")]
     [string]$Priority,
 
@@ -75,9 +72,6 @@ if (-not (Test-Path $filePath)) {
 $now = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 $content = Get-Content -Path $filePath -Raw
 
-if ($PSBoundParameters.ContainsKey("Status")) {
-    $content = Replace-LineValue -Content $content -Key "Status" -Value $Status
-}
 
 if ($PSBoundParameters.ContainsKey("Priority")) {
     $content = Replace-LineValue -Content $content -Key "Priority" -Value $Priority
@@ -90,25 +84,25 @@ if ($PSBoundParameters.ContainsKey("Owner")) {
 $content = Replace-LineValue -Content $content -Key "Updated" -Value $now
 
 if ($PSBoundParameters.ContainsKey("Note")) {
-    $content = Append-SectionLine -Content $content -Section "Notes" -Line "$now — $Note"
+    $content = Append-SectionLine -Content $content -Section "Notes" -Line "$now - $Note"
 }
 
 if ($PSBoundParameters.ContainsKey("Evidence")) {
-    $content = Append-SectionLine -Content $content -Section "Evidence" -Line "$now — $Evidence"
+    $content = Append-SectionLine -Content $content -Section "Evidence" -Line "$now - $Evidence"
 }
 
 $summaryParts = @()
-if ($PSBoundParameters.ContainsKey("Status")) { $summaryParts += "Status=$Status" }
+
 if ($PSBoundParameters.ContainsKey("Priority")) { $summaryParts += "Priority=$Priority" }
 if ($PSBoundParameters.ContainsKey("Owner")) { $summaryParts += "Owner=$Owner" }
 if ($PSBoundParameters.ContainsKey("Note")) { $summaryParts += "Note added" }
 if ($PSBoundParameters.ContainsKey("Evidence")) { $summaryParts += "Evidence added" }
 
 if ($summaryParts.Count -gt 0) {
-    $content = Append-SectionLine -Content $content -Section "Transition Log" -Line "$now — SYSTEM — UPDATED — $($summaryParts -join '; ')."
+    $content = Append-SectionLine -Content $content -Section "Transition Log" -Line "$now - SYSTEM - UPDATED - $($summaryParts -join '; ')."
 }
 
-Set-Content -Path $filePath -Value $content -Encoding UTF8
+[System.IO.File]::WriteAllText($filePath, $content, (New-Object System.Text.UTF8Encoding($false)))
 
 Write-Host "Task updated:" -ForegroundColor Green
 Write-Host $filePath
