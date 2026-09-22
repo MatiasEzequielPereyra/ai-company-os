@@ -116,7 +116,7 @@ if (-not [string]::IsNullOrWhiteSpace($Evidence)) {
     $content = Append-SectionLine -Content $content -Section "Evidence" -Line $evidenceLine
 }
 
-Set-Content -Path $filePath -Value $content -Encoding UTF8
+[System.IO.File]::WriteAllText($filePath, $content, (New-Object System.Text.UTF8Encoding($false)))
 
 Write-Host "Task advanced:" -ForegroundColor Green
 Write-Host "${Id}: $currentStatus -> $Status"
