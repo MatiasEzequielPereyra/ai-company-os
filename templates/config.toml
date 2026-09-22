@@ -1,0 +1,96 @@
+# ============================================================
+# AI COMPANY OS
+# Codex Project Configuration
+# ============================================================
+
+[agents]
+
+enabled = true
+
+max_concurrent_threads_per_session = 6
+
+# ============================================================
+# CEO / ORCHESTRATOR
+# ============================================================
+
+[agents.ceo]
+
+description = "Central company orchestrator. Understands objectives, coordinates PM, CTO, Engineering Manager and specialized engineering agents, tracks dependencies and verifies completion."
+
+config_file = "./agents/ceo.toml"
+
+# ============================================================
+# PRODUCT
+# ============================================================
+
+[agents.pm]
+
+description = "Product Manager. Defines requirements, user stories, acceptance criteria, scope and product decisions."
+
+config_file = "./agents/pm.toml"
+
+# ============================================================
+# TECHNOLOGY
+# ============================================================
+
+[agents.cto]
+
+description = "Chief Technology Officer. Owns architecture, technical strategy, technology decisions and major technical risks."
+
+config_file = "./agents/cto.toml"
+
+# ============================================================
+# ENGINEERING MANAGEMENT
+# ============================================================
+
+[agents.engineering_manager]
+
+description = "Engineering Manager. Converts architecture into executable engineering tasks, manages dependencies and coordinates implementation."
+
+config_file = "./agents/engineering-manager.toml"
+
+# ============================================================
+# ENGINEERING
+# ============================================================
+
+[agents.backend]
+
+description = "Backend engineer responsible for APIs, services, business logic, databases and backend testing."
+
+config_file = "./agents/backend.toml"
+
+[agents.frontend]
+
+description = "Frontend engineer responsible for UI, components, client-side logic, state management and frontend testing."
+
+config_file = "./agents/frontend.toml"
+
+# ============================================================
+# OPERATIONS
+# ============================================================
+
+[agents.devops]
+
+description = "DevOps engineer responsible for infrastructure, CI/CD, deployment, environments and observability."
+
+config_file = "./agents/devops.toml"
+
+# ============================================================
+# QUALITY
+# ============================================================
+
+[agents.qa]
+
+description = "QA engineer responsible for functional testing, regression testing, acceptance validation and bug verification."
+
+config_file = "./agents/qa.toml"
+
+# ============================================================
+# SECURITY
+# ============================================================
+
+[agents.security]
+
+description = "Security engineer responsible for authentication, authorization, secrets, vulnerabilities and security review."
+
+config_file = "./agents/security.toml"
