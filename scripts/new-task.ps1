@@ -28,12 +28,14 @@ function Get-NextTaskId {
             }
         }
 
-    $next = 1
+    [int]$next = 1
     if ($existing) {
-        $next = ($existing | Measure-Object -Maximum).Maximum + 1
+        [int]$maxId = ($existing | Measure-Object -Maximum).Maximum
+        $next = $maxId + 1
     }
 
-    return ([string]::Format("AICO-{0:D3}", $next))
+    $suffix = $next.ToString().PadLeft(3, '0')
+    return "AICO-$suffix"
 }
 
 function ConvertTo-SafeFileText {
