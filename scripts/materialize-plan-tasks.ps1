@@ -174,7 +174,7 @@ if ($existingForRequest.Count -gt 0) {
 }
 
 $created = @()
-$previous = @()
+$taskByRole = @{}
 
 foreach ($role in $roles) {
     $title = switch ($role) {
@@ -198,19 +198,35 @@ foreach ($role in $roles) {
     }
 
     $deps = @()
-    if ($role -eq "cto" -and ($roles -contains "pm") -and $created.Count -gt 0) {
-        $deps = @($created[0])
+
+    if ($type -eq "AUDIT") {
+        if ($role -eq "engineering-manager") {
+            foreach ($dependencyRole in @("pm","cto","qa","security","devops")) {
+                if ($taskByRole.ContainsKey($dependencyRole)) {
+                    $deps += $taskByRole[$dependencyRole]
+                }
+            }
+        }
     }
-    elseif ($role -eq "engineering-manager") {
-        $deps = @($created)
-    }
-    elseif ($role -in @("qa","security","devops")) {
-        $emTask = $created | Select-Object -Last 1
-        if ($emTask) { $deps = @($emTask) }
+    else {
+        if ($role -eq "cto" -and $taskByRole.ContainsKey("pm")) {
+            $deps = @($taskByRole["pm"])
+        }
+        elseif ($role -eq "engineering-manager") {
+            foreach ($dependencyRole in @("pm","cto")) {
+                if ($taskByRole.ContainsKey($dependencyRole)) {
+                    $deps += $taskByRole[$dependencyRole]
+                }
+            }
+        }
+        elseif ($role -in @("qa","security","devops") -and $taskByRole.ContainsKey("engineering-manager")) {
+            $deps = @($taskByRole["engineering-manager"])
+        }
     }
 
     $id = New-GeneratedTask -TasksPath $tasksPath -Title $title -Owner $role -Priority $priority -Objective $roleObjective -Dependencies $deps -WorkRequestId $WorkRequestId
     $created += $id
+    $taskByRole[$role] = $id
 }
 
 $mappingPath = Join-Path $root ("docs\engineering\plans\" + $WorkRequestId + "-tasks.md")
