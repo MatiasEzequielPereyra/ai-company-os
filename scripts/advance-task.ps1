@@ -118,4 +118,4 @@ if (-not [string]::IsNullOrWhiteSpace($Evidence)) {
 Set-Content -Path $filePath -Value $content -Encoding UTF8
 
 Write-Host "Task advanced:" -ForegroundColor Green
-Write-Host "$Id: $currentStatus -> $Status"
+Write-Host "${Id}: $currentStatus -> $Status"
