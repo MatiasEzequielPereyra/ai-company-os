@@ -142,7 +142,9 @@ $ScriptFiles = @(
     "list-tasks.ps1",
     "update-task.ps1",
     "advance-task.ps1",
-    "sync-company-state.ps1"
+    "sync-company-state.ps1",
+    "new-work-request.ps1",
+    "generate-plan.ps1"
 )
 
 foreach ($ScriptFile in $ScriptFiles) {
