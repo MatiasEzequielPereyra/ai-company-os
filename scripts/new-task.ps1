@@ -33,7 +33,7 @@ function Get-NextTaskId {
         $next = ($existing | Measure-Object -Maximum).Maximum + 1
     }
 
-    return "AICO-{0:D3}" -f $next
+    return ([string]::Format("AICO-{0:D3}", $next))
 }
 
 function ConvertTo-SafeFileText {
@@ -163,6 +163,6 @@ Set-Content -Path $filePath -Value $content -Encoding UTF8
 Write-Host "Task created:" -ForegroundColor Green
 Write-Host $filePath
 Write-Host ""
-Write-Host "ID: $id"
+Write-Host "ID: ${id}"
 Write-Host "Status: BACKLOG"
-Write-Host "Owner: $safeOwner"
+Write-Host "Owner: ${safeOwner}"
