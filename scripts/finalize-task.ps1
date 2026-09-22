@@ -57,6 +57,9 @@ $relative="docs/engineering/final-approvals/"+(Split-Path $path -Leaf)
 
 if($Decision -eq "APPROVE"){
     & $advance -Id $Id -Status DONE -Actor "ceo" -Reason "CEO final verification approved all applicable gates." -Evidence ("Final approval: "+$relative) -TasksPath $tasksPath
+
+    $refresh=Join-Path $PSScriptRoot "refresh-dependencies.ps1"
+    if(Test-Path $refresh){ & $refresh -ProjectPath $root }
 }else{
     & $advance -Id $Id -Status READY -Actor "ceo" -Reason "CEO final verification rejected the task." -Evidence ("Final approval: "+$relative) -TasksPath $tasksPath
 }
