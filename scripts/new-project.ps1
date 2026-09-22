@@ -149,7 +149,10 @@ $ScriptFiles = @(
     "evaluate-readiness.ps1",
     "dispatch-ready-tasks.ps1",
     "submit-task-result.ps1",
-    "review-task.ps1"
+    "review-task.ps1",
+    "qa-task.ps1",
+    "security-task.ps1",
+    "finalize-task.ps1"
 )
 
 foreach ($ScriptFile in $ScriptFiles) {
