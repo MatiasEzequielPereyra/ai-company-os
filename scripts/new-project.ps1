@@ -168,6 +168,17 @@ foreach ($ScriptFile in $ScriptFiles) {
 }
 
 # ------------------------------------------------------------
+# Copy runtime schemas
+# ------------------------------------------------------------
+
+$SchemaSource = Join-Path $ScriptRoot "schemas\agent-result.schema.json"
+$SchemaTarget = Join-Path $ProjectPath "schemas\agent-result.schema.json"
+
+if (Test-Path $SchemaSource) {
+    Copy-Item $SchemaSource $SchemaTarget -Force
+}
+
+# ------------------------------------------------------------
 # Initial state files
 # ------------------------------------------------------------
 
