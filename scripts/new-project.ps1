@@ -48,6 +48,7 @@ $Directories = @(
     "docs\engineering",
     "docs\operations",
     "docs\decisions",
+    "schemas",
 
     "tasks",
 
@@ -154,7 +155,9 @@ $ScriptFiles = @(
     "security-task.ps1",
     "finalize-task.ps1",
     "refresh-dependencies.ps1",
-    "orchestrate.ps1"
+    "orchestrate.ps1",
+    "run-agent-task.ps1",
+    "run-active-agents.ps1"
 )
 
 foreach ($ScriptFile in $ScriptFiles) {
