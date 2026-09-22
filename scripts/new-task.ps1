@@ -55,7 +55,7 @@ if ([string]::IsNullOrWhiteSpace($safeObjective)) {
 }
 
 $content = @"
-# $id — $safeTitle
+# $id - $safeTitle
 
 ## Metadata
 
@@ -151,7 +151,7 @@ Next agent: $safeOwner
 
 ## Transition Log
 
-- $now — SYSTEM — CREATED — Task created in BACKLOG.
+- $now - SYSTEM - CREATED - Task created in BACKLOG.
 
 ---
 
@@ -160,7 +160,7 @@ Next agent: $safeOwner
 -
 "@
 
-Set-Content -Path $filePath -Value $content -Encoding UTF8
+[System.IO.File]::WriteAllText($filePath, $content, (New-Object System.Text.UTF8Encoding($false)))
 
 Write-Host "Task created:" -ForegroundColor Green
 Write-Host $filePath
