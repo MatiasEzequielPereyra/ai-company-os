@@ -84,6 +84,10 @@ if ($runner -notmatch 'COMPLETED means you completed the assigned audit') {
 if ($runner -notmatch 'BLOCKED means you could not complete the assigned agent task itself') {
     throw "Agent runner must reserve BLOCKED for execution blockers"
 }
+$gateBatch = Get-Content (Join-Path $repoRoot "scripts\run-pending-gates.ps1") -Raw
+if ($gateBatch -notmatch 'securityOutcome -in @\("PASS","NOT_APPLICABLE"\)') {
+    throw "Pending gate runner must skip already satisfied security gates"
+}
 
 $codex = Get-Content (Join-Path $repoRoot "scripts\providers\invoke-codex.ps1") -Raw
 if ($codex -notmatch '"--sandbox","read-only"') {
