@@ -16,7 +16,7 @@ $tasksPath=Join-Path $root "tasks"
 $taskPath=Join-Path $tasksPath ($Id+".md")
 if(-not(Test-Path $taskPath)){throw "Task not found: $taskPath"}
 
-$content=Get-Content $taskPath -Raw
+$content=Get-Content $taskPath -Raw -Encoding UTF8
 $status=Read-Field $content "Status"
 if($status -ne "SECURITY"){throw "Task $Id must be SECURITY. Current status: $status"}
 
