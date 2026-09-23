@@ -107,15 +107,108 @@ try {
     $build = Get-Content (Join-Path $tempRoot "tasks\AICO-008.md") -Raw -Encoding UTF8
     $verify = Get-Content (Join-Path $tempRoot "tasks\AICO-009.md") -Raw -Encoding UTF8
 
-    if ($auth -notmatch '(?m)^Backlog key:\s*AUTH$') {
+    if ($auth -notmatch '(?m)^Backlog key:\s*AUTH\r?
+
+    $mapping = Join-Path $tempRoot "docs\engineering\plans\AICO-006-engineering-backlog-tasks.md"
+    if (-not (Test-Path $mapping)) {
+        throw "Backlog mapping file was not created"
+    }
+
+    $duplicateRejected = $false
+    try {
+        & $materializer -SourceTaskId "AICO-006" -ProjectPath $tempRoot
+    }
+    catch {
+        if ($_.Exception.Message -match 'already materialized') {
+            $duplicateRejected = $true
+        }
+        else {
+            throw
+        }
+    }
+
+    if (-not $duplicateRejected) {
+        throw "Materializer did not reject duplicate materialization"
+    }
+}
+finally {
+    if (Test-Path $tempRoot) {
+        Remove-Item $tempRoot -Recurse -Force
+    }
+}
+
+Write-Host "PASS: engineering backlog materializer test" -ForegroundColor Green
+) {
         throw "Authorization task mapping is incorrect"
     }
 
-    if ($build -notmatch '(?ms)^## Dependencies\s*\r?\n\s*\r?\n- AICO-007') {
+    if ($build -notmatch '(?m)^- AICO-007\r?
+
+    $mapping = Join-Path $tempRoot "docs\engineering\plans\AICO-006-engineering-backlog-tasks.md"
+    if (-not (Test-Path $mapping)) {
+        throw "Backlog mapping file was not created"
+    }
+
+    $duplicateRejected = $false
+    try {
+        & $materializer -SourceTaskId "AICO-006" -ProjectPath $tempRoot
+    }
+    catch {
+        if ($_.Exception.Message -match 'already materialized') {
+            $duplicateRejected = $true
+        }
+        else {
+            throw
+        }
+    }
+
+    if (-not $duplicateRejected) {
+        throw "Materializer did not reject duplicate materialization"
+    }
+}
+finally {
+    if (Test-Path $tempRoot) {
+        Remove-Item $tempRoot -Recurse -Force
+    }
+}
+
+Write-Host "PASS: engineering backlog materializer test" -ForegroundColor Green
+) {
         throw "Implementation task did not inherit authorization dependency"
     }
 
-    if ($verify -notmatch '(?ms)^## Dependencies\s*\r?\n\s*\r?\n(?:- AICO-008\s*\r?\n)?- AICO-007|^## Dependencies\s*\r?\n\s*\r?\n- AICO-008') {
+    if ($verify -notmatch '(?m)^- AICO-008\r?
+
+    $mapping = Join-Path $tempRoot "docs\engineering\plans\AICO-006-engineering-backlog-tasks.md"
+    if (-not (Test-Path $mapping)) {
+        throw "Backlog mapping file was not created"
+    }
+
+    $duplicateRejected = $false
+    try {
+        & $materializer -SourceTaskId "AICO-006" -ProjectPath $tempRoot
+    }
+    catch {
+        if ($_.Exception.Message -match 'already materialized') {
+            $duplicateRejected = $true
+        }
+        else {
+            throw
+        }
+    }
+
+    if (-not $duplicateRejected) {
+        throw "Materializer did not reject duplicate materialization"
+    }
+}
+finally {
+    if (Test-Path $tempRoot) {
+        Remove-Item $tempRoot -Recurse -Force
+    }
+}
+
+Write-Host "PASS: engineering backlog materializer test" -ForegroundColor Green
+) {
         throw "Validation task dependency mapping is incorrect"
     }
 
