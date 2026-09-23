@@ -16,6 +16,8 @@ Updated: 2026-09-22T17:26:35Z
 
 Workflow phase: DONE
 
+Workflow profile: standard
+
 ---
 
 ## Objective
@@ -49,8 +51,8 @@ The repository already had agent roles, workflows, policies, state files and a t
 - [x] `scripts/update-task.ps1` updates metadata and appends notes/evidence.
 - [x] `scripts/advance-task.ps1` validates lifecycle transitions.
 - [x] `scripts/sync-company-state.ps1` regenerates `.codex/state/current-sprint.md` from task files.
-- [ ] `scripts/new-project.ps1` installs the task scripts and task README into newly generated projects.
-- [ ] Local PowerShell smoke test is executed from a clean pull.
+- [x] `scripts/new-project.ps1` installs the task scripts and task README into newly generated projects.
+- [x] Local PowerShell smoke test is executed from a clean pull.
 
 ---
 
@@ -108,7 +110,7 @@ git diff
 
 ## Evidence
 
-- 2026-09-22T17:00:00Z ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â Initial scripts and task documentation added directly to GitHub.
+- 2026-09-22T17:00:00Z - Initial scripts and task documentation added directly to GitHub.
 - 2026-09-22T17:26:15Z - Windows PowerShell 5.1 smoke test passed.
 - 2026-09-22T17:26:27Z - Review passed.
 - 2026-09-22T17:26:30Z - PowerShell 5.1 task lifecycle smoke test passed.
@@ -117,8 +119,8 @@ git diff
 
 ## Risks
 
-- Scripts still need a local smoke test on Windows PowerShell.
 - Manual edits can break metadata if required fields are deleted.
+- Generated state must be rebuilt after authoritative task changes.
 
 ---
 
@@ -130,7 +132,7 @@ Next agent: engineering-manager
 
 ## Transition Log
 
-- 2026-09-22T17:00:00Z ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â SYSTEM ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â CREATED ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â Task created in ACTIVE because implementation had already started with user authorization.
+- 2026-09-22T17:00:00Z - SYSTEM - CREATED - Task created in ACTIVE because implementation had already started with user authorization.
 - 2026-09-22T17:26:15Z - SYSTEM - UPDATED - Evidence added.
 - 2026-09-22T17:26:22Z - engineering-manager - ACTIVE -> REVIEW - Implementation and smoke test completed.
 - 2026-09-22T17:26:27Z - engineering-manager - REVIEW -> QA - Review passed.
