@@ -32,6 +32,13 @@ foreach ($field in @("outcome","summary","report_markdown","verification","decis
     }
 }
 
+if ([string]$schema.properties.outcome.description -notmatch 'Use COMPLETED.*release blockers') {
+    throw "Runtime schema must distinguish completed audits from product/release blockers"
+}
+if ([string]$schema.properties.blockers.description -notmatch 'Execution blockers') {
+    throw "Runtime schema blockers field must mean execution blockers"
+}
+
 $configPath = Join-Path $repoRoot ".codex\provider-config.json"
 $config = Get-Content $configPath -Raw | ConvertFrom-Json
 
@@ -64,6 +71,12 @@ if ($runner -notmatch 'build-agent-context\.ps1') {
 }
 if ($runner -notmatch 'submit-task-result\.ps1') {
     throw "Agent runner must feed the Result Intake Engine"
+}
+if ($runner -notmatch 'COMPLETED means you completed the assigned audit') {
+    throw "Agent runner must define audit completion semantics"
+}
+if ($runner -notmatch 'BLOCKED means you could not complete the assigned agent task itself') {
+    throw "Agent runner must reserve BLOCKED for execution blockers"
 }
 
 $codex = Get-Content (Join-Path $repoRoot "scripts\providers\invoke-codex.ps1") -Raw
