@@ -40,6 +40,15 @@ if (@($config.auto_order) -notcontains "OpenRouter") { throw "Provider config mu
 if (@($config.auto_order) -notcontains "Gemini") { throw "Provider config must include Gemini" }
 if ([string]$config.models.OpenRouter -ne "openrouter/free") { throw "OpenRouter must default to openrouter/free" }
 if ([string]$config.models.Gemini -ne "gemini-3.5-flash-lite") { throw "Gemini must default to gemini-3.5-flash-lite" }
+if ([int]$config.context_max_chars -lt 500000) { throw "External provider context budget must be at least 500000 characters" }
+
+$pmInstructions = Get-Content (Join-Path $repoRoot ".codex\agents\pm.md") -Raw
+if ($pmInstructions -notmatch 'Existing Project Context Fallback') {
+    throw "PM instructions must support existing-project intake baselines"
+}
+if ($pmInstructions -notmatch 'product-intake\.md') {
+    throw "PM existing-project fallback must recognize product-intake.md"
+}
 
 $runnerPath = Join-Path $repoRoot "scripts\run-agent-task.ps1"
 $runner = Get-Content $runnerPath -Raw
@@ -143,6 +152,9 @@ try {
 
     if ($context -notmatch 'src\\product-controller\.ts') {
         throw "Context builder did not include relevant source evidence"
+    }
+    if ($context.Length -gt 20000) {
+        throw "Context builder exceeded requested MaxChars"
     }
     if ($context -match 'must-not-leak') {
         throw "Context builder leaked .env content"
