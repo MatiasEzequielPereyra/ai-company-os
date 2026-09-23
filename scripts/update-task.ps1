@@ -93,7 +93,7 @@ if ($PSBoundParameters.ContainsKey("WorkflowProfile")) {
         $content = Replace-LineValue -Content $content -Key "Workflow profile" -Value $WorkflowProfile
     }
     elseif ($content -match '(?m)^Workflow phase:\s*.*$') {
-        $content = [regex]::Replace($content,'(?m)^(Workflow phase:\s*.*)$',('$1' + [Environment]::NewLine + [Environment]::NewLine + "Workflow profile: $WorkflowProfile"),1)
+        $content = [regex]::Replace($content,'(?m)^(Workflow phase:\s*.*)$',('$1' + [Environment]::NewLine + [Environment]::NewLine + "Workflow profile: $WorkflowProfile"))
     }
     else {
         throw "Task metadata is missing Workflow phase; cannot safely add Workflow profile."
