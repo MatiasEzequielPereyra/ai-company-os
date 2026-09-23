@@ -8,6 +8,35 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Get-HttpStatusCode {
+    param([System.Management.Automation.ErrorRecord]$ErrorRecord)
+
+    try {
+        $response = $ErrorRecord.Exception.Response
+        if ($null -eq $response -or $null -eq $response.StatusCode) { return 0 }
+        return [int]$response.StatusCode
+    }
+    catch {
+        return 0
+    }
+}
+
+function Test-TransientOpenRouterError {
+    param(
+        [System.Management.Automation.ErrorRecord]$ErrorRecord,
+        [int]$StatusCode
+    )
+
+    if ($StatusCode -eq 429 -or $StatusCode -ge 500) { return $true }
+
+    $message = [string]$ErrorRecord.Exception.Message
+    if ($message -match 'timed out|timeout|connection.*closed|conexi[oó]n.*cerrada|forcibly closed|connection reset|underlying connection was closed|se ha terminado la conexi[oó]n') {
+        return $true
+    }
+
+    return $false
+}
+
 function Get-HttpErrorBody {
     param([System.Management.Automation.ErrorRecord]$ErrorRecord)
 
@@ -79,21 +108,41 @@ $headers = @{
     "X-Title" = "AI Company OS"
 }
 
-try {
-    $response = Invoke-RestMethod -Method Post -Uri "https://openrouter.ai/api/v1/chat/completions" -Headers $headers -ContentType "application/json; charset=utf-8" -Body $bodyBytes -TimeoutSec 240
+$response = $null
+$maxAttempts = 3
+
+for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+    try {
+        $response = Invoke-RestMethod -Method Post -Uri "https://openrouter.ai/api/v1/chat/completions" -Headers $headers -ContentType "application/json; charset=utf-8" -Body $bodyBytes -TimeoutSec 240
+        break
+    }
+    catch {
+        $statusCode = Get-HttpStatusCode -ErrorRecord $_
+        $message = $_.Exception.Message
+        $errorBody = Get-HttpErrorBody -ErrorRecord $_
+
+        if (-not [string]::IsNullOrWhiteSpace($errorBody)) {
+            $message = $errorBody
+        }
+        elseif ($null -ne $_.ErrorDetails -and -not [string]::IsNullOrWhiteSpace($_.ErrorDetails.Message)) {
+            $message = $_.ErrorDetails.Message
+        }
+
+        $isTransient = Test-TransientOpenRouterError -ErrorRecord $_ -StatusCode $statusCode
+
+        if ($isTransient -and $attempt -lt $maxAttempts) {
+            $delaySeconds = [Math]::Pow(2,($attempt - 1))
+            Write-Host ("OpenRouter transient failure on attempt " + $attempt + "/" + $maxAttempts + ". Retrying in " + $delaySeconds + "s...") -ForegroundColor Yellow
+            Start-Sleep -Seconds $delaySeconds
+            continue
+        }
+
+        throw "OpenRouter request failed: $message"
+    }
 }
-catch {
-    $message = $_.Exception.Message
-    $body = Get-HttpErrorBody -ErrorRecord $_
 
-    if (-not [string]::IsNullOrWhiteSpace($body)) {
-        $message = $body
-    }
-    elseif ($null -ne $_.ErrorDetails -and -not [string]::IsNullOrWhiteSpace($_.ErrorDetails.Message)) {
-        $message = $_.ErrorDetails.Message
-    }
-
-    throw "OpenRouter request failed: $message"
+if ($null -eq $response) {
+    throw "OpenRouter request failed without a response after $maxAttempts attempts."
 }
 
 if ($null -eq $response.choices -or $response.choices.Count -lt 1) {
