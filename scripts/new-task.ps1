@@ -7,6 +7,9 @@ param(
     [ValidateSet("P0", "P1", "P2", "P3")]
     [string]$Priority = "P2",
 
+    [ValidateSet("lightweight","standard","high-assurance")]
+    [string]$WorkflowProfile = "standard",
+
     [string]$Objective = "",
 
     [string]$TasksPath = "tasks"
@@ -72,6 +75,8 @@ Created: $now
 Updated: $now
 
 Workflow phase: PLANNING
+
+Workflow profile: $WorkflowProfile
 
 ---
 
@@ -165,6 +170,7 @@ Next agent: $safeOwner
 Write-Host "Task created:" -ForegroundColor Green
 Write-Host $filePath
 Write-Host ""
-Write-Host "ID: ${id}"
+Write-Host "ID: $id"
 Write-Host "Status: BACKLOG"
-Write-Host "Owner: ${safeOwner}"
+Write-Host "Owner: $safeOwner"
+Write-Host "Workflow profile: $WorkflowProfile"
