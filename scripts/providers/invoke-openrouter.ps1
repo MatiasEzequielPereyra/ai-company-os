@@ -61,13 +61,26 @@ $body = @{
     }
 } | ConvertTo-Json -Depth 100 -Compress
 
+# Validate the exact serialized payload before it leaves the machine.
+try {
+    $null = $body | ConvertFrom-Json
+}
+catch {
+    throw "OpenRouter request payload is invalid JSON before transport: $($_.Exception.Message)"
+}
+
+# Windows PowerShell 5.1 can choose an unexpected encoding for large string bodies.
+# Send explicit UTF-8 bytes so OpenRouter receives the same JSON we validated locally.
+$bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($body)
+Write-Host ("OpenRouter payload: " + $body.Length + " chars / " + $bodyBytes.Length + " UTF-8 bytes") -ForegroundColor DarkGray
+
 $headers = @{
     Authorization = "Bearer $($env:OPENROUTER_API_KEY)"
     "X-Title" = "AI Company OS"
 }
 
 try {
-    $response = Invoke-RestMethod -Method Post -Uri "https://openrouter.ai/api/v1/chat/completions" -Headers $headers -ContentType "application/json" -Body $body -TimeoutSec 240
+    $response = Invoke-RestMethod -Method Post -Uri "https://openrouter.ai/api/v1/chat/completions" -Headers $headers -ContentType "application/json; charset=utf-8" -Body $bodyBytes -TimeoutSec 240
 }
 catch {
     $message = $_.Exception.Message
