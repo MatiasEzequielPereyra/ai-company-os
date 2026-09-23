@@ -2,6 +2,8 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Id,
     [string]$ProjectPath = ".",
+    [ValidateSet("Auto","Codex","OpenRouter","Gemini")]
+    [string]$Provider = "Auto",
     [string]$Model = "",
     [ValidateSet("Auto","ChatGPT","ApiKey")]
     [string]$AuthMode = "Auto"
@@ -21,6 +23,15 @@ function Write-Utf8NoBom {
     [System.IO.File]::WriteAllText($Path,$Value,(New-Object System.Text.UTF8Encoding($false)))
 }
 
+if ($PSBoundParameters.ContainsKey("AuthMode") -and -not $PSBoundParameters.ContainsKey("Provider")) {
+    if ($AuthMode -eq "ChatGPT") {
+        $Provider = "Codex"
+    }
+    elseif ($AuthMode -eq "ApiKey") {
+        throw "Legacy -AuthMode ApiKey is disabled to prevent accidental OpenAI API spend. Use -Provider OpenRouter or -Provider Gemini for free-tier providers."
+    }
+}
+
 $root = (Resolve-Path $ProjectPath).Path
 $tasksPath = Join-Path $root "tasks"
 $taskPath = Join-Path $tasksPath ($Id + ".md")
@@ -32,18 +43,16 @@ $owner = Read-Field $task "Owner"
 if ($status -ne "ACTIVE") { throw "Task $Id must be ACTIVE. Current status: $status" }
 if ([string]::IsNullOrWhiteSpace($owner)) { throw "Task $Id has no owner." }
 
-$codex = Get-Command codex -ErrorAction SilentlyContinue
-if ($null -eq $codex) {
-    throw "Codex CLI was not found in PATH. Install/login to Codex CLI before running agents."
-}
-
 $dispatchPath = Join-Path $root ("docs\engineering\dispatch\" + $Id + ".md")
 $rolePath = Join-Path $root (".codex\agents\" + $owner + ".md")
 $schemaPath = Join-Path $root "schemas\agent-result.schema.json"
+$routerPath = Join-Path $PSScriptRoot "provider-router.ps1"
+$contextBuilderPath = Join-Path $PSScriptRoot "build-agent-context.ps1"
 
 if (-not (Test-Path $dispatchPath)) { throw "Dispatch packet not found: $dispatchPath" }
 if (-not (Test-Path $rolePath)) { throw "Role instructions not found: $rolePath" }
 if (-not (Test-Path $schemaPath)) { throw "Agent result schema not found: $schemaPath" }
+if (-not (Test-Path $routerPath)) { throw "Provider router not found: $routerPath" }
 
 $runtimeDir = Join-Path $root ".codex\runtime"
 $reportsDir = Join-Path $root "docs\engineering\agent-reports"
@@ -54,114 +63,88 @@ $jsonPath = Join-Path $runtimeDir ($Id + "-result.json")
 $reportPath = Join-Path $reportsDir ($Id + ".md")
 
 $promptLines = @(
-    "You are executing an AI Company OS task inside this repository.",
+    "You are executing an AI Company OS task.",
     "",
     "Role: $owner",
     "Task: $Id",
     "",
-    "Read and obey these repository files before doing the task:",
-    "- AGENTS.md",
-    "- .codex/agents/$owner.md",
-    "- tasks/$Id.md",
-    "- docs/engineering/dispatch/$Id.md",
-    "- .codex/state/current-sprint.md",
-    "- docs/engineering/project-intake.md",
-    "- docs/product/product-intake.md",
-    "- docs/architecture/architecture-intake.md",
-    "- docs/operations/operations-intake.md",
+    "Follow the role authority, task objective, dispatch packet and supplied project evidence.",
+    "For Codex, inspect the repository directly in read-only mode.",
+    "For API providers, use only the supplied Repository Context Pack and never claim access to omitted files.",
     "",
     "This execution is AUDIT/ANALYSIS ONLY.",
-    "Do not edit, create, delete, rename or format project files.",
-    "Do not run destructive commands.",
-    "Do not change Git state.",
-    "Inspect the repository deeply enough to support your role-owned conclusions.",
+    "Do not edit production code or change Git state.",
     "Separate verified evidence from assumptions.",
-    "Reference concrete repository-relative files and relevant symbols where useful.",
+    "Reference concrete repository-relative files and symbols when supported by evidence.",
     "If required evidence is unavailable, return BLOCKED rather than inventing it.",
     "",
-    "The report_markdown field must contain the complete role report, with findings, evidence, risks and recommended actions.",
-    "The summary field should be concise.",
-    "The changed_artifacts concept is NONE because this execution is read-only.",
+    "The report_markdown field must contain the complete role report with findings, evidence, risks and recommended actions.",
+    "The summary field must be concise.",
     "Return only the structured result required by the supplied JSON schema."
 )
 $prompt = $promptLines -join [Environment]::NewLine
 
-$effectiveAuth = "ChatGPT"
-$savedApiKey = $env:CODEX_API_KEY
+$context = ""
+$needsExternalContext = ($Provider -eq "OpenRouter" -or $Provider -eq "Gemini")
+if ($Provider -eq "Auto" -and (
+    -not [string]::IsNullOrWhiteSpace($env:OPENROUTER_API_KEY) -or
+    -not [string]::IsNullOrWhiteSpace($env:GEMINI_API_KEY)
+)) {
+    $needsExternalContext = $true
+}
 
-if ($AuthMode -eq "ApiKey") {
-    if ([string]::IsNullOrWhiteSpace($env:CODEX_API_KEY)) {
-        throw "AuthMode ApiKey requires CODEX_API_KEY to be set in the environment."
+if ($needsExternalContext) {
+    if (-not (Test-Path $contextBuilderPath)) { throw "Context builder not found: $contextBuilderPath" }
+
+    $maxChars = 180000
+    $configPath = Join-Path $root ".codex\provider-config.json"
+    if (Test-Path $configPath) {
+        try {
+            $providerConfig = Get-Content $configPath -Raw | ConvertFrom-Json
+            if ($null -ne $providerConfig.context_max_chars) {
+                $maxChars = [int]$providerConfig.context_max_chars
+            }
+        }
+        catch {
+            throw "Invalid provider configuration: $configPath"
+        }
     }
-    $effectiveAuth = "ApiKey"
-}
-elseif ($AuthMode -eq "ChatGPT") {
-    $env:CODEX_API_KEY = $null
-    $effectiveAuth = "ChatGPT"
-}
-elseif (-not [string]::IsNullOrWhiteSpace($env:CODEX_API_KEY)) {
-    $effectiveAuth = "ApiKey"
-}
 
-Write-Host "Codex authentication: $effectiveAuth" -ForegroundColor DarkGray
-
-$args = @("exec","--sandbox","read-only","--output-schema",$schemaPath,"-o",$jsonPath)
-if (-not [string]::IsNullOrWhiteSpace($Model)) {
-    $args += @("--model",$Model)
+    Write-Host "Building role-aware repository context for $owner..." -ForegroundColor DarkGray
+    $context = & $contextBuilderPath -ProjectPath $root -Id $Id -Owner $owner -MaxChars $maxChars
+    Write-Host ("Context pack: " + $context.Length + " characters") -ForegroundColor DarkGray
 }
-# Explicit stdin prompt sentinel avoids Codex CLI hanging in non-TTY Windows automation.
-$args += "-"
 
 Write-Host "Running agent: $owner -> $Id" -ForegroundColor Cyan
-Push-Location $root
-try {
-    $codexOutput = New-Object System.Collections.Generic.List[string]
+Write-Host "Provider mode: $Provider" -ForegroundColor DarkGray
 
-    $prompt | & codex @args 2>&1 | ForEach-Object {
-        $line = $_.ToString()
-        [void]$codexOutput.Add($line)
-        Write-Host $line
-    }
+$execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $jsonPath -Model $Model
 
-    $exitCode = $LASTEXITCODE
-
-    if ($exitCode -ne 0) {
-        $joinedOutput = ($codexOutput.ToArray()) -join [Environment]::NewLine
-
-        if ($joinedOutput -match "(?i)usage limit|hit your usage limit|purchase more credits|try again at") {
-            if ($effectiveAuth -eq "ChatGPT") {
-                throw "Codex ChatGPT usage limit reached. Wait for the displayed reset, add eligible Codex credits, or set CODEX_API_KEY and re-run with -AuthMode ApiKey."
-            }
-            throw "Codex API execution was rejected for usage/billing. Check the API project billing, limits and CODEX_API_KEY."
-        }
-
-        throw "Codex exec failed with exit code $exitCode"
-    }
-}
-finally {
-    if ($AuthMode -eq "ChatGPT") {
-        $env:CODEX_API_KEY = $savedApiKey
-    }
-    Pop-Location
-}
-
-if (-not (Test-Path $jsonPath)) { throw "Codex did not produce structured output: $jsonPath" }
+if (-not (Test-Path $jsonPath)) { throw "Provider runtime did not produce structured output: $jsonPath" }
 
 $result = Get-Content $jsonPath -Raw | ConvertFrom-Json
-if ($null -eq $result.outcome -or $null -eq $result.summary -or $null -eq $result.report_markdown) {
-    throw "Structured agent result is incomplete for $Id"
+foreach ($field in @("outcome","summary","report_markdown","verification","decisions","blockers","recommended_next")) {
+    if ($null -eq $result.PSObject.Properties[$field]) {
+        throw "Structured agent result is missing field: $field"
+    }
 }
 
+$providerUsed = [string]$execution.Provider
+$modelUsed = [string]$execution.Model
 $now = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+
 $report = @(
     "# Agent Report - $Id",
     "",
     "Generated: $now",
     "Owner: $owner",
+    "Provider: $providerUsed",
+    "Model: $modelUsed",
     "Outcome: $($result.outcome)",
     "",
     $result.report_markdown
 ) -join [Environment]::NewLine
+
 Write-Utf8NoBom $reportPath $report
 
 $submit = Join-Path $PSScriptRoot "submit-task-result.ps1"
@@ -173,4 +156,6 @@ $changed = "docs/engineering/agent-reports/" + (Split-Path $reportPath -Leaf)
 Write-Host ""
 Write-Host "Agent task completed:" -ForegroundColor Green
 Write-Host "$Id - $owner - $($result.outcome)"
+Write-Host "Provider: $providerUsed"
+Write-Host "Model: $modelUsed"
 Write-Host "Report: $changed"
