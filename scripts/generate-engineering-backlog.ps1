@@ -7,7 +7,9 @@ param(
     [ValidateSet("Auto","Codex","OpenRouter","Gemini")]
     [string]$Provider = "Auto",
 
-    [string]$Model = ""
+    [string]$Model = "",
+
+    [switch]$ReuseExistingOutput
 )
 
 $ErrorActionPreference = "Stop"
@@ -23,6 +25,58 @@ function Write-Utf8NoBom {
     param([string]$Path,[string]$Value)
     [System.IO.File]::WriteAllText($Path,$Value,(New-Object System.Text.UTF8Encoding($false)))
 }
+
+function Resolve-ImplementationAuthorizationKey {
+    param([object]$Backlog)
+
+    $requested = [string]$Backlog.implementation_authorization_key
+    if ([string]::IsNullOrWhiteSpace($requested)) {
+        throw "Backlog implementation_authorization_key cannot be empty."
+    }
+
+    if ($requested -eq "NONE") {
+        return "NONE"
+    }
+
+    $items = @($Backlog.items)
+    $exact = @($items | Where-Object { [string]$_.key -eq $requested })
+    if ($exact.Count -eq 1) {
+        if ([string]$exact[0].kind -ne "DECISION") {
+            throw "Implementation authorization item '$requested' must be a DECISION."
+        }
+        return [string]$exact[0].key
+    }
+
+    # Recover only from a single, semantically clear authorization decision.
+    $candidates = @(
+        $items | Where-Object {
+            if ([string]$_.kind -ne "DECISION") { return $false }
+
+            $haystack = @(
+                [string]$_.key,
+                [string]$_.title,
+                [string]$_.objective,
+                [string]$_.context
+            ) -join " "
+
+            return ($haystack -match '(?i)implement.*authori[sz]|authori[sz].*implement|approve.*implement|implementation scope|implementation approval')
+        }
+    )
+
+    if ($candidates.Count -eq 1) {
+        $resolved = [string]$candidates[0].key
+        Write-Host ("Repaired implementation authorization key: '" + $requested + "' -> '" + $resolved + "'") -ForegroundColor Yellow
+        return $resolved
+    }
+
+    if ($candidates.Count -eq 0) {
+        throw "Implementation authorization key '$requested' does not reference a backlog item, and no unambiguous authorization DECISION item was found."
+    }
+
+    $candidateKeys = ($candidates | ForEach-Object { [string]$_.key }) -join ", "
+    throw "Implementation authorization key '$requested' is invalid and multiple authorization DECISION candidates exist: $candidateKeys"
+}
+
 
 $root = (Resolve-Path $ProjectPath).Path
 $taskPath = Join-Path $root ("tasks\" + $SourceTaskId + ".md")
@@ -95,11 +149,22 @@ New-Item -ItemType Directory -Force -Path $planDir | Out-Null
 $outputPath = Join-Path $runtimeDir ($SourceTaskId + "-engineering-backlog.json")
 $planPath = Join-Path $planDir ($SourceTaskId + "-engineering-backlog.json")
 
-Write-Host "Generating structured engineering backlog from $SourceTaskId..." -ForegroundColor Cyan
-$execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $outputPath -Model $Model
+$execution = $null
 
-if (-not (Test-Path $outputPath)) {
-    throw "Backlog provider did not produce structured output: $outputPath"
+if ($ReuseExistingOutput) {
+    if (-not (Test-Path $outputPath)) {
+        throw "Cannot reuse backlog output because it does not exist: $outputPath"
+    }
+
+    Write-Host "Reusing existing structured backlog output for $SourceTaskId..." -ForegroundColor Cyan
+}
+else {
+    Write-Host "Generating structured engineering backlog from $SourceTaskId..." -ForegroundColor Cyan
+    $execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $outputPath -Model $Model
+
+    if (-not (Test-Path $outputPath)) {
+        throw "Backlog provider did not produce structured output: $outputPath"
+    }
 }
 
 $backlog = Get-Content $outputPath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -112,10 +177,8 @@ if (-not [string]::IsNullOrWhiteSpace($workRequestId) -and [string]$backlog.work
     throw "Backlog work_request_id mismatch. Expected $workRequestId, got $($backlog.work_request_id)"
 }
 
-$authorizationKey = [string]$backlog.implementation_authorization_key
-if ([string]::IsNullOrWhiteSpace($authorizationKey)) {
-    throw "Backlog implementation_authorization_key cannot be empty."
-}
+$authorizationKey = Resolve-ImplementationAuthorizationKey -Backlog $backlog
+$backlog.implementation_authorization_key = $authorizationKey
 
 $keys = @{}
 foreach ($item in @($backlog.items)) {
@@ -135,21 +198,21 @@ foreach ($item in @($backlog.items)) {
     }
 }
 
-if ($authorizationKey -ne "NONE") {
-    if (-not $keys.ContainsKey($authorizationKey)) {
-        throw "Implementation authorization key '$authorizationKey' does not reference a backlog item."
-    }
-
-    $authorizationItem = @($backlog.items | Where-Object { [string]$_.key -eq $authorizationKey })[0]
-    if ([string]$authorizationItem.kind -ne "DECISION") {
-        throw "Implementation authorization item '$authorizationKey' must be a DECISION."
-    }
+if ($authorizationKey -ne "NONE" -and -not $keys.ContainsKey($authorizationKey)) {
+    throw "Resolved implementation authorization key '$authorizationKey' does not reference a backlog item."
 }
 
-Write-Utf8NoBom $planPath (Get-Content $outputPath -Raw -Encoding UTF8)
+$normalizedJson = $backlog | ConvertTo-Json -Depth 100
+Write-Utf8NoBom $planPath $normalizedJson
 
 Write-Host "Structured engineering backlog generated:" -ForegroundColor Green
 Write-Host $planPath
 Write-Host ("Items: " + @($backlog.items).Count)
-Write-Host ("Provider: " + $execution.Provider)
-Write-Host ("Model: " + $execution.Model)
+if ($null -ne $execution) {
+    Write-Host ("Provider: " + $execution.Provider)
+    Write-Host ("Model: " + $execution.Model)
+}
+else {
+    Write-Host "Provider: REUSED_EXISTING_OUTPUT"
+    Write-Host "Model: N/A"
+}
