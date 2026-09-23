@@ -64,7 +64,8 @@ $promptLines = @(
     "Encode dependencies only by logical item key; the materializer will translate them to AICO IDs.",
     "Preserve the plan's priorities and critical path.",
     "Create explicit DECISION items for unresolved PM/CTO/CEO decisions before dependent implementation work.",
-    "If implementation authorization is required, include an explicit decision task near the root of the graph so implementation tasks cannot become ready before it is approved through the normal lifecycle.",
+    "If implementation authorization is required, include an explicit DECISION task near the root of the graph and set implementation_authorization_key to that item key.",
+    "Use implementation_authorization_key = NONE only when the approved source plan explicitly requires no implementation authorization.",
     "Do not silently resolve open product, architecture, security or operational decisions.",
     "IMPLEMENTATION items must be narrow enough for one specialist to execute and verify.",
     "VALIDATION items should depend on the implementation they validate.",
@@ -111,6 +112,11 @@ if (-not [string]::IsNullOrWhiteSpace($workRequestId) -and [string]$backlog.work
     throw "Backlog work_request_id mismatch. Expected $workRequestId, got $($backlog.work_request_id)"
 }
 
+$authorizationKey = [string]$backlog.implementation_authorization_key
+if ([string]::IsNullOrWhiteSpace($authorizationKey)) {
+    throw "Backlog implementation_authorization_key cannot be empty."
+}
+
 $keys = @{}
 foreach ($item in @($backlog.items)) {
     $key = [string]$item.key
@@ -126,6 +132,17 @@ foreach ($item in @($backlog.items)) {
         if ([string]$dependency -eq [string]$item.key) {
             throw "Backlog item $($item.key) cannot depend on itself."
         }
+    }
+}
+
+if ($authorizationKey -ne "NONE") {
+    if (-not $keys.ContainsKey($authorizationKey)) {
+        throw "Implementation authorization key '$authorizationKey' does not reference a backlog item."
+    }
+
+    $authorizationItem = @($backlog.items | Where-Object { [string]$_.key -eq $authorizationKey })[0]
+    if ([string]$authorizationItem.kind -ne "DECISION") {
+        throw "Implementation authorization item '$authorizationKey' must be a DECISION."
     }
 }
 
