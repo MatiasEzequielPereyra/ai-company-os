@@ -141,6 +141,87 @@ $allFiles = Get-ChildItem $root -File -Recurse -ErrorAction SilentlyContinue | W
 
     if ($lower -match '(^|\\)(node_modules|\.git|dist|dist-refactor-modular|build|coverage|\.next|vendor)(\\|$)') { return $false }
     if ($lower -match '^\.codex\\runtime\\|^docs\\engineering\\agent-reports\\') { return $false }
+    if ($lower -match '(^|\\)\.env($|\.)|secret|credential|private[-_]?key|service[-_]?account') { return $false }
+    if ($lower -match '(^|\\)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock)
+    if ($allowedExtensions -contains $ext) { return $true }
+    if ($_.Name -in @("Dockerfile",".gitignore",".npmrc")) { return $true }
+    return $false
+} | ForEach-Object {
+    $relative = $_.FullName.Substring($root.Length).TrimStart("\")
+    [PSCustomObject]@{
+        FullName = $_.FullName
+        Relative = $relative
+        Score = Get-RoleScore -RelativePath $relative -Role $Owner
+    }
+}
+
+[void]$builder.AppendLine("")
+[void]$builder.AppendLine("")
+[void]$builder.AppendLine("===== REPOSITORY INVENTORY =====")
+
+foreach ($entry in ($allFiles | Sort-Object Relative | Select-Object -First 1200)) {
+    $line = $entry.Relative
+    if (($builder.Length + $line.Length + 2) -ge $MaxChars) { break }
+    [void]$builder.AppendLine($line)
+}
+
+$used = $builder.Length
+
+foreach ($entry in ($allFiles | Sort-Object @{Expression="Score";Descending=$true}, @{Expression="Relative";Descending=$false})) {
+    if ($used -ge $MaxChars) { break }
+
+    $key = $entry.Relative.ToLowerInvariant()
+    if ($included.ContainsKey($key)) { continue }
+
+    $added = Add-ContextFile -Builder $builder -Root $root -RelativePath $entry.Relative -Remaining ($MaxChars - $used)
+    if ($added -gt 0) {
+        $included[$key] = $true
+        $used += $added
+    }
+}
+
+$builder.ToString()
+) { return $false }
+    if ($lower -match '\.(pem|key|p12|pfx|crt|cer)
+    if ($allowedExtensions -contains $ext) { return $true }
+    if ($_.Name -in @("Dockerfile",".gitignore",".npmrc")) { return $true }
+    return $false
+} | ForEach-Object {
+    $relative = $_.FullName.Substring($root.Length).TrimStart("\")
+    [PSCustomObject]@{
+        FullName = $_.FullName
+        Relative = $relative
+        Score = Get-RoleScore -RelativePath $relative -Role $Owner
+    }
+}
+
+[void]$builder.AppendLine("")
+[void]$builder.AppendLine("")
+[void]$builder.AppendLine("===== REPOSITORY INVENTORY =====")
+
+foreach ($entry in ($allFiles | Sort-Object Relative | Select-Object -First 1200)) {
+    $line = $entry.Relative
+    if (($builder.Length + $line.Length + 2) -ge $MaxChars) { break }
+    [void]$builder.AppendLine($line)
+}
+
+$used = $builder.Length
+
+foreach ($entry in ($allFiles | Sort-Object @{Expression="Score";Descending=$true}, @{Expression="Relative";Descending=$false})) {
+    if ($used -ge $MaxChars) { break }
+
+    $key = $entry.Relative.ToLowerInvariant()
+    if ($included.ContainsKey($key)) { continue }
+
+    $added = Add-ContextFile -Builder $builder -Root $root -RelativePath $entry.Relative -Remaining ($MaxChars - $used)
+    if ($added -gt 0) {
+        $included[$key] = $true
+        $used += $added
+    }
+}
+
+$builder.ToString()
+) { return $false }
 
     $ext = $_.Extension.ToLowerInvariant()
     if ($allowedExtensions -contains $ext) { return $true }
