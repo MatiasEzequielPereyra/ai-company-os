@@ -7,6 +7,9 @@ param(
 
     [string]$Owner,
 
+    [ValidateSet("lightweight","standard","high-assurance")]
+    [string]$WorkflowProfile,
+
     [string]$Note,
 
     [string]$Evidence,
@@ -70,8 +73,12 @@ if (-not (Test-Path $filePath)) {
 }
 
 $now = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-$content = Get-Content -Path $filePath -Raw
+$content = Get-Content -Path $filePath -Raw -Encoding UTF8
+$currentStatus = if ($content -match '(?m)^Status:\s*(.+)$') { $Matches[1].Trim() } else { "UNKNOWN" }
 
+if ($PSBoundParameters.ContainsKey("WorkflowProfile") -and $currentStatus -notin @("BACKLOG","READY")) {
+    throw "Workflow profile may only change while a task is BACKLOG or READY. Current status: $currentStatus"
+}
 
 if ($PSBoundParameters.ContainsKey("Priority")) {
     $content = Replace-LineValue -Content $content -Key "Priority" -Value $Priority
@@ -79,6 +86,18 @@ if ($PSBoundParameters.ContainsKey("Priority")) {
 
 if ($PSBoundParameters.ContainsKey("Owner")) {
     $content = Replace-LineValue -Content $content -Key "Owner" -Value $Owner
+}
+
+if ($PSBoundParameters.ContainsKey("WorkflowProfile")) {
+    if ($content -match '(?m)^Workflow profile:\s*.*$') {
+        $content = Replace-LineValue -Content $content -Key "Workflow profile" -Value $WorkflowProfile
+    }
+    elseif ($content -match '(?m)^Workflow phase:\s*.*$') {
+        $content = [regex]::Replace($content,'(?m)^(Workflow phase:\s*.*)$',("$1" + [Environment]::NewLine + [Environment]::NewLine + "Workflow profile: $WorkflowProfile"),1)
+    }
+    else {
+        throw "Task metadata is missing Workflow phase; cannot safely add Workflow profile."
+    }
 }
 
 $content = Replace-LineValue -Content $content -Key "Updated" -Value $now
@@ -95,6 +114,7 @@ $summaryParts = @()
 
 if ($PSBoundParameters.ContainsKey("Priority")) { $summaryParts += "Priority=$Priority" }
 if ($PSBoundParameters.ContainsKey("Owner")) { $summaryParts += "Owner=$Owner" }
+if ($PSBoundParameters.ContainsKey("WorkflowProfile")) { $summaryParts += "WorkflowProfile=$WorkflowProfile" }
 if ($PSBoundParameters.ContainsKey("Note")) { $summaryParts += "Note added" }
 if ($PSBoundParameters.ContainsKey("Evidence")) { $summaryParts += "Evidence added" }
 
