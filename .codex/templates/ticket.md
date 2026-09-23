@@ -1,82 +1,102 @@
-# {{ID}} — {{TITLE}}
+# {{ID}} - {{TITLE}}
 
 ## Metadata
+
+ID: {{ID}}
 
 Status: BACKLOG
 
 Priority: P2
 
-Owner:
+Owner: engineering-manager
 
-Created:
+Created: {{DATE}}
 
-Updated:
+Updated: {{DATE}}
+
+Workflow phase: PLANNING
+
+Workflow profile: standard
 
 ---
 
 ## Objective
 
-What needs to be accomplished?
+Describe the concrete outcome this task must produce.
 
 ---
 
 ## Context
 
-Why is this needed?
+Record the repository/product context needed to execute the task without relying on chat history.
 
 ---
 
 ## Requirements
 
-- 
+-
 
 ---
 
 ## Acceptance Criteria
 
-- [ ]
+- [ ] Objective is satisfied.
+- [ ] Required evidence is recorded.
+- [ ] Applicable quality gates are complete or explicitly marked NOT_APPLICABLE.
 
 ---
 
 ## Non-Goals
 
-- 
+-
 
 ---
 
 ## Dependencies
 
-- 
+-
 
 ---
 
 ## Technical Notes
 
-- 
+-
 
 ---
 
 ## Affected Areas
 
-- 
+-
 
 ---
 
 ## Testing Requirements
 
-- 
+-
+
+---
+
+## Evidence
+
+-
 
 ---
 
 ## Risks
 
-- 
+-
 
 ---
 
 ## Handoff
 
-Next agent:
+Next agent: engineering-manager
+
+---
+
+## Transition Log
+
+- {{DATE}} - SYSTEM - CREATED - Task created in BACKLOG.
 
 ---
 
