@@ -68,6 +68,17 @@ if ($pmInstructions -notmatch 'product-intake\.md') {
     throw "PM existing-project fallback must recognize product-intake.md"
 }
 
+$advanceGuardScript = Get-Content (Join-Path $repoRoot "scripts\advance-task.ps1") -Raw -Encoding UTF8
+if ($advanceGuardScript -notmatch 'Central transition guards') {
+    throw "advance-task.ps1 must enforce central lifecycle transition guards"
+}
+if ($advanceGuardScript -notmatch 'cannot become ACTIVE without a prepared dispatch packet') {
+    throw "advance-task.ps1 must require dispatch evidence before ACTIVE"
+}
+if ($advanceGuardScript -notmatch 'required final approval artifact is missing') {
+    throw "advance-task.ps1 must require final approval evidence before DONE"
+}
+
 $runnerPath = Join-Path $repoRoot "scripts\run-agent-task.ps1"
 $runner = Get-Content $runnerPath -Raw
 
