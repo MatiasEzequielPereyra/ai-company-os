@@ -1,6 +1,8 @@
 param(
     [string]$ProjectPath = ".",
     [switch]$Parallel,
+    [ValidateSet("Auto","Codex","OpenRouter","Gemini")]
+    [string]$Provider = "Auto",
     [string]$Model = "",
     [ValidateSet("Auto","ChatGPT","ApiKey")]
     [string]$AuthMode = "Auto"
@@ -13,6 +15,15 @@ function Read-Field {
     $pattern = "(?m)^" + [regex]::Escape($Key) + ":\s*(.+)$"
     if ($Content -match $pattern) { return $Matches[1].Trim() }
     return ""
+}
+
+if ($PSBoundParameters.ContainsKey("AuthMode") -and -not $PSBoundParameters.ContainsKey("Provider")) {
+    if ($AuthMode -eq "ChatGPT") {
+        $Provider = "Codex"
+    }
+    elseif ($AuthMode -eq "ApiKey") {
+        throw "Legacy -AuthMode ApiKey is disabled. Use -Provider OpenRouter or -Provider Gemini."
+    }
 }
 
 $root = (Resolve-Path $ProjectPath).Path
@@ -38,11 +49,12 @@ if ($active.Count -eq 0) {
 }
 
 Write-Host "ACTIVE agent tasks: $($active.Count)" -ForegroundColor Cyan
+Write-Host "Provider mode: $Provider" -ForegroundColor DarkGray
 $active | Sort-Object ID | Format-Table ID, Owner -AutoSize
 
 if (-not $Parallel) {
     foreach ($task in ($active | Sort-Object ID)) {
-        & $runner -ProjectPath $root -Id $task.ID -Model $Model -AuthMode $AuthMode
+        & $runner -ProjectPath $root -Id $task.ID -Provider $Provider -Model $Model
     }
 }
 else {
@@ -50,9 +62,9 @@ else {
 
     foreach ($task in ($active | Sort-Object ID)) {
         $id = $task.ID
-        $jobs += Start-Job -Name $id -ArgumentList $runner,$root,$id,$Model,$AuthMode -ScriptBlock {
-            param($runnerPath,$projectRoot,$taskId,$modelName,$authModeName)
-            & $runnerPath -ProjectPath $projectRoot -Id $taskId -Model $modelName -AuthMode $authModeName
+        $jobs += Start-Job -Name $id -ArgumentList $runner,$root,$id,$Provider,$Model -ScriptBlock {
+            param($runnerPath,$projectRoot,$taskId,$providerName,$modelName)
+            & $runnerPath -ProjectPath $projectRoot -Id $taskId -Provider $providerName -Model $modelName
         }
     }
 
@@ -62,11 +74,8 @@ else {
     $failed = @()
     foreach ($job in $jobs) {
         Receive-Job -Job $job
-        if ($job.State -ne "Completed") {
-            $failed += $job.Name
-        }
+        if ($job.State -ne "Completed") { $failed += $job.Name }
     }
-
     Remove-Job -Job $jobs -Force
 
     if ($failed.Count -gt 0) {
