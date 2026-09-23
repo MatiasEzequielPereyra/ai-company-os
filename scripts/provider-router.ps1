@@ -90,7 +90,7 @@ foreach ($candidate in $attempts) {
 
     $providerScript = Join-Path $providersRoot $scriptName
     if (-not (Test-Path $providerScript)) {
-        $errors += "$candidateName: adapter missing"
+        $errors += "${candidateName}: adapter missing"
         if ($Provider -ne "Auto") { throw "Provider adapter not found: $providerScript" }
         continue
     }
