@@ -162,7 +162,9 @@ $ScriptFiles = @(
     "build-agent-context.ps1",
     "provider-router.ps1",
     "run-gate-agent.ps1",
-    "run-pending-gates.ps1"
+    "run-pending-gates.ps1",
+    "generate-engineering-backlog.ps1",
+    "materialize-engineering-backlog.ps1"
 )
 
 foreach ($ScriptFile in $ScriptFiles) {
