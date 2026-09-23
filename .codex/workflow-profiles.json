@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "default_profile": "standard",
+  "profiles": {
+    "lightweight": {
+      "description": "Low-risk, reversible work with normal review and QA evidence.",
+      "required_gates": ["review", "qa"],
+      "security": "conditional",
+      "writable_parallelism": "isolated-worktree",
+      "minimum_reviewers": 1
+    },
+    "standard": {
+      "description": "Default product engineering profile with independent review, QA, and risk-based security validation.",
+      "required_gates": ["review", "qa"],
+      "security": "conditional",
+      "writable_parallelism": "isolated-worktree",
+      "minimum_reviewers": 1
+    },
+    "high-assurance": {
+      "description": "Sensitive, release-critical, auth, payment, data, infrastructure, or security-relevant work.",
+      "required_gates": ["review", "qa", "security"],
+      "security": "required",
+      "writable_parallelism": "isolated-worktree",
+      "minimum_reviewers": 1
+    }
+  }
+}
