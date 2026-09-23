@@ -73,3 +73,9 @@ Before security review, read:
 - Relevant task
 
 Do not request or expose secrets unnecessarily.
+
+# Existing Project Context Fallback
+
+For an existing repository, use project-intake, architecture-intake and operations-intake when canonical context documents are absent.
+Use database migrations, policies, auth code, infrastructure configuration and audit documentation as primary security evidence.
+Do not block solely because canonical context templates are missing.
