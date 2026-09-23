@@ -13,7 +13,7 @@ if ([string]::IsNullOrWhiteSpace($env:GEMINI_API_KEY)) {
     throw "GEMINI_API_KEY is not configured."
 }
 
-$schema = Get-Content $SchemaPath -Raw | ConvertFrom-Json
+$schema = Get-Content $SchemaPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $fullPrompt = $Prompt + [Environment]::NewLine + [Environment]::NewLine + "# Repository Context Pack" + [Environment]::NewLine + $Context
 
 $body = @{
