@@ -17,6 +17,8 @@ if(-not(Test-Path $taskPath)){throw "Task not found: $taskPath"}
 
 $content=Get-Content $taskPath -Raw
 $status=Read-Field $content "Status"
+$profile=Read-Field $content "Workflow profile"
+if([string]::IsNullOrWhiteSpace($profile)){$profile="standard"}
 if($status -ne "SECURITY"){throw "Task $Id must be SECURITY for final approval. Current status: $status"}
 
 $qaPath=Join-Path $root ("docs\engineering\qa\"+$Id+"-qa.md")
@@ -31,6 +33,7 @@ $secOutcome=Read-Field $sec "Outcome"
 
 if($qaOutcome -ne "PASS"){throw "QA gate is not PASS for $Id"}
 if($secOutcome -notin @("PASS","NOT_APPLICABLE")){throw "Security gate is not satisfied for $Id"}
+if($profile -eq "high-assurance" -and $secOutcome -ne "PASS"){throw "High-assurance task $Id requires security PASS before final approval."}
 
 $dir=Join-Path $root "docs\engineering\final-approvals"
 if(-not(Test-Path $dir)){New-Item -ItemType Directory -Force -Path $dir|Out-Null}
