@@ -16,6 +16,7 @@ $required = @(
     "scripts\run-pending-gates.ps1",
     "scripts\generate-engineering-backlog.ps1",
     "scripts\materialize-engineering-backlog.ps1",
+    "scripts\reconcile-engineering-backlog.ps1",
     ".codex\provider-config.json",
     "schemas\agent-result.schema.json",
     "schemas\review-result.schema.json",
@@ -164,7 +165,8 @@ $parseTargets = @(
     "scripts\run-gate-agent.ps1",
     "scripts\run-pending-gates.ps1",
     "scripts\generate-engineering-backlog.ps1",
-    "scripts\materialize-engineering-backlog.ps1"
+    "scripts\materialize-engineering-backlog.ps1",
+    "scripts\reconcile-engineering-backlog.ps1"
 )
 
 foreach ($relative in $parseTargets) {
