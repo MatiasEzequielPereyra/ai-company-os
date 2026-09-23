@@ -1,0 +1,25 @@
+{
+  "type": "object",
+  "properties": {
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "PASS",
+        "FAIL"
+      ],
+      "description": "PASS when the task deliverable satisfies its acceptance criteria and is internally coherent/evidence-based. FAIL only when the deliverable itself is inadequate. Do not FAIL merely because the underlying product has defects documented by the deliverable."
+    },
+    "evidence": {
+      "type": "string"
+    },
+    "findings": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "outcome",
+    "evidence",
+    "findings"
+  ],
+  "additionalProperties": false
+}
