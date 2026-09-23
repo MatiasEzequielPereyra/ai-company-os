@@ -71,6 +71,96 @@ foreach ($item in $items) {
         if (-not $keys.ContainsKey($dependencyKey)) {
             throw "Unknown dependency '$dependencyKey' in item $($item.key)"
         }
+        if ($dependencyKey -eq [string]$item.key) {
+            throw "Backlog item $($item.key) cannot depend on itself."
+        }
+    }
+}
+
+$authorizationKey = [string]$backlog.implementation_authorization_key
+if ([string]::IsNullOrWhiteSpace($authorizationKey)) {
+    throw "Backlog implementation_authorization_key cannot be empty."
+}
+
+if ($authorizationKey -ne "NONE") {
+    if (-not $keys.ContainsKey($authorizationKey)) {
+        throw "Implementation authorization key '$authorizationKey' does not reference a backlog item."
+    }
+
+    $authorizationItem = @($items | Where-Object { [string]$_.key -eq $authorizationKey })[0]
+    if ([string]$authorizationItem.kind -ne "DECISION") {
+        throw "Implementation authorization item '$authorizationKey' must be a DECISION."
+    }
+}
+
+# Detect dependency cycles before creating any task files.
+$remaining = @{}
+$dependents = @{}
+foreach ($item in $items) {
+    $key = [string]$item.key
+    $remaining[$key] = @($item.dependencies).Count
+    if (-not $dependents.ContainsKey($key)) { $dependents[$key] = @() }
+}
+foreach ($item in $items) {
+    $key = [string]$item.key
+    foreach ($dependency in @($item.dependencies)) {
+        $d = [string]$dependency
+        $dependents[$d] = @($dependents[$d]) + @($key)
+    }
+}
+$queue = New-Object System.Collections.Queue
+foreach ($key in @($remaining.Keys)) {
+    if ([int]$remaining[$key] -eq 0) { $queue.Enqueue($key) }
+}
+$visited = 0
+while ($queue.Count -gt 0) {
+    $key = [string]$queue.Dequeue()
+    $visited++
+    foreach ($dependent in @($dependents[$key])) {
+        $remaining[$dependent] = [int]$remaining[$dependent] - 1
+        if ([int]$remaining[$dependent] -eq 0) { $queue.Enqueue([string]$dependent) }
+    }
+}
+if ($visited -ne $items.Count) {
+    throw "Engineering backlog contains a dependency cycle. No tasks were created."
+}
+
+function Test-DependsOnKey {
+    param(
+        [string]$ItemKey,
+        [string]$TargetKey,
+        [hashtable]$ItemByKey,
+        [hashtable]$Visited
+    )
+
+    if ($ItemKey -eq $TargetKey) { return $true }
+    if ($Visited.ContainsKey($ItemKey)) { return $false }
+    $Visited[$ItemKey] = $true
+
+    $item = $ItemByKey[$ItemKey]
+    foreach ($dependency in @($item.dependencies)) {
+        $dependencyKey = [string]$dependency
+        if ($dependencyKey -eq $TargetKey) { return $true }
+        if (Test-DependsOnKey -ItemKey $dependencyKey -TargetKey $TargetKey -ItemByKey $ItemByKey -Visited $Visited) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+$itemByKey = @{}
+foreach ($item in $items) { $itemByKey[[string]$item.key] = $item }
+
+if ($authorizationKey -ne "NONE") {
+    foreach ($item in $items) {
+        $key = [string]$item.key
+        if ($key -eq $authorizationKey -or [string]$item.kind -eq "DECISION") { continue }
+
+        $visitedKeys = @{}
+        if (-not (Test-DependsOnKey -ItemKey $key -TargetKey $authorizationKey -ItemByKey $itemByKey -Visited $visitedKeys)) {
+            $item.dependencies = @($item.dependencies) + @($authorizationKey)
+        }
     }
 }
 
