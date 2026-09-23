@@ -19,7 +19,7 @@ if (-not (Test-Path (Join-Path $targetRoot ".git"))) {
 }
 
 $directories = @(
-    ".codex", ".codex\agents", ".codex\policies", ".codex\protocols", ".codex\state", ".codex\workflows",
+    ".codex", ".codex\agents", ".codex\policies", ".codex\protocols", ".codex\state", ".codex\workflows", ".codex\templates",
     ".agents", ".agents\skills", "docs", "docs\product", "docs\architecture", "docs\engineering",
     "docs\operations", "docs\decisions", "tasks", "scripts", "scripts\providers", "schemas"
 )
@@ -39,7 +39,7 @@ foreach ($entry in $frameworkFiles) {
     else { Copy-Item $source $target -Force; Write-Host "INSTALLED: $($entry.Target)" -ForegroundColor Green }
 }
 
-foreach ($folder in @(".codex\agents",".codex\policies",".codex\protocols",".codex\workflows")) {
+foreach ($folder in @(".codex\agents",".codex\policies",".codex\protocols",".codex\workflows",".codex\templates")) {
     $sourceFolder = Join-Path $sourceRoot $folder
     $targetFolder = Join-Path $targetRoot $folder
     if (Test-Path $sourceFolder) {
