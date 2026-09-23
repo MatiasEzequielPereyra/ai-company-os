@@ -82,7 +82,7 @@ if (-not (Test-Path $filePath)) {
     throw "Task not found: $filePath"
 }
 
-$content = Get-Content -Path $filePath -Raw
+$content = Get-Content -Path $filePath -Raw -Encoding UTF8
 $currentStatus = if ($content -match '(?m)^Status:\s*(.+)$') { $Matches[1].Trim() } else { "UNKNOWN" }
 
 if (-not $validTransitions.ContainsKey($currentStatus)) {
