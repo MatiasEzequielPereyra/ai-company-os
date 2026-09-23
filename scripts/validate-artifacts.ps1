@@ -97,7 +97,7 @@ foreach ($file in Get-ChildItem $tasksPath -Filter "AICO-*.md" -File -ErrorActio
         dependencies = @(Read-Dependencies $content)
     }
 
-    if (-not $expectedPhaseByStatus.ContainsKey([string]$normalized.status)) { throw "Unsupported task status in $id: $($normalized.status)" }
+    if (-not $expectedPhaseByStatus.ContainsKey([string]$normalized.status)) { throw "Unsupported task status in ${id}: $($normalized.status)" }
     $expectedPhase = [string]$expectedPhaseByStatus[[string]$normalized.status]
     if ([string]$normalized.workflow_phase -ne $expectedPhase) {
         throw "Task $id has Workflow phase $($normalized.workflow_phase) but status $($normalized.status) requires $expectedPhase."
