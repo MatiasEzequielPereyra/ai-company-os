@@ -15,7 +15,7 @@ $tasksPath=Join-Path $root "tasks"
 $taskPath=Join-Path $tasksPath ($Id+".md")
 if(-not(Test-Path $taskPath)){throw "Task not found: $taskPath"}
 
-$content=Get-Content $taskPath -Raw
+$content=Get-Content $taskPath -Raw -Encoding UTF8
 $status=Read-Field $content "Status"
 if($status -ne "SECURITY"){throw "Task $Id must be SECURITY for final approval. Current status: $status"}
 
@@ -24,8 +24,8 @@ $securityPath=Join-Path $root ("docs\engineering\security\"+$Id+"-security.md")
 if(-not(Test-Path $qaPath)){throw "QA artifact missing for $Id"}
 if(-not(Test-Path $securityPath)){throw "Security artifact missing for $Id"}
 
-$qa=Get-Content $qaPath -Raw
-$sec=Get-Content $securityPath -Raw
+$qa=Get-Content $qaPath -Raw -Encoding UTF8
+$sec=Get-Content $securityPath -Raw -Encoding UTF8
 $qaOutcome=Read-Field $qa "Outcome"
 $secOutcome=Read-Field $sec "Outcome"
 
