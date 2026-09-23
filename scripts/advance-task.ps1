@@ -161,7 +161,6 @@ function Assert-PreparedForReady {
 
     $owner = Read-Field -Content $Content -Key "Owner"
     $objective = Read-Section -Content $Content -Section "Objective"
-    $context = Read-Section -Content $Content -Section "Context"
     $acceptance = Read-Section -Content $Content -Section "Acceptance Criteria"
 
     if ([string]::IsNullOrWhiteSpace($owner)) {
@@ -172,9 +171,6 @@ function Assert-PreparedForReady {
         throw ("Transition guard: {0} is missing Objective." -f $TaskId)
     }
 
-    if ([string]::IsNullOrWhiteSpace($context) -or $context -eq "-") {
-        throw ("Transition guard: {0} is missing Context." -f $TaskId)
-    }
 
     if ([string]::IsNullOrWhiteSpace($acceptance) -or $acceptance -eq "-") {
         throw ("Transition guard: {0} is missing Acceptance Criteria." -f $TaskId)
