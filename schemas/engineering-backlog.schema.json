@@ -113,7 +113,7 @@
     },
     "implementation_authorization_key": {
       "type": "string",
-      "description": "Logical key of the DECISION item that authorizes implementation. Use NONE only when the approved source plan explicitly requires no implementation authorization."
+      "description": "Exact logical key copied from one DECISION item in items that authorizes implementation. The value must exactly match that item's key. Use NONE only when the approved source plan explicitly requires no implementation authorization."
     }
   },
   "required": [
