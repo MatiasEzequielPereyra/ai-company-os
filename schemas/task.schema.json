@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AI Company OS normalized task",
+  "type": "object",
+  "properties": {
+    "id": { "type": "string", "pattern": "^AICO-[0-9]{3,}$" },
+    "title": { "type": "string", "minLength": 1 },
+    "status": { "type": "string", "enum": ["BACKLOG","READY","ACTIVE","REVIEW","QA","SECURITY","DONE","BLOCKED"] },
+    "priority": { "type": "string", "enum": ["P0","P1","P2","P3"] },
+    "owner": { "type": "string", "minLength": 1 },
+    "created": { "type": "string", "minLength": 1 },
+    "updated": { "type": "string", "minLength": 1 },
+    "workflow_phase": { "type": "string", "minLength": 1 },
+    "workflow_profile": { "type": "string", "enum": ["lightweight","standard","high-assurance"] },
+    "objective": { "type": "string", "minLength": 1 },
+    "acceptance_criteria": { "type": "string", "minLength": 1 },
+    "dependencies": { "type": "array", "items": { "type": "string", "pattern": "^AICO-[0-9]{3,}$" } }
+  },
+  "required": ["id","title","status","priority","owner","created","updated","workflow_phase","workflow_profile","objective","acceptance_criteria","dependencies"],
+  "additionalProperties": true
+}
