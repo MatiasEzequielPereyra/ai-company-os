@@ -21,7 +21,7 @@ function Add-ContextFile {
     if (-not (Test-Path $fullPath -PathType Leaf)) { return 0 }
 
     try {
-        $content = Get-Content $fullPath -Raw -ErrorAction Stop
+        $content = Get-Content $fullPath -Raw -Encoding UTF8 -ErrorAction Stop
     }
     catch {
         return 0
