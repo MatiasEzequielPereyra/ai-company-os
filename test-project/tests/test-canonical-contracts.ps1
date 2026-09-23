@@ -61,13 +61,13 @@ try {
 
     $gemini = Get-Content (Join-Path $repoRoot "scripts\providers\invoke-gemini.ps1") -Raw -Encoding UTF8
     if ($gemini -notmatch "Test-TransientGeminiError") { throw "Gemini adapter must classify transient failures." }
-    if ($gemini -notmatch "\$maxAttempts = 3") { throw "Gemini adapter must retry transient failures." }
+    if (-not $gemini.Contains('$maxAttempts = 3')) { throw "Gemini adapter must retry transient failures." }
 
     $parallel = Get-Content (Join-Path $repoRoot "scripts\run-active-agents.ps1") -Raw -Encoding UTF8
     if ($parallel -notmatch "Shared-workspace -Parallel execution is only allowed") { throw "Parallel runtime guard is missing." }
 
     $workspace = Get-Content (Join-Path $repoRoot "scripts\new-agent-workspace.ps1") -Raw -Encoding UTF8
-    if ($workspace -notmatch "git -C \$root worktree add") { throw "Writable isolation must use Git worktrees." }
+    if (-not $workspace.Contains('git -C $root worktree add')) { throw "Writable isolation must use Git worktrees." }
 
     Write-Host "PASS: canonical contracts and runtime safety test" -ForegroundColor Green
 }
