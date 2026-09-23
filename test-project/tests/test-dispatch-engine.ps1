@@ -29,6 +29,16 @@ try{
     $packets=@(Get-ChildItem (Join-Path $tempRoot "docs\engineering\dispatch") -Filter "AICO-*.md" -File)
     if($packets.Count -ne 5){throw "Expected 5 prepared execution packets, found $($packets.Count)"}
 
+    foreach($packet in $packets){
+        $packetContent = Get-Content $packet.FullName -Raw -Encoding UTF8
+        $expectedTask = [System.IO.Path]::GetFileNameWithoutExtension($packet.Name)
+        $identityPattern = "(?m)^Task:\s*" + [regex]::Escape($expectedTask) + "\s*$"
+
+        if($packetContent -notmatch $identityPattern){
+            throw "Prepared dispatch packet identity mismatch for $expectedTask`: $($packet.FullName)"
+        }
+    }
+
     $activeBefore=@()
     Get-ChildItem (Join-Path $tempRoot "tasks") -Filter "AICO-*.md" -File|ForEach-Object{
         $c=Get-Content $_.FullName -Raw
