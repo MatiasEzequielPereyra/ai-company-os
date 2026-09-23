@@ -56,8 +56,6 @@ try {
         New-Item -ItemType Directory -Force -Path (Join-Path $tempRoot $dir) | Out-Null
     }
 
-    Copy-Item $advanceSource (Join-Path $tempRoot "scripts\advance-task.ps1") -Force
-
     $task = @(
         "# AICO-001 - Guard fixture",
         "",
@@ -123,7 +121,9 @@ try {
         (New-Object System.Text.UTF8Encoding($false))
     )
 
-    $advance = Join-Path $tempRoot "scripts\advance-task.ps1"
+    # Invoke the repository script against an external absolute TasksPath.
+    # This verifies evidence paths resolve from the task project, not from PSScriptRoot.
+    $advance = $advanceSource
 
     & $advance -Id AICO-001 -Status READY -TasksPath (Join-Path $tempRoot "tasks")
 
