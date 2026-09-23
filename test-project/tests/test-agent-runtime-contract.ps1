@@ -90,6 +90,15 @@ if ($openRouter -notmatch 'json_schema') {
 if ($openRouter -notmatch 'Get-HttpErrorBody') {
     throw "OpenRouter adapter must surface HTTP error response bodies"
 }
+if ($openRouter -notmatch 'UTF8\.GetBytes') {
+    throw "OpenRouter adapter must send explicitly encoded UTF-8 request bytes"
+}
+if ($openRouter -notmatch 'application/json; charset=utf-8') {
+    throw "OpenRouter adapter must declare UTF-8 JSON content type"
+}
+if ($openRouter -notmatch 'ConvertFrom-Json') {
+    throw "OpenRouter adapter must validate serialized JSON before transport"
+}
 
 $gemini = Get-Content (Join-Path $repoRoot "scripts\providers\invoke-gemini.ps1") -Raw
 if ($gemini -notmatch 'generativelanguage\.googleapis\.com') {
