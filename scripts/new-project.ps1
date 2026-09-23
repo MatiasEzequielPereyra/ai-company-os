@@ -165,7 +165,8 @@ $ScriptFiles = @(
     "run-pending-gates.ps1",
     "generate-engineering-backlog.ps1",
     "materialize-engineering-backlog.ps1",
-    "reconcile-engineering-backlog.ps1"
+    "reconcile-engineering-backlog.ps1",
+    "repair-artifact-encoding.ps1"
 )
 
 foreach ($ScriptFile in $ScriptFiles) {
