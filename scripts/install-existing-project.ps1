@@ -63,7 +63,7 @@ $scriptNames = @(
     "initialize-project.ps1","new-task.ps1","list-tasks.ps1","update-task.ps1","advance-task.ps1","sync-company-state.ps1",
     "new-work-request.ps1","generate-plan.ps1","materialize-plan-tasks.ps1","evaluate-readiness.ps1","dispatch-ready-tasks.ps1",
     "submit-task-result.ps1","review-task.ps1","qa-task.ps1","security-task.ps1","finalize-task.ps1","refresh-dependencies.ps1","orchestrate.ps1",
-    "run-agent-task.ps1","run-active-agents.ps1","build-agent-context.ps1","provider-router.ps1","run-gate-agent.ps1","run-pending-gates.ps1","generate-engineering-backlog.ps1","materialize-engineering-backlog.ps1","reconcile-engineering-backlog.ps1"
+    "run-agent-task.ps1","run-active-agents.ps1","build-agent-context.ps1","provider-router.ps1","run-gate-agent.ps1","run-pending-gates.ps1","generate-engineering-backlog.ps1","materialize-engineering-backlog.ps1","reconcile-engineering-backlog.ps1","repair-artifact-encoding.ps1"
 )
 foreach ($name in $scriptNames) {
     $source = Join-Path $sourceRoot ("scripts\" + $name)
