@@ -19,7 +19,8 @@ try {
     $advance = Join-Path $tempRoot "scripts\advance-task.ps1"
     $security = Join-Path $tempRoot "scripts\security-task.ps1"
 
-    & $newTask -Title "High assurance change" -Owner backend -Priority P0 -WorkflowProfile "high-assurance" -Objective "Exercise profile enforcement." -TasksPath $tasksPath
+    & $newTask -Title "High assurance change" -Owner backend -Priority P0 -WorkflowProfile "standard" -Objective "Exercise profile enforcement." -TasksPath $tasksPath
+    & (Join-Path $tempRoot "scripts\update-task.ps1") -Id AICO-001 -WorkflowProfile "high-assurance" -TasksPath $tasksPath
 
     $taskPath = Join-Path $tasksPath "AICO-001.md"
     $task = Get-Content $taskPath -Raw -Encoding UTF8
@@ -28,6 +29,15 @@ try {
     foreach ($status in @("READY","ACTIVE","REVIEW","QA","SECURITY")) {
         & $advance -Id AICO-001 -Status $status -Actor "test" -Reason "Profile test transition." -TasksPath $tasksPath
     }
+
+    $profileMutationRejected = $false
+    try {
+        & (Join-Path $tempRoot "scripts\update-task.ps1") -Id AICO-001 -WorkflowProfile "lightweight" -TasksPath $tasksPath
+    }
+    catch {
+        if ($_.Exception.Message -match "BACKLOG or READY") { $profileMutationRejected = $true } else { throw }
+    }
+    if (-not $profileMutationRejected) { throw "Active/high-assurance task profile was allowed to weaken mid-flight." }
 
     $rejected = $false
     try {
