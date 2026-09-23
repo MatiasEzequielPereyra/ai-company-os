@@ -28,7 +28,8 @@ foreach ($dir in $directories) { New-Item -ItemType Directory -Force -Path (Join
 $frameworkFiles = @(
     @{ Source="AGENTS.md"; Target="AGENTS.md" },
     @{ Source=".codex\config.toml"; Target=".codex\config.toml" },
-    @{ Source=".codex\provider-config.json"; Target=".codex\provider-config.json" }
+    @{ Source=".codex\provider-config.json"; Target=".codex\provider-config.json" },
+    @{ Source=".codex\workflow-profiles.json"; Target=".codex\workflow-profiles.json" }
 )
 foreach ($entry in $frameworkFiles) {
     $source = Join-Path $sourceRoot $entry.Source
@@ -63,7 +64,8 @@ $scriptNames = @(
     "initialize-project.ps1","new-task.ps1","list-tasks.ps1","update-task.ps1","advance-task.ps1","sync-company-state.ps1",
     "new-work-request.ps1","generate-plan.ps1","materialize-plan-tasks.ps1","evaluate-readiness.ps1","dispatch-ready-tasks.ps1",
     "submit-task-result.ps1","review-task.ps1","qa-task.ps1","security-task.ps1","finalize-task.ps1","refresh-dependencies.ps1","orchestrate.ps1",
-    "run-agent-task.ps1","run-active-agents.ps1","build-agent-context.ps1","provider-router.ps1","run-gate-agent.ps1","run-pending-gates.ps1","generate-engineering-backlog.ps1","materialize-engineering-backlog.ps1"
+    "run-agent-task.ps1","run-active-agents.ps1","build-agent-context.ps1","provider-router.ps1","run-gate-agent.ps1","run-pending-gates.ps1","generate-engineering-backlog.ps1","materialize-engineering-backlog.ps1",
+    "validate-json-contract.ps1","validate-artifacts.ps1","write-operational-event.ps1","summarize-metrics.ps1","new-agent-workspace.ps1"
 )
 foreach ($name in $scriptNames) {
     $source = Join-Path $sourceRoot ("scripts\" + $name)
@@ -88,24 +90,17 @@ if (Test-Path $providersSource) {
     }
 }
 
-$schemaNames = @(
-    "agent-result.schema.json",
-    "review-result.schema.json",
-    "qa-gate-result.schema.json",
-    "security-gate-result.schema.json",
-    "engineering-backlog.schema.json"
-)
-foreach ($schemaName in $schemaNames) {
-    $schemaSource = Join-Path $sourceRoot ("schemas\" + $schemaName)
-    $schemaTarget = Join-Path $targetRoot ("schemas\" + $schemaName)
-    if (-not (Test-Path $schemaSource)) { continue }
-
-    if ((Test-Path $schemaTarget) -and -not $Force) {
-        Write-Host "SKIP existing schema: $schemaName" -ForegroundColor DarkYellow
-    }
-    else {
-        Copy-Item $schemaSource $schemaTarget -Force
-        Write-Host "INSTALLED schema: $schemaName" -ForegroundColor Green
+$schemasSource = Join-Path $sourceRoot "schemas"
+if (Test-Path $schemasSource) {
+    Get-ChildItem $schemasSource -Filter "*.schema.json" -File | ForEach-Object {
+        $schemaTarget = Join-Path $targetRoot ("schemas\" + $_.Name)
+        if ((Test-Path $schemaTarget) -and -not $Force) {
+            Write-Host "SKIP existing schema: $($_.Name)" -ForegroundColor DarkYellow
+        }
+        else {
+            Copy-Item $_.FullName $schemaTarget -Force
+            Write-Host "INSTALLED schema: $($_.Name)" -ForegroundColor Green
+        }
     }
 }
 
