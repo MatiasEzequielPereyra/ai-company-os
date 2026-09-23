@@ -5,6 +5,7 @@ $ErrorActionPreference = "Stop"
 $testsRoot = $PSScriptRoot
 
 $tests = @(
+    "test-powershell-parse.ps1",
     "test-project-intake.ps1",
     "test-new-project-contract.ps1",
     "test-install-existing-project-contract.ps1",
