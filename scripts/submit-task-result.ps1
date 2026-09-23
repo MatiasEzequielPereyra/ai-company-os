@@ -100,7 +100,8 @@ $lines=@(
     "",
     "- This result records the assigned owner's delivery.",
     "- It does not replace independent review, QA, security or CEO approval.",
-    "- Any blocker must remain explicit until resolved."
+    "- BLOCKED is reserved for an execution blocker that prevented the assigned owner from completing the task.",
+    "- Product defects, release blockers, failed validations and audit findings may be severe while the task outcome remains COMPLETED."
 )
 
 Write-Utf8NoBom $resultPath ($lines -join [Environment]::NewLine)
