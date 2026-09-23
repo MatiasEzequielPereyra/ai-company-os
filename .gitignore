@@ -1,0 +1,7 @@
+# AI Company OS generated runtime artifacts
+.codex/runtime/
+
+# Common local secrets
+.env
+.env.*
+!.env.example
