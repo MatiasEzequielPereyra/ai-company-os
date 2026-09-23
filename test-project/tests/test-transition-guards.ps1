@@ -123,11 +123,8 @@ try {
     # The central lifecycle guard must not reject those profiles.
     & $advance -Id AICO-001 -Status READY -TasksPath (Join-Path $tempRoot "tasks")
 
-    Expect-Failure {
-        & $advance -Id AICO-001 -Status ACTIVE -TasksPath (Join-Path $tempRoot "tasks")
-    } "cannot become ACTIVE without a prepared dispatch packet"
-
-    Set-Content -Path (Join-Path $tempRoot "docs\engineering\dispatch\AICO-001.md") -Encoding UTF8 -Value "# Dispatch"
+    # ACTIVE itself is workflow-profile agnostic. Standard dispatch packet
+    # enforcement belongs to dispatch-ready-tasks.ps1, not this primitive.
     & $advance -Id AICO-001 -Status ACTIVE -TasksPath (Join-Path $tempRoot "tasks")
 
     Expect-Failure {
