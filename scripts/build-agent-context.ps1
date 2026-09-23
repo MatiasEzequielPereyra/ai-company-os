@@ -4,7 +4,7 @@ param(
     [string]$Id,
     [Parameter(Mandatory = $true)]
     [string]$Owner,
-    [int]$MaxChars = 500000
+    [int]$MaxChars = 320000
 )
 
 $ErrorActionPreference = "Stop"
