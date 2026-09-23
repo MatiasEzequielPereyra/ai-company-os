@@ -24,7 +24,7 @@ try {
 
     $taskPath = Join-Path $tasksPath "AICO-001.md"
     $task = Get-Content $taskPath -Raw -Encoding UTF8
-    if ($task -notmatch '(?m)^Workflow profile:\s*high-assurance$') { throw "Task did not persist high-assurance profile." }
+    if ($task -notmatch '(?m)^Workflow profile:\s*high-assurance\r?$') { throw "Task did not persist high-assurance profile." }
 
     foreach ($status in @("READY","ACTIVE","REVIEW","QA","SECURITY")) {
         & $advance -Id AICO-001 -Status $status -Actor "test" -Reason "Profile test transition." -TasksPath $tasksPath
@@ -52,7 +52,7 @@ try {
     & $security -ProjectPath $tempRoot -Id AICO-001 -Outcome PASS -Evidence "Security validation executed." -Findings "NONE"
 
     $artifact = Get-Content (Join-Path $tempRoot "docs\engineering\security\AICO-001-security.md") -Raw -Encoding UTF8
-    if ($artifact -notmatch '(?m)^Outcome:\s*PASS$') { throw "Security PASS artifact was not recorded." }
+    if ($artifact -notmatch '(?m)^Outcome:\s*PASS\r?$') { throw "Security PASS artifact was not recorded." }
 
     Write-Host "PASS: workflow profile enforcement test" -ForegroundColor Green
 }
