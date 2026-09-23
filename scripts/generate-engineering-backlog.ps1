@@ -1,0 +1,138 @@
+param(
+    [Parameter(Mandatory = $true)]
+    [string]$SourceTaskId,
+
+    [string]$ProjectPath = ".",
+
+    [ValidateSet("Auto","Codex","OpenRouter","Gemini")]
+    [string]$Provider = "Auto",
+
+    [string]$Model = ""
+)
+
+$ErrorActionPreference = "Stop"
+
+function Read-Field {
+    param([string]$Content,[string]$Key)
+    $pattern = "(?m)^" + [regex]::Escape($Key) + ":\s*(.+)$"
+    if ($Content -match $pattern) { return $Matches[1].Trim() }
+    return ""
+}
+
+function Write-Utf8NoBom {
+    param([string]$Path,[string]$Value)
+    [System.IO.File]::WriteAllText($Path,$Value,(New-Object System.Text.UTF8Encoding($false)))
+}
+
+$root = (Resolve-Path $ProjectPath).Path
+$taskPath = Join-Path $root ("tasks\" + $SourceTaskId + ".md")
+$reportPath = Join-Path $root ("docs\engineering\agent-reports\" + $SourceTaskId + ".md")
+$schemaPath = Join-Path $root "schemas\engineering-backlog.schema.json"
+$routerPath = Join-Path $PSScriptRoot "provider-router.ps1"
+
+foreach ($path in @($taskPath,$reportPath,$schemaPath,$routerPath)) {
+    if (-not (Test-Path $path)) { throw "Required backlog-generation input not found: $path" }
+}
+
+$task = Get-Content $taskPath -Raw -Encoding UTF8
+$status = Read-Field $task "Status"
+$workRequestId = Read-Field $task "Work request"
+
+if ($status -ne "DONE") {
+    throw "Source planning task $SourceTaskId must be DONE before executable backlog generation. Current status: $status"
+}
+
+$report = Get-Content $reportPath -Raw -Encoding UTF8
+
+$latestResult = Get-ChildItem (Join-Path $root "docs\engineering\results") -Filter ($SourceTaskId + "-result-*.md") -File -ErrorAction SilentlyContinue |
+    Sort-Object Name -Descending |
+    Select-Object -First 1
+
+$resultText = ""
+if ($null -ne $latestResult) {
+    $resultText = Get-Content $latestResult.FullName -Raw -Encoding UTF8
+}
+
+$promptLines = @(
+    "You are converting an approved Engineering Manager execution plan into a structured AI Company OS backlog.",
+    "",
+    "Source task: $SourceTaskId",
+    "Work request: $workRequestId",
+    "",
+    "Create small, independently verifiable tasks rather than giant work-stream tickets.",
+    "Each item must have exactly one primary owner from the allowed roles.",
+    "Encode dependencies only by logical item key; the materializer will translate them to AICO IDs.",
+    "Preserve the plan's priorities and critical path.",
+    "Create explicit DECISION items for unresolved PM/CTO/CEO decisions before dependent implementation work.",
+    "If implementation authorization is required, include an explicit decision task near the root of the graph so implementation tasks cannot become ready before it is approved through the normal lifecycle.",
+    "Do not silently resolve open product, architecture, security or operational decisions.",
+    "IMPLEMENTATION items must be narrow enough for one specialist to execute and verify.",
+    "VALIDATION items should depend on the implementation they validate.",
+    "Acceptance criteria must be behavioral and testable.",
+    "Do not duplicate findings that can be closed by the same tightly-scoped change.",
+    "Do not create implementation work unrelated to the approved report.",
+    "Return only JSON matching the supplied schema."
+)
+$prompt = $promptLines -join [Environment]::NewLine
+
+$context = @(
+    "===== SOURCE TASK =====",
+    $task,
+    "",
+    "===== APPROVED ENGINEERING MANAGER REPORT =====",
+    $report,
+    "",
+    "===== LATEST RESULT =====",
+    $resultText
+) -join [Environment]::NewLine
+
+$runtimeDir = Join-Path $root ".codex\runtime"
+$planDir = Join-Path $root "docs\engineering\plans"
+New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
+New-Item -ItemType Directory -Force -Path $planDir | Out-Null
+
+$outputPath = Join-Path $runtimeDir ($SourceTaskId + "-engineering-backlog.json")
+$planPath = Join-Path $planDir ($SourceTaskId + "-engineering-backlog.json")
+
+Write-Host "Generating structured engineering backlog from $SourceTaskId..." -ForegroundColor Cyan
+$execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $outputPath -Model $Model
+
+if (-not (Test-Path $outputPath)) {
+    throw "Backlog provider did not produce structured output: $outputPath"
+}
+
+$backlog = Get-Content $outputPath -Raw -Encoding UTF8 | ConvertFrom-Json
+
+if ([string]$backlog.source_task_id -ne $SourceTaskId) {
+    throw "Backlog source_task_id mismatch. Expected $SourceTaskId, got $($backlog.source_task_id)"
+}
+
+if (-not [string]::IsNullOrWhiteSpace($workRequestId) -and [string]$backlog.work_request_id -ne $workRequestId) {
+    throw "Backlog work_request_id mismatch. Expected $workRequestId, got $($backlog.work_request_id)"
+}
+
+$keys = @{}
+foreach ($item in @($backlog.items)) {
+    $key = [string]$item.key
+    if ($keys.ContainsKey($key)) { throw "Duplicate backlog item key: $key" }
+    $keys[$key] = $true
+}
+
+foreach ($item in @($backlog.items)) {
+    foreach ($dependency in @($item.dependencies)) {
+        if (-not $keys.ContainsKey([string]$dependency)) {
+            throw "Unknown dependency key '$dependency' referenced by item $($item.key)"
+        }
+        if ([string]$dependency -eq [string]$item.key) {
+            throw "Backlog item $($item.key) cannot depend on itself."
+        }
+    }
+}
+
+Write-Utf8NoBom $planPath (Get-Content $outputPath -Raw -Encoding UTF8)
+
+Write-Host "Structured engineering backlog generated:" -ForegroundColor Green
+Write-Host $planPath
+Write-Host ("Items: " + @($backlog.items).Count)
+Write-Host ("Provider: " + $execution.Provider)
+Write-Host ("Model: " + $execution.Model)
