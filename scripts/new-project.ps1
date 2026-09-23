@@ -14,6 +14,7 @@ Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host ""
 
 $ProjectPath = Join-Path $Destination $ProjectName
+$now = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 
 if (Test-Path $ProjectPath) {
     Write-Host "ERROR: El proyecto ya existe:" -ForegroundColor Red
@@ -106,6 +107,11 @@ Copy-Item `
     (Join-Path $TemplateRoot "docs\PROJECT-BRIEF.md") `
     (Join-Path $ProjectPath "docs\PROJECT-BRIEF.md") `
     -Force
+
+$ProjectBriefPath = Join-Path $ProjectPath "docs\PROJECT-BRIEF.md"
+$ProjectBrief = Get-Content $ProjectBriefPath -Raw -Encoding UTF8
+$ProjectBrief = $ProjectBrief.Replace("{{PROJECT_NAME}}",$ProjectName).Replace("{{DATE}}",$now)
+[System.IO.File]::WriteAllText($ProjectBriefPath,$ProjectBrief,(New-Object System.Text.UTF8Encoding($false)))
 
 Copy-Item `
     (Join-Path $TemplateRoot "docs\product-context.md") `
