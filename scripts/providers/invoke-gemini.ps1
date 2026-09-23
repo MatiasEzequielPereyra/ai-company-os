@@ -9,11 +9,34 @@ param(
 $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
+function Get-HttpStatusCode {
+    param([System.Management.Automation.ErrorRecord]$ErrorRecord)
+    try {
+        $response = $ErrorRecord.Exception.Response
+        if ($null -eq $response -or $null -eq $response.StatusCode) { return 0 }
+        return [int]$response.StatusCode
+    }
+    catch { return 0 }
+}
+
+function Test-TransientGeminiError {
+    param([System.Management.Automation.ErrorRecord]$ErrorRecord,[int]$StatusCode)
+
+    if ($StatusCode -eq 429 -or $StatusCode -ge 500) { return $true }
+
+    $message = [string]$ErrorRecord.Exception.Message
+    if ($message -match '(?i)timed out|timeout|connection.*closed|connection reset|underlying connection was closed') {
+        return $true
+    }
+
+    return $false
+}
+
 if ([string]::IsNullOrWhiteSpace($env:GEMINI_API_KEY)) {
     throw "GEMINI_API_KEY is not configured."
 }
 
-$schema = Get-Content $SchemaPath -Raw | ConvertFrom-Json
+$schema = Get-Content $SchemaPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $fullPrompt = $Prompt + [Environment]::NewLine + [Environment]::NewLine + "# Repository Context Pack" + [Environment]::NewLine + $Context
 
 $body = @{
@@ -33,21 +56,42 @@ $body = @{
     }
 } | ConvertTo-Json -Depth 100 -Compress
 
-$headers = @{
-    "x-goog-api-key" = $env:GEMINI_API_KEY
-}
+try { $null = $body | ConvertFrom-Json }
+catch { throw "Gemini request payload is invalid JSON before transport: $($_.Exception.Message)" }
 
+$bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($body)
+$headers = @{ "x-goog-api-key" = $env:GEMINI_API_KEY }
 $uri = "https://generativelanguage.googleapis.com/v1beta/models/$($Model):generateContent"
 
-try {
-    $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -ContentType "application/json" -Body $body -TimeoutSec 240
-}
-catch {
-    $message = $_.Exception.Message
-    if ($null -ne $_.ErrorDetails -and -not [string]::IsNullOrWhiteSpace($_.ErrorDetails.Message)) {
-        $message = $_.ErrorDetails.Message
+$response = $null
+$maxAttempts = 3
+
+for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+    try {
+        $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -ContentType "application/json; charset=utf-8" -Body $bodyBytes -TimeoutSec 240
+        break
     }
-    throw "Gemini request failed: $message"
+    catch {
+        $statusCode = Get-HttpStatusCode -ErrorRecord $_
+        $message = $_.Exception.Message
+        if ($null -ne $_.ErrorDetails -and -not [string]::IsNullOrWhiteSpace($_.ErrorDetails.Message)) {
+            $message = $_.ErrorDetails.Message
+        }
+
+        $isTransient = Test-TransientGeminiError -ErrorRecord $_ -StatusCode $statusCode
+        if ($isTransient -and $attempt -lt $maxAttempts) {
+            $delaySeconds = [Math]::Pow(2,($attempt - 1))
+            Write-Host ("Gemini transient failure on attempt " + $attempt + "/" + $maxAttempts + ". Retrying in " + $delaySeconds + "s...") -ForegroundColor Yellow
+            Start-Sleep -Seconds $delaySeconds
+            continue
+        }
+
+        throw "Gemini request failed: $message"
+    }
+}
+
+if ($null -eq $response) {
+    throw "Gemini request failed without a response after $maxAttempts attempts."
 }
 
 if ($null -eq $response.candidates -or $response.candidates.Count -lt 1) {
