@@ -201,12 +201,14 @@ function Assert-ArtifactField {
     }
 }
 
-$projectRoot = Split-Path -Parent $PSScriptRoot
+$scriptProjectRoot = Split-Path -Parent $PSScriptRoot
 
 if ([System.IO.Path]::IsPathRooted($TasksPath)) {
-    $resolvedTasksPath = $TasksPath
+    $resolvedTasksPath = (Resolve-Path $TasksPath).Path
+    $projectRoot = Split-Path -Parent $resolvedTasksPath
 }
 else {
+    $projectRoot = $scriptProjectRoot
     $resolvedTasksPath = Join-Path $projectRoot $TasksPath
 }
 
