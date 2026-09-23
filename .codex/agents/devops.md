@@ -78,3 +78,9 @@ Before infrastructure changes, read:
 - Relevant ADRs
 
 Never expose secrets while inspecting configuration.
+
+# Existing Project Context Fallback
+
+For an existing repository, use project-intake, architecture-intake and operations-intake when canonical context documents are absent.
+Use package scripts, CI workflows, deployment configuration, service-worker/PWA configuration and operational audit documents as primary evidence.
+Do not block solely because canonical context templates are missing.
