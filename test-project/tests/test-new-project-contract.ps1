@@ -31,6 +31,20 @@ try {
         }
     }
 
+    $sourceValidator = Join-Path $repoRoot "scripts\validate-artifacts.ps1"
+    $generatedValidator = Join-Path $projectPath "scripts\validate-artifacts.ps1"
+
+    $sourceHash = (Get-FileHash $sourceValidator -Algorithm SHA256).Hash
+    $generatedHash = (Get-FileHash $generatedValidator -Algorithm SHA256).Hash
+    if ($sourceHash -ne $generatedHash) {
+        throw "Generated validate-artifacts.ps1 differs from source runtime. Source=$sourceValidator Generated=$generatedValidator"
+    }
+
+    $sourceValidatorContent = Get-Content $sourceValidator -Raw -Encoding UTF8
+    if ($sourceValidatorContent -match 'Unsupported task status in \$id:') {
+        throw "Source validate-artifacts.ps1 is stale and contains the Windows PowerShell 5.1 interpolation bug. Pull the latest hardening branch."
+    }
+
     $brief = Get-Content (Join-Path $projectPath "docs\PROJECT-BRIEF.md") -Raw -Encoding UTF8
     if ($brief -match "\{\{PROJECT_NAME\}\}|\{\{DATE\}\}") { throw "Generated project brief retained unresolved template placeholders." }
     if ($brief -notmatch [regex]::Escape($projectName)) { throw "Generated project brief did not materialize project name." }
