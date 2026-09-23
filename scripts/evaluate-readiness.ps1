@@ -40,7 +40,7 @@ $taskFiles = @(Get-ChildItem $tasksPath -Filter "AICO-*.md" -File -ErrorAction S
 $statusById = @{}
 
 foreach ($file in $taskFiles) {
-    $content = Get-Content $file.FullName -Raw
+    $content = Get-Content $file.FullName -Raw -Encoding UTF8
     $id = Read-Field $content "ID"
     if ([string]::IsNullOrWhiteSpace($id)) { $id = $file.BaseName }
     $statusById[$id] = Read-Field $content "Status"
@@ -49,7 +49,7 @@ foreach ($file in $taskFiles) {
 $results = @()
 
 foreach ($file in $taskFiles) {
-    $content = Get-Content $file.FullName -Raw
+    $content = Get-Content $file.FullName -Raw -Encoding UTF8
     $id = Read-Field $content "ID"
     if ([string]::IsNullOrWhiteSpace($id)) { $id = $file.BaseName }
 

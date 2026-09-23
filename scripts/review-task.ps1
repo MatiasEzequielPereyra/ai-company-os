@@ -36,7 +36,7 @@ $taskPath=Join-Path $tasksPath ($Id + ".md")
 
 if(-not(Test-Path $taskPath)){throw "Task not found: $taskPath"}
 
-$taskContent=Get-Content $taskPath -Raw
+$taskContent=Get-Content $taskPath -Raw -Encoding UTF8
 $status=Read-Field $taskContent "Status"
 $owner=Read-Field $taskContent "Owner"
 

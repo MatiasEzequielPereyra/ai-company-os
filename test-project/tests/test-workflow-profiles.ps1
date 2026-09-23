@@ -6,7 +6,15 @@ $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $tempRoot = Join-Path $env:TEMP ("aico-profiles-" + [Guid]::NewGuid().ToString("N"))
 
 try {
-    foreach ($relative in @("scripts","tasks","docs\engineering\security",".codex\runtime")) {
+    foreach ($relative in @(
+        "scripts",
+        "tasks",
+        "docs\engineering\results",
+        "docs\engineering\reviews",
+        "docs\engineering\qa",
+        "docs\engineering\security",
+        ".codex\runtime"
+    )) {
         New-Item -ItemType Directory -Force -Path (Join-Path $tempRoot $relative) | Out-Null
     }
 
@@ -26,9 +34,41 @@ try {
     $task = Get-Content $taskPath -Raw -Encoding UTF8
     if ($task -notmatch '(?m)^Workflow profile:\s*high-assurance\r?$') { throw "Task did not persist high-assurance profile." }
 
-    foreach ($status in @("READY","ACTIVE","REVIEW","QA","SECURITY")) {
-        & $advance -Id AICO-001 -Status $status -Actor "test" -Reason "Profile test transition." -TasksPath $tasksPath
-    }
+    & $advance -Id AICO-001 -Status READY -Actor "test" -Reason "Profile test transition." -TasksPath $tasksPath
+    & $advance -Id AICO-001 -Status ACTIVE -Actor "test" -Reason "Profile test transition." -TasksPath $tasksPath
+
+    [System.IO.File]::WriteAllText(
+        (Join-Path $tempRoot "docs\engineering\results\AICO-001-result-001.md"),
+        @"
+# Result
+Outcome: COMPLETED
+"@,
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+
+    & $advance -Id AICO-001 -Status REVIEW -Actor "test" -Reason "Profile test transition." -TasksPath $tasksPath
+
+    [System.IO.File]::WriteAllText(
+        (Join-Path $tempRoot "docs\engineering\reviews\AICO-001-review-001.md"),
+        @"
+# Review
+Recommendation: APPROVE
+"@,
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+
+    & $advance -Id AICO-001 -Status QA -Actor "test" -Reason "Profile test transition." -TasksPath $tasksPath
+
+    [System.IO.File]::WriteAllText(
+        (Join-Path $tempRoot "docs\engineering\qa\AICO-001-qa.md"),
+        @"
+# QA
+Outcome: PASS
+"@,
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+
+    & $advance -Id AICO-001 -Status SECURITY -Actor "test" -Reason "Profile test transition." -TasksPath $tasksPath
 
     $profileMutationRejected = $false
     try {

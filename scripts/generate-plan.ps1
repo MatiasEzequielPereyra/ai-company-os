@@ -22,7 +22,7 @@ $root = (Resolve-Path $ProjectPath).Path
 $requestPath = Join-Path $root ("docs\engineering\work-requests\" + $WorkRequestId + ".md")
 if (-not (Test-Path $requestPath)) { throw "Work request not found: $requestPath" }
 
-$request = Get-Content $requestPath -Raw
+$request = Get-Content $requestPath -Raw -Encoding UTF8
 $type = Read-Field $request "Type"
 $priority = Read-Field $request "Priority"
 $objective = "UNKNOWN"

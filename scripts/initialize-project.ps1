@@ -52,7 +52,7 @@ $packageJsonPath = Join-Path $resolved "package.json"
 if (Test-Path $packageJsonPath) {
     $languages += "JavaScript/TypeScript"
     try {
-        $packageJson = Get-Content $packageJsonPath -Raw | ConvertFrom-Json
+        $packageJson = Get-Content $packageJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
         $deps = @{}
         if ($packageJson.dependencies) { $packageJson.dependencies.psobject.Properties | ForEach-Object { $deps[$_.Name] = $_.Value } }
         if ($packageJson.devDependencies) { $packageJson.devDependencies.psobject.Properties | ForEach-Object { $deps[$_.Name] = $_.Value } }
@@ -105,7 +105,7 @@ $readmePath = Join-Path $resolved "README.md"
 $readmeExcerpt = "-"
 if (Test-Path $readmePath) {
     try {
-        $readmeRaw = Get-Content $readmePath -Raw
+        $readmeRaw = Get-Content $readmePath -Raw -Encoding UTF8
         if ($readmeRaw.Length -gt 4000) { $readmeExcerpt = $readmeRaw.Substring(0, 4000) } else { $readmeExcerpt = $readmeRaw }
     }
     catch {

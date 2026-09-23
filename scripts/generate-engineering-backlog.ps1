@@ -26,6 +26,124 @@ function Write-Utf8NoBom {
     [System.IO.File]::WriteAllText($Path,$Value,(New-Object System.Text.UTF8Encoding($false)))
 }
 
+function Get-MojibakeScore {
+    param([string]$Value)
+
+    if ([string]::IsNullOrEmpty($Value)) { return 0 }
+
+    $score = 0
+    $suspiciousCodePoints = @(
+        0x00C3, # LATIN CAPITAL LETTER A WITH TILDE
+        0x00C2, # LATIN CAPITAL LETTER A WITH CIRCUMFLEX
+        0x00E2, # LATIN SMALL LETTER A WITH CIRCUMFLEX
+        0x00F0, # LATIN SMALL LETTER ETH
+        0x0192, # LATIN SMALL LETTER F WITH HOOK
+        0x20AC, # EURO SIGN
+        0x2122, # TRADE MARK SIGN
+        0x0153, # LATIN SMALL LIGATURE OE
+        0x017E  # LATIN SMALL LETTER Z WITH CARON
+    )
+
+    foreach ($codePoint in $suspiciousCodePoints) {
+        $pattern = [string][char]$codePoint
+        $score += ([regex]::Matches($Value,[regex]::Escape($pattern))).Count
+    }
+
+    $replacementCharacter = [string][char]0xFFFD
+    $score += 100 * ([regex]::Matches($Value,[regex]::Escape($replacementCharacter))).Count
+    return $score
+}
+
+function Repair-MojibakeText {
+    param([string]$Value)
+
+    if ([string]::IsNullOrEmpty($Value)) { return $Value }
+
+    $current = $Value
+    $strict1252 = [System.Text.Encoding]::GetEncoding(
+        1252,
+        [System.Text.EncoderFallback]::ExceptionFallback,
+        [System.Text.DecoderFallback]::ExceptionFallback
+    )
+    $utf8 = New-Object System.Text.UTF8Encoding($false,$true)
+
+    for ($i = 0; $i -lt 4; $i++) {
+        $currentScore = Get-MojibakeScore $current
+        if ($currentScore -eq 0) { break }
+
+        try {
+            $byteList = New-Object "System.Collections.Generic.List[byte]"
+
+            foreach ($character in $current.ToCharArray()) {
+                $codePoint = [int][char]$character
+
+                if ($codePoint -le 255) {
+                    $byteList.Add([byte]$codePoint)
+                    continue
+                }
+
+                $encodedCharacter = $strict1252.GetBytes([string]$character)
+                if ($encodedCharacter.Length -ne 1) {
+                    throw "Character cannot be represented as a single legacy byte."
+                }
+
+                $byteList.Add($encodedCharacter[0])
+            }
+
+            $candidate = $utf8.GetString($byteList.ToArray())
+        }
+        catch {
+            break
+        }
+
+        $candidateScore = Get-MojibakeScore $candidate
+        if ($candidateScore -ge $currentScore) { break }
+
+        $current = $candidate
+    }
+
+    return $current
+}
+
+function Repair-MojibakeObject {
+    param([object]$Value)
+
+    if ($null -eq $Value) { return $null }
+
+    if ($Value -is [string]) {
+        return (Repair-MojibakeText -Value ([string]$Value))
+    }
+
+    if ($Value -is [System.Array]) {
+        $result = @()
+
+        foreach ($entry in $Value) {
+            $result += ,(Repair-MojibakeObject -Value $entry)
+        }
+
+        # PowerShell normally enumerates arrays returned from functions.
+        # -NoEnumerate preserves [] as an actual empty array instead of $null.
+        Write-Output -NoEnumerate $result
+        return
+    }
+
+    if ($Value -is [System.Collections.IDictionary]) {
+        foreach ($key in @($Value.Keys)) {
+            $Value[$key] = Repair-MojibakeObject -Value $Value[$key]
+        }
+        return $Value
+    }
+
+    if ($Value -is [pscustomobject]) {
+        foreach ($property in @($Value.PSObject.Properties)) {
+            $property.Value = Repair-MojibakeObject -Value $property.Value
+        }
+        return $Value
+    }
+
+    return $Value
+}
+
 function Resolve-ImplementationAuthorizationKey {
     param([object]$Backlog)
 
@@ -47,7 +165,41 @@ function Resolve-ImplementationAuthorizationKey {
         return [string]$exact[0].key
     }
 
-    # Recover only from a single, semantically clear authorization decision.
+    # First repair by key identity. Models may return a shortened alias such as
+    # "impl-auth" while the actual item key is "AICO-006-IMPL-AUTH".
+    $normalizeKey = {
+        param([string]$Value)
+        return (($Value.ToUpperInvariant()) -replace '[^A-Z0-9]','')
+    }
+
+    $requestedNormalized = & $normalizeKey $requested
+    $identityCandidates = @(
+        $items | Where-Object {
+            if ([string]$_.kind -ne "DECISION") { return $false }
+
+            $candidateKey = [string]$_.key
+            $candidateNormalized = & $normalizeKey $candidateKey
+
+            return (
+                $candidateNormalized -eq $requestedNormalized -or
+                $candidateNormalized.EndsWith($requestedNormalized) -or
+                $requestedNormalized.EndsWith($candidateNormalized)
+            )
+        }
+    )
+
+    if ($identityCandidates.Count -eq 1) {
+        $resolved = [string]$identityCandidates[0].key
+        Write-Host ("Repaired implementation authorization key by identity: '" + $requested + "' -> '" + $resolved + "'") -ForegroundColor Yellow
+        return $resolved
+    }
+
+    if ($identityCandidates.Count -gt 1) {
+        $candidateKeys = ($identityCandidates | ForEach-Object { [string]$_.key }) -join ", "
+        throw "Implementation authorization key '$requested' is ambiguous by key identity: $candidateKeys"
+    }
+
+    # Fall back only to a single, semantically clear authorization decision.
     $candidates = @(
         $items | Where-Object {
             if ([string]$_.kind -ne "DECISION") { return $false }
@@ -65,7 +217,7 @@ function Resolve-ImplementationAuthorizationKey {
 
     if ($candidates.Count -eq 1) {
         $resolved = [string]$candidates[0].key
-        Write-Host ("Repaired implementation authorization key: '" + $requested + "' -> '" + $resolved + "'") -ForegroundColor Yellow
+        Write-Host ("Repaired implementation authorization key by semantics: '" + $requested + "' -> '" + $resolved + "'") -ForegroundColor Yellow
         return $resolved
     }
 
@@ -125,6 +277,9 @@ $promptLines = @(
     "VALIDATION items should depend on the implementation they validate.",
     "Acceptance criteria must be behavioral and testable.",
     "Do not duplicate findings that can be closed by the same tightly-scoped change.",
+    "Every explicitly planned source finding/task that requires downstream work must be represented by a DECISION, IMPLEMENTATION, VALIDATION or OPERATIONS item; do not create a decision without the downstream work it gates.",
+    "Every non-authorization DECISION item that exists to unblock engineering work must be referenced directly or transitively by at least one downstream item.",
+    "Do not combine primary responsibilities from different specialist domains into one ticket. Split backend/database/performance work from frontend/CSS/UI work, and split implementation from validation when they have different owners.",
     "Do not create implementation work unrelated to the approved report.",
     "Return only JSON matching the supplied schema."
 )
@@ -168,6 +323,19 @@ else {
 }
 
 $backlog = Get-Content $outputPath -Raw -Encoding UTF8 | ConvertFrom-Json
+$backlog = Repair-MojibakeObject -Value $backlog
+
+# Canonicalize dependency arrays. Empty/null/whitespace entries mean no dependency.
+foreach ($item in @($backlog.items)) {
+    $normalizedDependencies = @(
+        @($item.dependencies) |
+            ForEach-Object { [string]$_ } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            Select-Object -Unique
+    )
+
+    $item.dependencies = @($normalizedDependencies)
+}
 
 if ([string]$backlog.source_task_id -ne $SourceTaskId) {
     throw "Backlog source_task_id mismatch. Expected $SourceTaskId, got $($backlog.source_task_id)"

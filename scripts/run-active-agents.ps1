@@ -33,7 +33,7 @@ if (-not (Test-Path $runner)) { throw "run-agent-task.ps1 not found: $runner" }
 
 $active = @()
 Get-ChildItem $tasksPath -Filter "AICO-*.md" -File -ErrorAction SilentlyContinue | ForEach-Object {
-    $content = Get-Content $_.FullName -Raw
+    $content = Get-Content $_.FullName -Raw -Encoding UTF8
     $status = Read-Field $content "Status"
     if ($status -eq "ACTIVE") {
         $active += [PSCustomObject]@{

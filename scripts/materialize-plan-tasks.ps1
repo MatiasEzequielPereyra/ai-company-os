@@ -152,8 +152,8 @@ $planPath = Join-Path $root ("docs\engineering\plans\" + $WorkRequestId + "-plan
 if (-not (Test-Path $requestPath)) { throw "Work request not found: $requestPath" }
 if (-not (Test-Path $planPath)) { throw "Plan not found: $planPath" }
 
-$request = Get-Content $requestPath -Raw
-$plan = Get-Content $planPath -Raw
+$request = Get-Content $requestPath -Raw -Encoding UTF8
+$plan = Get-Content $planPath -Raw -Encoding UTF8
 
 $type = Read-Field $request "Type"
 $priority = Read-Field $request "Priority"
@@ -169,7 +169,7 @@ if ($plan -match '(?ms)^## Required Roles\s*\r?\n\s*\r?\n(.+?)(?:\r?\n\r?\n##|\z
 if ($roles.Count -eq 0) { throw "No required roles found in plan: $planPath" }
 
 $existingForRequest = @(Get-ChildItem $tasksPath -Filter "AICO-*.md" -File -ErrorAction SilentlyContinue | Where-Object {
-    (Get-Content $_.FullName -Raw) -match ("(?m)^Work request:\s*" + [regex]::Escape($WorkRequestId) + "$")
+    (Get-Content $_.FullName -Raw -Encoding UTF8) -match ("(?m)^Work request:\s*" + [regex]::Escape($WorkRequestId) + "$")
 })
 if ($existingForRequest.Count -gt 0) {
     throw "Tasks already materialized for $WorkRequestId. Existing count: $($existingForRequest.Count)"
@@ -248,7 +248,7 @@ $mapLines = @(
     "## Tasks"
 )
 foreach ($id in $created) {
-    $taskContent = Get-Content (Join-Path $tasksPath ($id + ".md")) -Raw
+    $taskContent = Get-Content (Join-Path $tasksPath ($id + ".md")) -Raw -Encoding UTF8
     $owner = Read-Field $taskContent "Owner"
     $mapLines += "- $id - Owner: $owner"
 }

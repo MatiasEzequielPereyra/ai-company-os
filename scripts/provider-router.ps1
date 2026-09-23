@@ -53,7 +53,7 @@ if (-not (Test-Path $validatorPath)) { throw "Provider contract validator not fo
 
 $config = $null
 if (Test-Path $configPath) {
-    $config = Get-Content $configPath -Raw | ConvertFrom-Json
+    $config = Get-Content $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
 }
 
 $autoOrder = @("Codex","OpenRouter","Gemini")
