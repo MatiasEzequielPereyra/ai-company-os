@@ -116,10 +116,15 @@ function Repair-MojibakeObject {
 
     if ($Value -is [System.Array]) {
         $result = @()
+
         foreach ($entry in $Value) {
             $result += ,(Repair-MojibakeObject -Value $entry)
         }
-        return $result
+
+        # PowerShell normally enumerates arrays returned from functions.
+        # -NoEnumerate preserves [] as an actual empty array instead of $null.
+        Write-Output -NoEnumerate $result
+        return
     }
 
     if ($Value -is [System.Collections.IDictionary]) {
@@ -319,6 +324,18 @@ else {
 
 $backlog = Get-Content $outputPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $backlog = Repair-MojibakeObject -Value $backlog
+
+# Canonicalize dependency arrays. Empty/null/whitespace entries mean no dependency.
+foreach ($item in @($backlog.items)) {
+    $normalizedDependencies = @(
+        @($item.dependencies) |
+            ForEach-Object { [string]$_ } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            Select-Object -Unique
+    )
+
+    $item.dependencies = @($normalizedDependencies)
+}
 
 if ([string]$backlog.source_task_id -ne $SourceTaskId) {
     throw "Backlog source_task_id mismatch. Expected $SourceTaskId, got $($backlog.source_task_id)"
