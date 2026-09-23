@@ -26,6 +26,88 @@ function Write-Utf8NoBom {
     [System.IO.File]::WriteAllText($Path,$Value,(New-Object System.Text.UTF8Encoding($false)))
 }
 
+function Get-MojibakeScore {
+    param([string]$Value)
+
+    if ([string]::IsNullOrEmpty($Value)) { return 0 }
+
+    $score = 0
+    foreach ($pattern in @("Ã","Â","â","ð","ƒ","€","™","œ","ž")) {
+        $score += ([regex]::Matches($Value,[regex]::Escape($pattern))).Count
+    }
+
+    $score += 100 * ([regex]::Matches($Value,[regex]::Escape([char]0xFFFD))).Count
+    return $score
+}
+
+function Repair-MojibakeText {
+    param([string]$Value)
+
+    if ([string]::IsNullOrEmpty($Value)) { return $Value }
+
+    $current = $Value
+    $strict1252 = [System.Text.Encoding]::GetEncoding(
+        1252,
+        [System.Text.EncoderFallback]::ExceptionFallback,
+        [System.Text.DecoderFallback]::ExceptionFallback
+    )
+    $utf8 = New-Object System.Text.UTF8Encoding($false,$true)
+
+    for ($i = 0; $i -lt 4; $i++) {
+        $currentScore = Get-MojibakeScore $current
+        if ($currentScore -eq 0) { break }
+
+        try {
+            $bytes = $strict1252.GetBytes($current)
+            $candidate = $utf8.GetString($bytes)
+        }
+        catch {
+            break
+        }
+
+        $candidateScore = Get-MojibakeScore $candidate
+        if ($candidateScore -ge $currentScore) { break }
+
+        $current = $candidate
+    }
+
+    return $current
+}
+
+function Repair-MojibakeObject {
+    param([object]$Value)
+
+    if ($null -eq $Value) { return $null }
+
+    if ($Value -is [string]) {
+        return (Repair-MojibakeText -Value ([string]$Value))
+    }
+
+    if ($Value -is [System.Array]) {
+        $result = @()
+        foreach ($entry in $Value) {
+            $result += ,(Repair-MojibakeObject -Value $entry)
+        }
+        return $result
+    }
+
+    if ($Value -is [System.Collections.IDictionary]) {
+        foreach ($key in @($Value.Keys)) {
+            $Value[$key] = Repair-MojibakeObject -Value $Value[$key]
+        }
+        return $Value
+    }
+
+    if ($Value -is [pscustomobject]) {
+        foreach ($property in @($Value.PSObject.Properties)) {
+            $property.Value = Repair-MojibakeObject -Value $property.Value
+        }
+        return $Value
+    }
+
+    return $Value
+}
+
 function Resolve-ImplementationAuthorizationKey {
     param([object]$Backlog)
 
@@ -205,6 +287,7 @@ else {
 }
 
 $backlog = Get-Content $outputPath -Raw -Encoding UTF8 | ConvertFrom-Json
+$backlog = Repair-MojibakeObject -Value $backlog
 
 if ([string]$backlog.source_task_id -ne $SourceTaskId) {
     throw "Backlog source_task_id mismatch. Expected $SourceTaskId, got $($backlog.source_task_id)"
