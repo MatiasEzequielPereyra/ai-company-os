@@ -32,7 +32,7 @@ function Add-ContextFile {
     $header = [Environment]::NewLine + [Environment]::NewLine + "===== FILE: " + $RelativePath + " =====" + [Environment]::NewLine
     if ($header.Length -ge $Remaining) { return 0 }
 
-    $allowed = $Remaining - $header.Length
+    $allowed = [Math]::Min(($Remaining - $header.Length),60000)
     if ($allowed -le 0) { return 0 }
 
     if ($content.Length -gt $allowed) {
@@ -75,11 +75,11 @@ function Get-RoleScore {
             if ($p -match '^scripts\\') { $score += 60 }
         }
         "security" {
-            if ($p -match '^supabase\\|auth|security|rls|policy|migration|edge|function|tenant|permission|role|secret|\.env') { $score += 240 }
+            if ($p -match '^supabase\\|auth|security|rls|policy|migration|edge|function|tenant|permission|role') { $score += 240 }
             if ($p -match '\.sql$') { $score += 80 }
         }
         "devops" {
-            if ($p -match '^\.github\\|vercel|deploy|workflow|docker|service-worker|manifest|pwa|build|operations|ci|cd') { $score += 240 }
+            if ($p -match '^\.github\\|vercel|deploy|workflow|docker|service-worker|manifest|pwa|operations|ci|cd') { $score += 240 }
             if ($p -match '^scripts\\|package\.json$') { $score += 80 }
         }
         "engineering-manager" {
@@ -97,10 +97,9 @@ $builder = New-Object System.Text.StringBuilder
 [void]$builder.AppendLine("")
 [void]$builder.AppendLine("Task: $Id")
 [void]$builder.AppendLine("Owner: $Owner")
-[void]$builder.AppendLine("Project root: $root")
 [void]$builder.AppendLine("Generated: " + (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"))
 [void]$builder.AppendLine("")
-[void]$builder.AppendLine("This context is a bounded snapshot. Do not claim to have inspected files that are not included below.")
+[void]$builder.AppendLine("This is a bounded repository snapshot. Do not claim to have inspected omitted files.")
 
 $required = @(
     "AGENTS.md",
@@ -117,11 +116,12 @@ $required = @(
     "package.json"
 )
 
-$used = $builder.Length
 $included = @{}
+$used = $builder.Length
 
 foreach ($relative in $required) {
     if ($used -ge $MaxChars) { break }
+
     $added = Add-ContextFile -Builder $builder -Root $root -RelativePath $relative -Remaining ($MaxChars - $used)
     if ($added -gt 0) {
         $included[$relative.ToLowerInvariant()] = $true
@@ -138,99 +138,42 @@ $allowedExtensions = @(
 $allFiles = Get-ChildItem $root -File -Recurse -ErrorAction SilentlyContinue | Where-Object {
     $relative = $_.FullName.Substring($root.Length).TrimStart("\")
     $lower = $relative.ToLowerInvariant()
-
-    if ($lower -match '(^|\\)(node_modules|\.git|dist|dist-refactor-modular|build|coverage|\.next|vendor)(\\|$)') { return $false }
-    if ($lower -match '^\.codex\\runtime\\|^docs\\engineering\\agent-reports\\') { return $false }
-    if ($lower -match '(^|\\)\.env($|\.)|secret|credential|private[-_]?key|service[-_]?account') { return $false }
-    if ($lower -match '(^|\\)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock)
-    if ($allowedExtensions -contains $ext) { return $true }
-    if ($_.Name -in @("Dockerfile",".gitignore",".npmrc")) { return $true }
-    return $false
-} | ForEach-Object {
-    $relative = $_.FullName.Substring($root.Length).TrimStart("\")
-    [PSCustomObject]@{
-        FullName = $_.FullName
-        Relative = $relative
-        Score = Get-RoleScore -RelativePath $relative -Role $Owner
-    }
-}
-
-[void]$builder.AppendLine("")
-[void]$builder.AppendLine("")
-[void]$builder.AppendLine("===== REPOSITORY INVENTORY =====")
-
-foreach ($entry in ($allFiles | Sort-Object Relative | Select-Object -First 1200)) {
-    $line = $entry.Relative
-    if (($builder.Length + $line.Length + 2) -ge $MaxChars) { break }
-    [void]$builder.AppendLine($line)
-}
-
-$used = $builder.Length
-
-foreach ($entry in ($allFiles | Sort-Object @{Expression="Score";Descending=$true}, @{Expression="Relative";Descending=$false})) {
-    if ($used -ge $MaxChars) { break }
-
-    $key = $entry.Relative.ToLowerInvariant()
-    if ($included.ContainsKey($key)) { continue }
-
-    $added = Add-ContextFile -Builder $builder -Root $root -RelativePath $entry.Relative -Remaining ($MaxChars - $used)
-    if ($added -gt 0) {
-        $included[$key] = $true
-        $used += $added
-    }
-}
-
-$builder.ToString()
-) { return $false }
-    if ($lower -match '\.(pem|key|p12|pfx|crt|cer)
-    if ($allowedExtensions -contains $ext) { return $true }
-    if ($_.Name -in @("Dockerfile",".gitignore",".npmrc")) { return $true }
-    return $false
-} | ForEach-Object {
-    $relative = $_.FullName.Substring($root.Length).TrimStart("\")
-    [PSCustomObject]@{
-        FullName = $_.FullName
-        Relative = $relative
-        Score = Get-RoleScore -RelativePath $relative -Role $Owner
-    }
-}
-
-[void]$builder.AppendLine("")
-[void]$builder.AppendLine("")
-[void]$builder.AppendLine("===== REPOSITORY INVENTORY =====")
-
-foreach ($entry in ($allFiles | Sort-Object Relative | Select-Object -First 1200)) {
-    $line = $entry.Relative
-    if (($builder.Length + $line.Length + 2) -ge $MaxChars) { break }
-    [void]$builder.AppendLine($line)
-}
-
-$used = $builder.Length
-
-foreach ($entry in ($allFiles | Sort-Object @{Expression="Score";Descending=$true}, @{Expression="Relative";Descending=$false})) {
-    if ($used -ge $MaxChars) { break }
-
-    $key = $entry.Relative.ToLowerInvariant()
-    if ($included.ContainsKey($key)) { continue }
-
-    $added = Add-ContextFile -Builder $builder -Root $root -RelativePath $entry.Relative -Remaining ($MaxChars - $used)
-    if ($added -gt 0) {
-        $included[$key] = $true
-        $used += $added
-    }
-}
-
-$builder.ToString()
-) { return $false }
-
+    $name = $_.Name.ToLowerInvariant()
     $ext = $_.Extension.ToLowerInvariant()
-    if ($allowedExtensions -contains $ext) { return $true }
-    if ($_.Name -in @("Dockerfile",".gitignore",".npmrc")) { return $true }
-    return $false
+
+    if ($lower -match '(^|\\)(node_modules|\.git|dist|dist-refactor-modular|build|coverage|\.next|vendor)(\\|$)') {
+        $false
+    }
+    elseif ($lower -match '^\.codex\\runtime\\|^docs\\engineering\\agent-reports\\') {
+        $false
+    }
+    elseif ($name -like ".env*") {
+        $false
+    }
+    elseif ($name -match 'secret|credential|private[-_]?key|service[-_]?account') {
+        $false
+    }
+    elseif ($name -in @("package-lock.json","pnpm-lock.yaml","yarn.lock")) {
+        $false
+    }
+    elseif ($ext -in @(".pem",".key",".p12",".pfx",".crt",".cer")) {
+        $false
+    }
+    elseif ($_.Length -gt 500000) {
+        $false
+    }
+    elseif ($allowedExtensions -contains $ext) {
+        $true
+    }
+    elseif ($_.Name -in @("Dockerfile",".gitignore",".npmrc")) {
+        $true
+    }
+    else {
+        $false
+    }
 } | ForEach-Object {
     $relative = $_.FullName.Substring($root.Length).TrimStart("\")
     [PSCustomObject]@{
-        FullName = $_.FullName
         Relative = $relative
         Score = Get-RoleScore -RelativePath $relative -Role $Owner
     }
