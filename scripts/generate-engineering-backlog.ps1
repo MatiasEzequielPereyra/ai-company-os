@@ -159,6 +159,9 @@ $promptLines = @(
     "VALIDATION items should depend on the implementation they validate.",
     "Acceptance criteria must be behavioral and testable.",
     "Do not duplicate findings that can be closed by the same tightly-scoped change.",
+    "Every explicitly planned source finding/task that requires downstream work must be represented by a DECISION, IMPLEMENTATION, VALIDATION or OPERATIONS item; do not create a decision without the downstream work it gates.",
+    "Every non-authorization DECISION item that exists to unblock engineering work must be referenced directly or transitively by at least one downstream item.",
+    "Do not combine primary responsibilities from different specialist domains into one ticket. Split backend/database/performance work from frontend/CSS/UI work, and split implementation from validation when they have different owners.",
     "Do not create implementation work unrelated to the approved report.",
     "Return only JSON matching the supplied schema."
 )
