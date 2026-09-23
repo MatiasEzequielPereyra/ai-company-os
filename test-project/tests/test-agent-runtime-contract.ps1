@@ -220,7 +220,6 @@ finally {
     }
 }
 
-Write-Host "PASS: multi-provider agent runtime contract test" -ForegroundColor Green
 
 
 $engineeringSchema = Get-Content (Join-Path $repoRoot "schemas\engineering-backlog.schema.json") -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -235,3 +234,5 @@ if ($materializerScript -notmatch 'dependency cycle') {
 if ($materializerScript -notmatch 'Test-DependsOnKey') {
     throw "Engineering backlog materializer must enforce authorization dependency reachability"
 }
+
+Write-Host "PASS: multi-provider agent runtime contract test" -ForegroundColor Green
