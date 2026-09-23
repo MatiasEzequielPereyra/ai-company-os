@@ -85,12 +85,6 @@ try {
         "",
         "---",
         "",
-        "## Context",
-        "",
-        "Regression fixture.",
-        "",
-        "---",
-        "",
         "## Acceptance Criteria",
         "",
         "- [ ] Guarded transitions require evidence.",
@@ -125,6 +119,8 @@ try {
     # This verifies evidence paths resolve from the task project, not from PSScriptRoot.
     $advance = $advanceSource
 
+    # Some workflow profiles intentionally omit a Context section.
+    # The central lifecycle guard must not reject those profiles.
     & $advance -Id AICO-001 -Status READY -TasksPath (Join-Path $tempRoot "tasks")
 
     Expect-Failure {
