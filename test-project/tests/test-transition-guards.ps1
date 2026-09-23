@@ -9,6 +9,17 @@ if (-not (Test-Path $advanceSource)) {
     throw "advance-task.ps1 missing"
 }
 
+$parseErrors = $null
+[void][System.Management.Automation.Language.Parser]::ParseFile(
+    $advanceSource,
+    [ref]$null,
+    [ref]$parseErrors
+)
+
+if ($parseErrors.Count -gt 0) {
+    throw ("advance-task.ps1 has PowerShell parse errors: " + (($parseErrors | ForEach-Object { $_.Message }) -join "; "))
+}
+
 $tempRoot = Join-Path $env:TEMP ("aico-transition-guards-" + [Guid]::NewGuid().ToString("N"))
 
 function Expect-Failure {
