@@ -19,6 +19,26 @@ if (-not $payload.ContainsKey("timestamp")) {
 
 $line = $payload | ConvertTo-Json -Depth 10 -Compress
 $path = Join-Path $metricsDir "events.jsonl"
-[System.IO.File]::AppendAllText($path,$line + [Environment]::NewLine,(New-Object System.Text.UTF8Encoding($false)))
+
+$sha = [System.Security.Cryptography.SHA256]::Create()
+try {
+    $hashBytes = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($root.ToLowerInvariant()))
+    $hash = -join ($hashBytes | ForEach-Object { $_.ToString("x2") })
+}
+finally {
+    $sha.Dispose()
+}
+
+$mutex = New-Object System.Threading.Mutex($false,("AICompanyOSMetrics_" + $hash.Substring(0,24)))
+$acquired = $false
+try {
+    $acquired = $mutex.WaitOne(10000)
+    if (-not $acquired) { throw "Timed out waiting for the operational metrics append lock." }
+    [System.IO.File]::AppendAllText($path,$line + [Environment]::NewLine,(New-Object System.Text.UTF8Encoding($false)))
+}
+finally {
+    if ($acquired) { $mutex.ReleaseMutex() | Out-Null }
+    $mutex.Dispose()
+}
 
 return $path
