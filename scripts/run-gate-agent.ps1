@@ -33,7 +33,7 @@ function Add-Artifact {
 
     if (-not (Test-Path $Path -PathType Leaf)) { return }
 
-    $content = Get-Content $Path -Raw
+    $content = Get-Content $Path -Raw -Encoding UTF8
     if ($null -eq $content) { $content = "" }
     if ($content.Length -gt $MaxChars) {
         $content = $content.Substring(0,$MaxChars) + [Environment]::NewLine + "[TRUNCATED]"
@@ -49,7 +49,7 @@ $root = (Resolve-Path $ProjectPath).Path
 $taskPath = Join-Path $root ("tasks\" + $Id + ".md")
 if (-not (Test-Path $taskPath)) { throw "Task not found: $taskPath" }
 
-$taskContent = Get-Content $taskPath -Raw
+$taskContent = Get-Content $taskPath -Raw -Encoding UTF8
 $status = Read-Field $taskContent "Status"
 $owner = Read-Field $taskContent "Owner"
 
@@ -91,7 +91,7 @@ $maxChars = 180000
 $configPath = Join-Path $root ".codex\provider-config.json"
 if (Test-Path $configPath) {
     try {
-        $providerConfig = Get-Content $configPath -Raw | ConvertFrom-Json
+        $providerConfig = Get-Content $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
         if ($null -ne $providerConfig.gate_context_max_chars) {
             $maxChars = [int]$providerConfig.gate_context_max_chars
         }
@@ -167,7 +167,7 @@ if (-not (Test-Path $outputPath)) {
     throw "Gate provider did not produce structured output: $outputPath"
 }
 
-$result = Get-Content $outputPath -Raw | ConvertFrom-Json
+$result = Get-Content $outputPath -Raw -Encoding UTF8 | ConvertFrom-Json
 
 switch ($Gate) {
     "Review" {
