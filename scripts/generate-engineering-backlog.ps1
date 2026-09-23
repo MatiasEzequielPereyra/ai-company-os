@@ -47,7 +47,41 @@ function Resolve-ImplementationAuthorizationKey {
         return [string]$exact[0].key
     }
 
-    # Recover only from a single, semantically clear authorization decision.
+    # First repair by key identity. Models may return a shortened alias such as
+    # "impl-auth" while the actual item key is "AICO-006-IMPL-AUTH".
+    $normalizeKey = {
+        param([string]$Value)
+        return (($Value.ToUpperInvariant()) -replace '[^A-Z0-9]','')
+    }
+
+    $requestedNormalized = & $normalizeKey $requested
+    $identityCandidates = @(
+        $items | Where-Object {
+            if ([string]$_.kind -ne "DECISION") { return $false }
+
+            $candidateKey = [string]$_.key
+            $candidateNormalized = & $normalizeKey $candidateKey
+
+            return (
+                $candidateNormalized -eq $requestedNormalized -or
+                $candidateNormalized.EndsWith($requestedNormalized) -or
+                $requestedNormalized.EndsWith($candidateNormalized)
+            )
+        }
+    )
+
+    if ($identityCandidates.Count -eq 1) {
+        $resolved = [string]$identityCandidates[0].key
+        Write-Host ("Repaired implementation authorization key by identity: '" + $requested + "' -> '" + $resolved + "'") -ForegroundColor Yellow
+        return $resolved
+    }
+
+    if ($identityCandidates.Count -gt 1) {
+        $candidateKeys = ($identityCandidates | ForEach-Object { [string]$_.key }) -join ", "
+        throw "Implementation authorization key '$requested' is ambiguous by key identity: $candidateKeys"
+    }
+
+    # Fall back only to a single, semantically clear authorization decision.
     $candidates = @(
         $items | Where-Object {
             if ([string]$_.kind -ne "DECISION") { return $false }
@@ -65,7 +99,7 @@ function Resolve-ImplementationAuthorizationKey {
 
     if ($candidates.Count -eq 1) {
         $resolved = [string]$candidates[0].key
-        Write-Host ("Repaired implementation authorization key: '" + $requested + "' -> '" + $resolved + "'") -ForegroundColor Yellow
+        Write-Host ("Repaired implementation authorization key by semantics: '" + $requested + "' -> '" + $resolved + "'") -ForegroundColor Yellow
         return $resolved
     }
 
