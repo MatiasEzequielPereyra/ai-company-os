@@ -92,7 +92,7 @@ if ($gemini -notmatch 'responseJsonSchema') {
 
 $contextBuilder = Get-Content (Join-Path $repoRoot "scripts\build-agent-context.ps1") -Raw
 if ($contextBuilder -notmatch '\.env') { throw "Context builder must explicitly exclude environment files" }
-if ($contextBuilder -notmatch 'private\[-_\]\?key') { throw "Context builder must exclude private-key files" }
+if (-not $contextBuilder.Contains("private[-_]?key")) { throw "Context builder must exclude private-key files" }
 
 $parseTargets = @(
     "scripts\run-agent-task.ps1",
