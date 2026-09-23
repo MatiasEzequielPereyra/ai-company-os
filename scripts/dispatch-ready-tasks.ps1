@@ -150,6 +150,16 @@ if($Apply){
     if(-not(Test-Path $advance)){throw "advance-task.ps1 not found: $advance"}
 
     foreach($task in ($ready|Sort-Object ID)){
+        $packetPath = Join-Path $dispatchDir ($task.ID + ".md")
+        if(-not(Test-Path $packetPath)){
+            throw "Dispatch packet missing immediately before activation: $packetPath"
+        }
+
+        $packetContent = Get-Content $packetPath -Raw -Encoding UTF8
+        if($packetContent -notmatch "(?m)^Task:\s*$([regex]::Escape($task.ID))\s*$"){
+            throw "Dispatch packet task identity mismatch for $($task.ID): $packetPath"
+        }
+
         & $advance -Id $task.ID -Status ACTIVE -Actor "engineering-manager" -Reason "Execution packet prepared and dispatch explicitly applied." -Evidence ("Execution request: docs/engineering/dispatch/" + $task.ID + ".md") -TasksPath $tasksPath
     }
 
