@@ -348,6 +348,27 @@ foreach ($item in $items) {
     $created += [PSCustomObject]@{ Key=$key; ID=$id; Kind=[string]$item.kind; Owner=[string]$item.owner; Priority=[string]$item.priority; Title=[string]$item.title }
 }
 
+$kindCounts = @{}
+foreach ($kind in @("DECISION","IMPLEMENTATION","VALIDATION","OPERATIONS")) {
+    $kindCounts[$kind] = @($items | Where-Object { [string]$_.kind -eq $kind }).Count
+}
+
+$referencedDependencies = @{}
+foreach ($item in $items) {
+    foreach ($dependency in @($item.dependencies)) {
+        $referencedDependencies[[string]$dependency] = $true
+    }
+}
+$orphanDecisionKeys = @(
+    $items |
+        Where-Object {
+            [string]$_.kind -eq "DECISION" -and
+            [string]$_.key -ne $authorizationKey -and
+            -not $referencedDependencies.ContainsKey([string]$_.key)
+        } |
+        ForEach-Object { [string]$_.key }
+)
+
 $mapping = @(
     "# Engineering Backlog Mapping - $SourceTaskId",
     "",
@@ -355,9 +376,21 @@ $mapping = @(
     "Work request: $($backlog.work_request_id)",
     "Source task: $SourceTaskId",
     "",
+    "## Computed Counts",
+    "",
+    "- Total: $($items.Count)",
+    "- DECISION: $($kindCounts["DECISION"])",
+    "- IMPLEMENTATION: $($kindCounts["IMPLEMENTATION"])",
+    "- VALIDATION: $($kindCounts["VALIDATION"])",
+    "- OPERATIONS: $($kindCounts["OPERATIONS"])",
+    "",
     "## Summary",
     "",
     [string]$backlog.summary,
+    "",
+    "## Orphan Decision Warnings",
+    "",
+    $(if ($orphanDecisionKeys.Count -eq 0) { "- NONE" } else { ($orphanDecisionKeys | ForEach-Object { "- " + $_ }) -join [Environment]::NewLine }),
     "",
     "## Materialized Tasks",
     ""
