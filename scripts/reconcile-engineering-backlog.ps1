@@ -102,10 +102,15 @@ function Repair-MojibakeObject {
 
     if ($Value -is [System.Array]) {
         $result = @()
+
         foreach ($entry in $Value) {
             $result += ,(Repair-MojibakeObject -Value $entry)
         }
-        return $result
+
+        # PowerShell normally enumerates arrays returned from functions.
+        # -NoEnumerate preserves [] as an actual empty array instead of $null.
+        Write-Output -NoEnumerate $result
+        return
     }
 
     if ($Value -is [System.Collections.IDictionary]) {
@@ -376,6 +381,18 @@ if (-not (Test-Path $tasksPath)) { throw "Tasks directory not found: $tasksPath"
 
 $backlog = Get-Content $planPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $backlog = Repair-MojibakeObject -Value $backlog
+
+# Canonicalize dependency arrays. Empty/null/whitespace entries mean no dependency.
+foreach ($item in @($backlog.items)) {
+    $normalizedDependencies = @(
+        @($item.dependencies) |
+            ForEach-Object { [string]$_ } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            Select-Object -Unique
+    )
+
+    $item.dependencies = @($normalizedDependencies)
+}
 $items = @($backlog.items)
 if ($items.Count -eq 0) { throw "Structured backlog has no items." }
 
