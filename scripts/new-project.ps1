@@ -160,7 +160,9 @@ $ScriptFiles = @(
     "run-agent-task.ps1",
     "run-active-agents.ps1",
     "build-agent-context.ps1",
-    "provider-router.ps1"
+    "provider-router.ps1",
+    "run-gate-agent.ps1",
+    "run-pending-gates.ps1"
 )
 
 foreach ($ScriptFile in $ScriptFiles) {
@@ -187,11 +189,12 @@ if (Test-Path $ProviderConfigSource) {
 # Copy runtime schemas
 # ------------------------------------------------------------
 
-$SchemaSource = Join-Path $ScriptRoot "schemas\agent-result.schema.json"
-$SchemaTarget = Join-Path $ProjectPath "schemas\agent-result.schema.json"
+$SchemasRoot = Join-Path $ScriptRoot "schemas"
 
-if (Test-Path $SchemaSource) {
-    Copy-Item $SchemaSource $SchemaTarget -Force
+if (Test-Path $SchemasRoot) {
+    Get-ChildItem $SchemasRoot -Filter "*.schema.json" -File | ForEach-Object {
+        Copy-Item $_.FullName (Join-Path $ProjectPath ("schemas\" + $_.Name)) -Force
+    }
 }
 
 # ------------------------------------------------------------
