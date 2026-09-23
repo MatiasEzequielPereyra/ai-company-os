@@ -19,6 +19,7 @@ try {
 
     & git -C $fixtureRepo init | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "git init failed." }
+
     & git -C $fixtureRepo config user.email "aico-test@example.invalid"
     & git -C $fixtureRepo config user.name "AI Company OS Test"
 
@@ -28,8 +29,18 @@ try {
         "ID: AICO-001",
         "Status: ACTIVE"
     ) -join [Environment]::NewLine
-    [System.IO.File]::WriteAllText((Join-Path $fixtureRepo "tasks\AICO-001.md"),$task,(New-Object System.Text.UTF8Encoding($false)))
-    [System.IO.File]::WriteAllText((Join-Path $fixtureRepo "README.md"),"fixture",(New-Object System.Text.UTF8Encoding($false)))
+
+    [System.IO.File]::WriteAllText(
+        (Join-Path $fixtureRepo "tasks\AICO-001.md"),
+        $task,
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+
+    [System.IO.File]::WriteAllText(
+        (Join-Path $fixtureRepo "README.md"),
+        "fixture",
+        (New-Object System.Text.UTF8Encoding($false))
+    )
 
     & git -C $fixtureRepo add .
     & git -C $fixtureRepo commit -m "fixture" | Out-Null
@@ -37,14 +48,28 @@ try {
 
     $result = & (Join-Path $repoRoot "scripts\new-agent-workspace.ps1") -Id AICO-001 -ProjectPath $fixtureRepo -WorkspaceRoot $workspaces
 
-    if (-not (Test-Path $workspace)) { throw "Isolated worktree was not created." }
+    if (-not (Test-Path $workspace)) {
+        throw "Isolated worktree was not created."
+    }
+
     $branch = (& git -C $workspace branch --show-current).Trim()
-    if ($branch -ne "aico/aico-001") { throw "Unexpected isolated branch: $branch" }
+    if ($branch -ne "aico/aico-001") {
+        throw "Unexpected isolated branch: $branch"
+    }
 
-    [System.IO.File]::WriteAllText((Join-Path $workspace "isolated-change.txt"),"worktree only",(New-Object System.Text.UTF8Encoding($false)))
-    if (Test-Path (Join-Path $fixtureRepo "isolated-change.txt")) { throw "Writable worktree change leaked into the primary checkout." }
+    [System.IO.File]::WriteAllText(
+        (Join-Path $workspace "isolated-change.txt"),
+        "worktree only",
+        (New-Object System.Text.UTF8Encoding($false))
+    )
 
-    if ([string]$result.Path -ne $workspace) { throw "Workspace helper returned an unexpected path." }
+    if (Test-Path (Join-Path $fixtureRepo "isolated-change.txt")) {
+        throw "Writable worktree change leaked into the primary checkout."
+    }
+
+    if ([string]$result.Path -ne $workspace) {
+        throw "Workspace helper returned an unexpected path."
+    }
 
     Write-Host "PASS: writable agent worktree isolation test" -ForegroundColor Green
 }
@@ -52,13 +77,18 @@ finally {
     if (Test-Path $fixtureRepo) {
         try {
             $registeredWorktrees = @(& git -C $fixtureRepo worktree list --porcelain 2>$null)
-            $normalizedWorkspace = ([System.IO.Path]::GetFullPath($workspace)).TrimEnd('\','/').Replace('\','/').ToLowerInvariant()
+            $normalizedWorkspace = [System.IO.Path]::GetFullPath($workspace)
             $isRegistered = $false
 
             foreach ($line in $registeredWorktrees) {
-                if ($line -notmatch '^worktree\s+(.+)) { continue }
-                $registeredPath = ([System.IO.Path]::GetFullPath($Matches[1])).TrimEnd('\','/').Replace('\','/').ToLowerInvariant()
-                if ($registeredPath -eq $normalizedWorkspace) {
+                if (-not $line.StartsWith("worktree ")) {
+                    continue
+                }
+
+                $registeredRaw = $line.Substring(9).Trim()
+                $registeredPath = [System.IO.Path]::GetFullPath($registeredRaw)
+
+                if ([string]::Equals($registeredPath,$normalizedWorkspace,[System.StringComparison]::OrdinalIgnoreCase)) {
                     $isRegistered = $true
                     break
                 }
