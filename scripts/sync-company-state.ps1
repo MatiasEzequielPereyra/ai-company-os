@@ -11,7 +11,7 @@ function Get-TaskData {
     $content = Get-Content -Path $File.FullName -Raw -Encoding UTF8
     $id = if ($content -match '(?m)^ID:\s*(.+)$') { $Matches[1].Trim() } else { $File.BaseName }
     $title = if ($content -match '(?m)^#\s+(.+)$') { $Matches[1].Trim() } else { $File.BaseName }
-    if ($title -match ("^" + [regex]::Escape($id) + "\\s+-\\s+(.+)$")) { $title = $Matches[1].Trim() }
+    if ($title -match ("^" + [regex]::Escape($id) + "\s+-\s+(.+)$")) { $title = $Matches[1].Trim() }
 
     [PSCustomObject]@{
         ID = $id
