@@ -7,6 +7,31 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+function Get-HttpErrorBody {
+    param([System.Management.Automation.ErrorRecord]$ErrorRecord)
+
+    try {
+        $response = $ErrorRecord.Exception.Response
+        if ($null -eq $response) { return "" }
+
+        $stream = $response.GetResponseStream()
+        if ($null -eq $stream) { return "" }
+
+        $reader = New-Object System.IO.StreamReader($stream)
+        try {
+            return $reader.ReadToEnd()
+        }
+        finally {
+            $reader.Dispose()
+            $stream.Dispose()
+        }
+    }
+    catch {
+        return ""
+    }
+}
+
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 if ([string]::IsNullOrWhiteSpace($env:OPENROUTER_API_KEY)) {
@@ -46,9 +71,15 @@ try {
 }
 catch {
     $message = $_.Exception.Message
-    if ($null -ne $_.ErrorDetails -and -not [string]::IsNullOrWhiteSpace($_.ErrorDetails.Message)) {
+    $body = Get-HttpErrorBody -ErrorRecord $_
+
+    if (-not [string]::IsNullOrWhiteSpace($body)) {
+        $message = $body
+    }
+    elseif ($null -ne $_.ErrorDetails -and -not [string]::IsNullOrWhiteSpace($_.ErrorDetails.Message)) {
         $message = $_.ErrorDetails.Message
     }
+
     throw "OpenRouter request failed: $message"
 }
 
