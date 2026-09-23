@@ -55,11 +55,23 @@ if (-not (Test-Path $tempDir)) { New-Item -ItemType Directory -Force -Path $temp
 
 $validated = 0
 $ids = @{}
+$records = @()
+$expectedPhaseByStatus = @{
+    BACKLOG = "PLANNING"
+    READY = "PLANNING"
+    ACTIVE = "IMPLEMENTATION"
+    REVIEW = "CODE_REVIEW"
+    QA = "QA"
+    SECURITY = "SECURITY"
+    DONE = "DONE"
+    BLOCKED = "BLOCKED"
+}
 
 foreach ($file in Get-ChildItem $tasksPath -Filter "AICO-*.md" -File -ErrorAction SilentlyContinue) {
     $content = Get-Content $file.FullName -Raw -Encoding UTF8
     $id = Read-Field $content "ID"
     if ([string]::IsNullOrWhiteSpace($id)) { $id = $file.BaseName }
+    if ($id -ne $file.BaseName) { throw "Task ID $id does not match filename $($file.BaseName)." }
 
     if ($ids.ContainsKey($id)) { throw "Duplicate task ID: $id" }
     $ids[$id] = $true
@@ -85,6 +97,17 @@ foreach ($file in Get-ChildItem $tasksPath -Filter "AICO-*.md" -File -ErrorActio
         dependencies = @(Read-Dependencies $content)
     }
 
+    if (-not $expectedPhaseByStatus.ContainsKey([string]$normalized.status)) { throw "Unsupported task status in $id: $($normalized.status)" }
+    $expectedPhase = [string]$expectedPhaseByStatus[[string]$normalized.status]
+    if ([string]$normalized.workflow_phase -ne $expectedPhase) {
+        throw "Task $id has Workflow phase $($normalized.workflow_phase) but status $($normalized.status) requires $expectedPhase."
+    }
+    if ([string]$normalized.acceptance_criteria -notmatch '(?m)^-\s+\[[ xX]\]') {
+        throw "Task $id must contain checklist-based Acceptance Criteria."
+    }
+
+    $records += [PSCustomObject]$normalized
+
     $tempJson = Join-Path $tempDir ($id + ".normalized.json")
     [System.IO.File]::WriteAllText(
         $tempJson,
@@ -96,10 +119,31 @@ foreach ($file in Get-ChildItem $tasksPath -Filter "AICO-*.md" -File -ErrorActio
     $validated++
 }
 
+foreach ($record in $records) {
+    foreach ($dependency in @($record.dependencies)) {
+        if (-not $ids.ContainsKey([string]$dependency)) { throw "Task $($record.id) references missing dependency $dependency." }
+    }
+}
+
 $companyStateJson = Join-Path $root ".codex\state\company-state.json"
 if (Test-Path $companyStateJson) {
     if (-not (Test-Path $companyStateSchema)) { throw "Company state schema missing: $companyStateSchema" }
     & $validator -JsonPath $companyStateJson -SchemaPath $companyStateSchema | Out-Null
+    $state = Get-Content $companyStateJson -Raw -Encoding UTF8 | ConvertFrom-Json
+
+    $expectedActiveIds = @($records | Where-Object { $_.status -eq "ACTIVE" } | ForEach-Object { $_.id } | Sort-Object)
+    $expectedBlockedIds = @($records | Where-Object { $_.status -eq "BLOCKED" } | ForEach-Object { $_.id } | Sort-Object)
+    $expectedDoneCount = @($records | Where-Object { $_.status -eq "DONE" }).Count
+
+    if ([int]$state.task_count -ne $records.Count) { throw "company-state task_count does not match authoritative tasks." }
+    if ([int]$state.active_count -ne $expectedActiveIds.Count) { throw "company-state active_count does not match authoritative tasks." }
+    if ([int]$state.blocked_count -ne $expectedBlockedIds.Count) { throw "company-state blocked_count does not match authoritative tasks." }
+    if ([int]$state.done_count -ne $expectedDoneCount) { throw "company-state done_count does not match authoritative tasks." }
+
+    $actualActiveIds = @($state.active_task_ids | ForEach-Object { [string]$_ } | Sort-Object)
+    $actualBlockedIds = @($state.blocked_task_ids | ForEach-Object { [string]$_ } | Sort-Object)
+    if (($actualActiveIds -join "|") -ne ($expectedActiveIds -join "|")) { throw "company-state active_task_ids do not match authoritative tasks." }
+    if (($actualBlockedIds -join "|") -ne ($expectedBlockedIds -join "|")) { throw "company-state blocked_task_ids do not match authoritative tasks." }
 }
 
 Write-Host "PASS: canonical artifact validation" -ForegroundColor Green
