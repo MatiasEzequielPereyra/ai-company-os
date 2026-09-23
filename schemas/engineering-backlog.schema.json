@@ -110,12 +110,17 @@
         ],
         "additionalProperties": false
       }
+    },
+    "implementation_authorization_key": {
+      "type": "string",
+      "description": "Logical key of the DECISION item that authorizes implementation. Use NONE only when the approved source plan explicitly requires no implementation authorization."
     }
   },
   "required": [
     "source_task_id",
     "work_request_id",
     "summary",
+    "implementation_authorization_key",
     "items"
   ],
   "additionalProperties": false
