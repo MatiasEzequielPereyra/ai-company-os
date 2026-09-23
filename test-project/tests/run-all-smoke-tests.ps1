@@ -6,6 +6,7 @@ $testsRoot = $PSScriptRoot
 
 $tests = @(
     "test-project-intake.ps1",
+    "test-new-project-contract.ps1",
     "test-planning-engine.ps1",
     "test-readiness-engine.ps1",
     "test-dispatch-engine.ps1",
