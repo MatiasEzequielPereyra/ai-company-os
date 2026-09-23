@@ -24,7 +24,8 @@ $workspacePath = Join-Path $WorkspaceRoot $Id
 
 if (Test-Path $workspacePath) { throw "Workspace already exists: $workspacePath" }
 
-$existingBranch = (& git -C $root branch --list $branchName 2>$null).Trim()
+$existingBranchLines = @(& git -C $root branch --list $branchName 2>$null)
+$existingBranch = ($existingBranchLines -join [Environment]::NewLine).Trim()
 if (-not [string]::IsNullOrWhiteSpace($existingBranch)) {
     & git -C $root worktree add $workspacePath $branchName
 }
