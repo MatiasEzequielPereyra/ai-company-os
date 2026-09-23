@@ -12,11 +12,25 @@ function Get-MojibakeScore {
     if ([string]::IsNullOrEmpty($Value)) { return 0 }
 
     $score = 0
-    foreach ($pattern in @("Ã","Â","â","ð","ƒ","€","™","œ","ž")) {
+    $suspiciousCodePoints = @(
+        0x00C3, # LATIN CAPITAL LETTER A WITH TILDE
+        0x00C2, # LATIN CAPITAL LETTER A WITH CIRCUMFLEX
+        0x00E2, # LATIN SMALL LETTER A WITH CIRCUMFLEX
+        0x00F0, # LATIN SMALL LETTER ETH
+        0x0192, # LATIN SMALL LETTER F WITH HOOK
+        0x20AC, # EURO SIGN
+        0x2122, # TRADE MARK SIGN
+        0x0153, # LATIN SMALL LIGATURE OE
+        0x017E  # LATIN SMALL LETTER Z WITH CARON
+    )
+
+    foreach ($codePoint in $suspiciousCodePoints) {
+        $pattern = [string][char]$codePoint
         $score += ([regex]::Matches($Value,[regex]::Escape($pattern))).Count
     }
 
-    $score += 100 * ([regex]::Matches($Value,[regex]::Escape([char]0xFFFD))).Count
+    $replacementCharacter = [string][char]0xFFFD
+    $score += 100 * ([regex]::Matches($Value,[regex]::Escape($replacementCharacter))).Count
     return $score
 }
 
