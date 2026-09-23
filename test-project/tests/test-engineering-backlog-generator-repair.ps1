@@ -121,6 +121,18 @@ try {
     if (@($plan.items).Count -ne 3) {
         throw "Repair changed backlog item count unexpectedly."
     }
+
+    $authorizationItem = @(
+        $plan.items | Where-Object { [string]$_.key -eq "AICO-006-IMPL-AUTH" }
+    ) | Select-Object -First 1
+
+    if ($null -eq $authorizationItem) {
+        throw "Authorization item disappeared during repair."
+    }
+
+    if (@($authorizationItem.dependencies | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }).Count -ne 0) {
+        throw "Empty authorization dependencies were not preserved as an empty dependency set."
+    }
 }
 finally {
     if (Test-Path $tempRoot) {
