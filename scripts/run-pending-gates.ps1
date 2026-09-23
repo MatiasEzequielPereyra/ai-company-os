@@ -32,7 +32,7 @@ foreach ($phase in $phases) {
     $ids = @(
         Get-ChildItem $tasksPath -Filter "AICO-*.md" -File |
             ForEach-Object {
-                $content = Get-Content $_.FullName -Raw
+                $content = Get-Content $_.FullName -Raw -Encoding UTF8
                 $id = Read-Field $content "ID"
                 if ([string]::IsNullOrWhiteSpace($id)) { $id = $_.BaseName }
                 $status = Read-Field $content "Status"
@@ -41,7 +41,7 @@ foreach ($phase in $phases) {
                     if ($phase.Gate -eq "Security") {
                         $securityArtifact = Join-Path $root ("docs\engineering\security\" + $id + "-security.md")
                         if (Test-Path $securityArtifact) {
-                            $securityContent = Get-Content $securityArtifact -Raw
+                            $securityContent = Get-Content $securityArtifact -Raw -Encoding UTF8
                             $securityOutcome = Read-Field $securityContent "Outcome"
                             if ($securityOutcome -in @("PASS","NOT_APPLICABLE")) {
                                 return
