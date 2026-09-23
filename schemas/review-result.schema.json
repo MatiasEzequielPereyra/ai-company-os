@@ -1,0 +1,25 @@
+{
+  "type": "object",
+  "properties": {
+    "recommendation": {
+      "type": "string",
+      "enum": [
+        "APPROVE",
+        "CHANGES_REQUIRED"
+      ],
+      "description": "APPROVE when the assigned task deliverable is complete, evidence-based and fit to proceed. CHANGES_REQUIRED only when the deliverable itself is materially incomplete, unsupported, contradictory, or fails its acceptance criteria. Product defects discovered by the deliverable are not by themselves a reason to request changes."
+    },
+    "findings": {
+      "type": "string"
+    },
+    "verification": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "recommendation",
+    "findings",
+    "verification"
+  ],
+  "additionalProperties": false
+}
