@@ -67,7 +67,16 @@ function Append-SectionLine {
     return "$Content`n`n## $Section`n`n- $Line`n"
 }
 
-$filePath = Join-Path $TasksPath "$Id.md"
+$projectRoot = Split-Path -Parent $PSScriptRoot
+
+if ([System.IO.Path]::IsPathRooted($TasksPath)) {
+    $resolvedTasksPath = $TasksPath
+}
+else {
+    $resolvedTasksPath = Join-Path $projectRoot $TasksPath
+}
+
+$filePath = Join-Path $resolvedTasksPath "$Id.md"
 
 if (-not (Test-Path $filePath)) {
     throw "Task not found: $filePath"
