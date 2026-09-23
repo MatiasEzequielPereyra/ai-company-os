@@ -83,3 +83,9 @@ Before planning or assigning work, read:
 - docs/architecture/
 - docs/engineering/
 - Relevant tasks and ADRs
+
+## Existing Project Context Fallback
+
+For an existing repository, intake documents and completed role reports are valid planning baselines when canonical context documents are absent.
+Do not block solely because PROJECT-BRIEF or context templates have not yet been created.
+Require concrete evidence from product, architecture, QA, security and operations before decomposing implementation work.
