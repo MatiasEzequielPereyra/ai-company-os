@@ -164,6 +164,38 @@ if ($authorizationKey -ne "NONE") {
     }
 }
 
+# Re-check acyclicity after authorization dependencies are injected.
+$remaining = @{}
+$dependents = @{}
+foreach ($item in $items) {
+    $key = [string]$item.key
+    $remaining[$key] = @($item.dependencies).Count
+    if (-not $dependents.ContainsKey($key)) { $dependents[$key] = @() }
+}
+foreach ($item in $items) {
+    $key = [string]$item.key
+    foreach ($dependency in @($item.dependencies)) {
+        $d = [string]$dependency
+        $dependents[$d] = @($dependents[$d]) + @($key)
+    }
+}
+$queue = New-Object System.Collections.Queue
+foreach ($key in @($remaining.Keys)) {
+    if ([int]$remaining[$key] -eq 0) { $queue.Enqueue($key) }
+}
+$visited = 0
+while ($queue.Count -gt 0) {
+    $key = [string]$queue.Dequeue()
+    $visited++
+    foreach ($dependent in @($dependents[$key])) {
+        $remaining[$dependent] = [int]$remaining[$dependent] - 1
+        if ([int]$remaining[$dependent] -eq 0) { $queue.Enqueue([string]$dependent) }
+    }
+}
+if ($visited -ne $items.Count) {
+    throw "Engineering backlog contains a dependency cycle after authorization enforcement. No tasks were created."
+}
+
 $nextNumber = Get-NextTaskNumber -TasksPath $tasksPath
 $idByKey = @{}
 
