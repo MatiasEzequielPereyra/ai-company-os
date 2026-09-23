@@ -76,7 +76,10 @@ $promptLines = @(
     "Do not edit production code or change Git state.",
     "Separate verified evidence from assumptions.",
     "Reference concrete repository-relative files and symbols when supported by evidence.",
-    "If required evidence is unavailable, return BLOCKED rather than inventing it.",
+    "The external Repository Context Pack is intentionally bounded.",
+    "Do not return BLOCKED merely because some repository files are omitted or canonical context templates are absent.",
+    "Record non-material evidence gaps as unresolved questions and complete the assigned role deliverable when the available evidence is sufficient.",
+    "Return BLOCKED only when a materially required decision cannot be supported without missing evidence.",
     "",
     "The report_markdown field must contain the complete role report with findings, evidence, risks and recommended actions.",
     "The summary field must be concise.",
@@ -96,7 +99,7 @@ if ($Provider -eq "Auto" -and (
 if ($needsExternalContext) {
     if (-not (Test-Path $contextBuilderPath)) { throw "Context builder not found: $contextBuilderPath" }
 
-    $maxChars = 180000
+    $maxChars = 500000
     $configPath = Join-Path $root ".codex\provider-config.json"
     if (Test-Path $configPath) {
         try {
