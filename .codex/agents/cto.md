@@ -95,3 +95,10 @@ Before making architecture decisions, read:
 - docs/engineering/engineering-context.md
 - Relevant ADRs
 - Relevant tasks
+
+# Existing Project Context Fallback
+
+For an existing repository, canonical context files may not exist yet.
+Do not block solely because PROJECT-BRIEF, product-context, architecture-context or engineering-context is absent.
+Use project-intake, product-intake, architecture-intake and operations-intake as baseline evidence when canonical context files are missing.
+Inspect repository source and existing architecture/audit documentation before declaring evidence insufficient.
