@@ -118,6 +118,18 @@ if ($openRouter -notmatch 'application/json; charset=utf-8') {
 if ($openRouter -notmatch 'ConvertFrom-Json') {
     throw "OpenRouter adapter must validate serialized JSON before transport"
 }
+if ($openRouter -notmatch 'Test-TransientOpenRouterError') {
+    throw "OpenRouter adapter must classify transient failures"
+}
+if ($openRouter -notmatch '\$maxAttempts = 3') {
+    throw "OpenRouter adapter must retry transient failures"
+}
+if ($openRouter -notmatch 'StatusCode -eq 429') {
+    throw "OpenRouter adapter must retry rate-limit responses"
+}
+if ($openRouter -notmatch 'StatusCode -ge 500') {
+    throw "OpenRouter adapter must retry server errors"
+}
 
 $gemini = Get-Content (Join-Path $repoRoot "scripts\providers\invoke-gemini.ps1") -Raw
 if ($gemini -notmatch 'generativelanguage\.googleapis\.com') {
