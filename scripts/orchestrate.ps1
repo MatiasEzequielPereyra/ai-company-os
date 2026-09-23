@@ -56,7 +56,7 @@ if ([string]::IsNullOrWhiteSpace($WorkRequestId)) {
 
     if ($null -eq $latest) { throw "Work request creation succeeded but no WR file was found." }
 
-    $requestContent = Get-Content $latest.FullName -Raw
+    $requestContent = Get-Content $latest.FullName -Raw -Encoding UTF8
     $WorkRequestId = Read-Field $requestContent "ID"
 }
 
