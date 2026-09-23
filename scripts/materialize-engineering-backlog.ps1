@@ -54,6 +54,19 @@ if ($sourceTask -notmatch '(?m)^Status:\s*DONE\s*$') {
 }
 
 $backlog = Get-Content $planPath -Raw -Encoding UTF8 | ConvertFrom-Json
+
+# Canonicalize dependency arrays. Empty/null/whitespace entries mean no dependency.
+foreach ($item in @($backlog.items)) {
+    $normalizedDependencies = @(
+        @($item.dependencies) |
+            ForEach-Object { [string]$_ } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            Select-Object -Unique
+    )
+
+    $item.dependencies = @($normalizedDependencies)
+}
+
 $items = @($backlog.items)
 if ($items.Count -eq 0) { throw "Structured backlog has no items." }
 
