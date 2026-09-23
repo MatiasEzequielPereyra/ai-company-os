@@ -229,20 +229,14 @@ if ($validTransitions[$currentStatus] -notcontains $Status) {
     throw "Invalid transition: $currentStatus -> $Status. Allowed: $($validTransitions[$currentStatus] -join ', ')"
 }
 
-# Central transition guards. Every lifecycle script ultimately calls this file,
-# so direct status changes cannot bypass dependency or gate evidence.
+# Central transition guards. These rules are universal across workflow profiles:
+# dependencies and lifecycle gate evidence cannot be bypassed. Dispatch packets
+# are workflow-specific and are enforced by dispatch-ready-tasks.ps1.
 if ($Status -in @("READY", "ACTIVE")) {
     Assert-PreparedForReady -Content $content -TaskId $Id
     Assert-DependenciesDone -Content $content -TasksPath $resolvedTasksPath -TaskId $Id
 }
 
-if ($Status -eq "ACTIVE") {
-    $dispatchPath = Join-Path $projectRoot ("docs\engineering\dispatch\" + $Id + ".md")
-
-    if (-not (Test-Path $dispatchPath)) {
-        throw ("Transition guard: {0} cannot become ACTIVE without a prepared dispatch packet: {1}" -f $Id, $dispatchPath)
-    }
-}
 
 if ($Status -eq "REVIEW") {
     $resultDir = Join-Path $projectRoot "docs\engineering\results"
