@@ -1,0 +1,8 @@
+{
+  "auto_order": ["Codex", "OpenRouter", "Gemini"],
+  "context_max_chars": 180000,
+  "models": {
+    "OpenRouter": "openrouter/free",
+    "Gemini": "gemini-3.5-flash-lite"
+  }
+}
