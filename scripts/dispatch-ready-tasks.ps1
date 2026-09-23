@@ -34,7 +34,7 @@ if(-not(Test-Path $dispatchDir)){New-Item -ItemType Directory -Force -Path $disp
 $ready=@()
 
 Get-ChildItem $tasksPath -Filter "AICO-*.md" -File -ErrorAction SilentlyContinue | ForEach-Object {
-    $content=Get-Content $_.FullName -Raw -Encoding UTF8
+    $content=Get-Content $_.FullName -Raw
     $status=Read-Field $content "Status"
     if($status -eq "READY"){
         $ready += [PSCustomObject]@{

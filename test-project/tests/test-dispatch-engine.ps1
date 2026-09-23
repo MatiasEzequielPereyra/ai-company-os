@@ -30,44 +30,12 @@ try{
     if($packets.Count -ne 5){throw "Expected 5 prepared execution packets, found $($packets.Count)"}
 
     foreach($packet in $packets){
-        $packetContent=Get-Content $packet.FullName -Raw -Encoding UTF8
-        if($packetContent -notmatch '(?m)^Task:\s+AICO-\d+\s*
+        $packetContent = Get-Content $packet.FullName -Raw -Encoding UTF8
+        $expectedTask = [System.IO.Path]::GetFileNameWithoutExtension($packet.Name)
+        $identityPattern = "(?m)^Task:\s*" + [regex]::Escape($expectedTask) + "\s*$"
 
-    $activeBefore=@()
-    Get-ChildItem (Join-Path $tempRoot "tasks") -Filter "AICO-*.md" -File|ForEach-Object{
-        $c=Get-Content $_.FullName -Raw
-        if($c -match '(?m)^Status:\s*ACTIVE$'){$activeBefore+=$_.Name}
-    }
-    if($activeBefore.Count -ne 0){throw "Dry-run dispatch must not activate tasks"}
-
-    & $dispatch -ProjectPath $tempRoot -Apply
-
-    $activeOwners=@()
-    $backlogOwners=@()
-
-    Get-ChildItem (Join-Path $tempRoot "tasks") -Filter "AICO-*.md" -File|ForEach-Object{
-        $c=Get-Content $_.FullName -Raw
-        $owner=if($c -match '(?m)^Owner:\s*(.+)$'){$Matches[1].Trim()}else{"UNKNOWN"}
-        $status=if($c -match '(?m)^Status:\s*(.+)$'){$Matches[1].Trim()}else{"UNKNOWN"}
-        if($status -eq "ACTIVE"){$activeOwners+=$owner}
-        if($status -eq "BACKLOG"){$backlogOwners+=$owner}
-    }
-
-    foreach($owner in @("pm","cto","qa","security","devops")){
-        if($activeOwners -notcontains $owner){throw "Expected ACTIVE owner missing: $owner"}
-    }
-
-    if($backlogOwners -notcontains "engineering-manager"){
-        throw "Engineering Manager should remain BACKLOG while audit dependencies are incomplete"
-    }
-
-    Write-Host "PASS: dispatch engine smoke test" -ForegroundColor Green
-}
-finally{
-    if(Test-Path $tempRoot){Remove-Item $tempRoot -Recurse -Force}
-}
-){
-            throw "Prepared dispatch packet is missing task identity: $($packet.FullName)"
+        if($packetContent -notmatch $identityPattern){
+            throw "Prepared dispatch packet identity mismatch for $expectedTask`: $($packet.FullName)"
         }
     }
 

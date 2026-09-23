@@ -221,6 +221,12 @@ if ([string]::IsNullOrWhiteSpace($currentStatus)) {
     $currentStatus = "UNKNOWN"
 }
 
+$workflowProfile = Read-Field -Content $content -Key "Workflow profile"
+
+if ([string]::IsNullOrWhiteSpace($workflowProfile)) {
+    $workflowProfile = "standard"
+}
+
 if (-not $validTransitions.ContainsKey($currentStatus)) {
     throw "Invalid current status '$currentStatus' in $filePath"
 }
@@ -271,7 +277,14 @@ if ($Status -eq "DONE") {
     $finalPath = Join-Path $projectRoot ("docs\engineering\final-approvals\" + $Id + "-final.md")
 
     Assert-ArtifactField -Path $qaPath -Field "Outcome" -AllowedValues @("PASS") -Description "QA"
-    Assert-ArtifactField -Path $securityPath -Field "Outcome" -AllowedValues @("PASS", "NOT_APPLICABLE") -Description "security"
+    $allowedSecurityOutcomes = if ($workflowProfile -eq "high-assurance") {
+        @("PASS")
+    }
+    else {
+        @("PASS", "NOT_APPLICABLE")
+    }
+
+    Assert-ArtifactField -Path $securityPath -Field "Outcome" -AllowedValues $allowedSecurityOutcomes -Description "security"
     Assert-ArtifactField -Path $finalPath -Field "Decision" -AllowedValues @("APPROVE") -Description "final approval"
 }
 
@@ -326,6 +339,12 @@ elseif ($Status -eq "DONE") {
 elseif ($Status -eq "BLOCKED") {
     $content = Replace-LineValue -Content $content -Key "Workflow phase" -Value "BLOCKED"
 }
+elseif ($Status -eq "READY") {
+    $content = Replace-LineValue -Content $content -Key "Workflow phase" -Value "PLANNING"
+}
+elseif ($Status -eq "READY") {
+    $content = Replace-LineValue -Content $content -Key "Workflow phase" -Value "PLANNING"
+}
 
 $logLine = $now + " - " + $Actor + " - " + $currentStatus + " -> " + $Status + " - " + $Reason
 $content = Append-SectionLine -Content $content -Section "Transition Log" -Line $logLine
@@ -340,6 +359,28 @@ if (-not [string]::IsNullOrWhiteSpace($Evidence)) {
     $content,
     (New-Object System.Text.UTF8Encoding($false))
 )
+
+$metricsWriter = Join-Path $PSScriptRoot "write-operational-event.ps1"
+
+if (Test-Path $metricsWriter) {
+    try {
+        & $metricsWriter -ProjectPath $projectRoot -Event @{
+            event_type      = "task_transition"
+            task_id         = $Id
+            from_status     = $currentStatus
+            to_status       = $Status
+            actor           = $Actor
+            workflow_profile = $workflowProfile
+            success         = $true
+        } | Out-Null
+    }
+    catch {
+        Write-Warning (
+            "Task transition succeeded, but metrics recording failed: " +
+            $_.Exception.Message
+        )
+    }
+}
 
 Write-Host "Task advanced:" -ForegroundColor Green
 Write-Host ($Id + ": " + $currentStatus + " -> " + $Status)

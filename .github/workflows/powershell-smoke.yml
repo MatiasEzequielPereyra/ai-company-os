@@ -1,0 +1,19 @@
+name: PowerShell smoke tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: windows-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run AI Company OS smoke suite
+        shell: powershell
+        run: .\test-project\tests\run-all-smoke-tests.ps1

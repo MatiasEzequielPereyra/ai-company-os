@@ -20,6 +20,13 @@ $content=Get-Content $taskPath -Raw -Encoding UTF8
 $status=Read-Field $content "Status"
 if($status -ne "SECURITY"){throw "Task $Id must be SECURITY. Current status: $status"}
 
+$profile=Read-Field $content "Workflow profile"
+if([string]::IsNullOrWhiteSpace($profile)){$profile="standard"}
+
+if($profile -eq "high-assurance" -and $Outcome -eq "NOT_APPLICABLE"){
+    throw "High-assurance tasks require an explicit security PASS or FAIL; NOT_APPLICABLE is not allowed."
+}
+
 $dir=Join-Path $root "docs\engineering\security"
 if(-not(Test-Path $dir)){New-Item -ItemType Directory -Force -Path $dir|Out-Null}
 $now=(Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
@@ -28,11 +35,13 @@ $path=Join-Path $dir ($Id+"-security.md")
 $lines=@(
 "# Security Gate - $Id","",
 "Recorded: $now",
+"Workflow profile: $profile",
 "Outcome: $Outcome","",
 "## Evidence","",$Evidence,"",
 "## Findings","",$Findings,"",
 "## Rule","",
-"- PASS or NOT_APPLICABLE satisfies the security gate only.",
+"- PASS or an allowed NOT_APPLICABLE satisfies the security gate only.",
+"- high-assurance tasks require an explicit PASS or FAIL.",
 "- Final DONE still requires CEO verification.",
 "- FAIL returns the task to READY."
 )

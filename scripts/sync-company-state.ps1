@@ -9,10 +9,13 @@ function Get-TaskData {
     param([System.IO.FileInfo]$File)
 
     $content = Get-Content -Path $File.FullName -Raw -Encoding UTF8
+    $id = if ($content -match '(?m)^ID:\s*(.+)$') { $Matches[1].Trim() } else { $File.BaseName }
+    $title = if ($content -match '(?m)^#\s+(.+)$') { $Matches[1].Trim() } else { $File.BaseName }
+    if ($title -match ("^" + [regex]::Escape($id) + "\s+-\s+(.+)$")) { $title = $Matches[1].Trim() }
 
     [PSCustomObject]@{
-        ID = if ($content -match '(?m)^ID:\s*(.+)$') { $Matches[1].Trim() } else { $File.BaseName }
-        Title = if ($content -match '(?m)^#\s+(.+)$') { $Matches[1].Trim() } else { $File.BaseName }
+        ID = $id
+        Title = $title
         Status = if ($content -match '(?m)^Status:\s*(.+)$') { $Matches[1].Trim() } else { "UNKNOWN" }
         Priority = if ($content -match '(?m)^Priority:\s*(.+)$') { $Matches[1].Trim() } else { "" }
         Owner = if ($content -match '(?m)^Owner:\s*(.+)$') { $Matches[1].Trim() } else { "" }
@@ -33,6 +36,10 @@ function Format-TaskLines {
     }) -join [Environment]::NewLine)
 }
 
+$scriptProjectRoot = Split-Path -Parent $PSScriptRoot
+if (-not [System.IO.Path]::IsPathRooted($TasksPath)) { $TasksPath = Join-Path $scriptProjectRoot $TasksPath }
+if (-not [System.IO.Path]::IsPathRooted($SprintPath)) { $SprintPath = Join-Path $scriptProjectRoot $SprintPath }
+
 if (-not (Test-Path $TasksPath)) {
     throw "Tasks directory not found: $TasksPath"
 }
@@ -45,10 +52,10 @@ $tasks = @(
 $now = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 
 $sprintGoal = "No current objective recorded."
-$currentObjectivePath = ".codex/state/current-objective.md"
+$currentObjectivePath = Join-Path $scriptProjectRoot ".codex\state\current-objective.md"
 
 if (Test-Path $currentObjectivePath) {
-    $objectiveContent = Get-Content -Path $currentObjectivePath -Raw -Encoding UTF8
+    $objectiveContent = Get-Content -Path $currentObjectivePath -Raw
     if ($objectiveContent -match '(?m)^Objective:\s*(.+)$') {
         $sprintGoal = $Matches[1].Trim()
     }
@@ -126,5 +133,62 @@ if ($dir -and -not (Test-Path $dir)) {
     (New-Object System.Text.UTF8Encoding($false))
 )
 
-Write-Host "Company sprint state synced:" -ForegroundColor Green
+$stateDir = Split-Path -Parent $SprintPath
+$companyStateMarkdownPath = Join-Path $stateDir "company-state.md"
+$companyStateJsonPath = Join-Path $stateDir "company-state.json"
+
+$companyStateLines = @(
+    "# Company State",
+    "",
+    "Generated: $now",
+    "",
+    "## Source of Truth",
+    "",
+    "- Task status and task evidence: tasks/AICO-*.md",
+    "- Product decisions: docs/product/",
+    "- Architecture decisions: docs/architecture/ and docs/decisions/",
+    "- This file is a derived index and does not grant execution authorization.",
+    "",
+    "## Current Objective",
+    "",
+    $sprintGoal,
+    "",
+    "## Current Sprint",
+    "",
+    ".codex/state/current-sprint.md",
+    "",
+    "## Active Tasks",
+    "",
+    (Format-TaskLines $active),
+    "",
+    "## Blocked Tasks",
+    "",
+    (Format-TaskLines $blocked),
+    "",
+    "## Completed Tasks",
+    "",
+    (Format-TaskLines $done),
+    "",
+    "## Operational Metrics",
+    "",
+    ".codex/runtime/metrics/events.jsonl"
+)
+[System.IO.File]::WriteAllText($companyStateMarkdownPath,($companyStateLines -join [Environment]::NewLine),(New-Object System.Text.UTF8Encoding($false)))
+
+$companyState = [ordered]@{
+    schema_version = 1
+    generated = $now
+    sprint_goal = $sprintGoal
+    task_count = $tasks.Count
+    active_count = $active.Count
+    blocked_count = $blocked.Count
+    done_count = $done.Count
+    active_task_ids = @($active | Sort-Object ID | ForEach-Object { $_.ID })
+    blocked_task_ids = @($blocked | Sort-Object ID | ForEach-Object { $_.ID })
+}
+[System.IO.File]::WriteAllText($companyStateJsonPath,($companyState | ConvertTo-Json -Depth 10),(New-Object System.Text.UTF8Encoding($false)))
+
+Write-Host "Company state synced:" -ForegroundColor Green
 Write-Host $SprintPath
+Write-Host $companyStateMarkdownPath
+Write-Host $companyStateJsonPath

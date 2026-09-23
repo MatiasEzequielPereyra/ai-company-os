@@ -67,6 +67,8 @@ function New-GeneratedTask {
         "",
         "Workflow phase: PLANNING",
         "",
+        "Workflow profile: standard",
+        "",
         "Work request: $WorkRequestId",
         "",
         "---",

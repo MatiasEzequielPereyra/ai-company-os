@@ -58,6 +58,14 @@ if (-not $Parallel) {
     }
 }
 else {
+    $runnerContract = Get-Content $runner -Raw -Encoding UTF8
+    if ($runnerContract -notmatch "AUDIT/ANALYSIS ONLY" -or $runnerContract -notmatch "Do not edit production code or change Git state") {
+        throw "Shared-workspace -Parallel execution is only allowed for the analysis-only runner. Use scripts/new-agent-workspace.ps1 for authorized writable agent work."
+    }
+
+    Write-Host "Parallel mode uses a shared checkout and is restricted to analysis-only agents." -ForegroundColor DarkYellow
+    Write-Host "Writable parallel work must use task-specific Git worktrees." -ForegroundColor DarkYellow
+
     $jobs = @()
 
     foreach ($task in ($active | Sort-Object ID)) {

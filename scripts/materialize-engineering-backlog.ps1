@@ -260,6 +260,8 @@ foreach ($item in $items) {
         "",
         "Workflow phase: PLANNING",
         "",
+        "Workflow profile: standard",
+        "",
         "Work request: $($backlog.work_request_id)",
         "",
         "Source plan: $SourceTaskId",

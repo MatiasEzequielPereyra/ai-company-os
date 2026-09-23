@@ -5,7 +5,10 @@ $ErrorActionPreference = "Stop"
 $testsRoot = $PSScriptRoot
 
 $tests = @(
+    "test-powershell-parse.ps1",
     "test-project-intake.ps1",
+    "test-new-project-contract.ps1",
+    "test-install-existing-project-contract.ps1",
     "test-planning-engine.ps1",
     "test-readiness-engine.ps1",
     "test-dispatch-engine.ps1",
@@ -15,6 +18,11 @@ $tests = @(
     "test-dependency-refresh.ps1",
     "test-orchestrator.ps1",
     "test-agent-runtime-contract.ps1",
+    "test-canonical-contracts.ps1",
+    "test-provider-router-contract.ps1",
+    "test-agent-workspace-isolation.ps1",
+    "test-workflow-profiles.ps1",
+    "test-end-to-end-code-change.ps1",
     "test-engineering-backlog-materializer.ps1",
     "test-engineering-backlog-generator-repair.ps1",
     "test-engineering-backlog-reconcile.ps1",

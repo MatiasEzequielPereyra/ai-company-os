@@ -6,91 +6,60 @@
 
 ## One-Line Description
 
-{{DESCRIPTION}}
+UNCONFIRMED - PM must replace this with a validated one-line product description.
 
 ## Vision
 
-What are we building and why?
+UNCONFIRMED - describe what is being built and why after product review.
 
 ## Problem
 
-What problem does this project solve?
+UNCONFIRMED - record the user/business problem supported by evidence.
 
 ## Target Users
 
-Who uses this product?
+UNCONFIRMED - identify primary and secondary users.
 
 ## Primary User Journey
 
-Describe the main flow.
-
-## Business Goals
-
-- 
+UNCONFIRMED - describe the main user flow.
 
 ## Product Goals
 
-- 
+- UNCONFIRMED
 
 ## Non-Goals
 
-- 
+- UNCONFIRMED
 
 ## Current Status
 
-{{STATUS}}
+INITIALIZED
 
-## Current Phase
+## Current Workflow Phase
 
-IDEA / PRODUCT / ARCHITECTURE / DEVELOPMENT / QA / RELEASE / MAINTENANCE
+IDEA
 
 ## Technology
 
-### Frontend
-
--
-
-### Backend
-
--
-
-### Database
-
--
-
-### Infrastructure
-
--
-
-### External Services
-
--
-
-## Repository Structure
-
--
+Use `docs/engineering/project-intake.md` and `docs/architecture/architecture-intake.md` for detected repository evidence. Automated detection is not an architecture decision.
 
 ## Important Constraints
 
--
+- Preserve explicit user constraints and repository conventions.
+- Do not infer implementation authorization from project initialization.
 
 ## Known Risks
 
--
+- Product intent is not considered confirmed until PM review.
+- Architecture assumptions are not considered decisions until CTO review.
 
 ## Current Priorities
 
-### P0
-
--
-
-### P1
-
--
-
-### P2
-
--
+- Complete repository intake.
+- Confirm product scope.
+- Confirm architecture boundaries.
+- Materialize authorized engineering tasks.
 
 ## Active Work
 
@@ -98,7 +67,9 @@ IDEA / PRODUCT / ARCHITECTURE / DEVELOPMENT / QA / RELEASE / MAINTENANCE
 
 ## Open Questions
 
--
+- What product outcome is being requested?
+- Which requirements are confirmed versus assumed?
+- Which technical/release constraints materially affect the work?
 
 ## Important Decisions
 

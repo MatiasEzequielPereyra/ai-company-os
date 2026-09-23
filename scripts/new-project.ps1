@@ -14,6 +14,7 @@ Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host ""
 
 $ProjectPath = Join-Path $Destination $ProjectName
+$now = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 
 if (Test-Path $ProjectPath) {
     Write-Host "ERROR: El proyecto ya existe:" -ForegroundColor Red
@@ -38,6 +39,7 @@ $Directories = @(
     ".codex\protocols",
     ".codex\state",
     ".codex\workflows",
+    ".codex\templates",
 
     ".agents",
     ".agents\skills",
@@ -102,10 +104,25 @@ Copy-Item `
     (Join-Path $ProjectPath ".codex\agents\") `
     -Force
 
+foreach ($CompanyFolder in @("policies","protocols","workflows","templates")) {
+    $SourceFolder = Join-Path $ScriptRoot (".codex\" + $CompanyFolder)
+    $TargetFolder = Join-Path $ProjectPath (".codex\" + $CompanyFolder)
+    if (Test-Path $SourceFolder) {
+        Get-ChildItem $SourceFolder -File | ForEach-Object {
+            Copy-Item $_.FullName (Join-Path $TargetFolder $_.Name) -Force
+        }
+    }
+}
+
 Copy-Item `
     (Join-Path $TemplateRoot "docs\PROJECT-BRIEF.md") `
     (Join-Path $ProjectPath "docs\PROJECT-BRIEF.md") `
     -Force
+
+$ProjectBriefPath = Join-Path $ProjectPath "docs\PROJECT-BRIEF.md"
+$ProjectBrief = Get-Content $ProjectBriefPath -Raw -Encoding UTF8
+$ProjectBrief = $ProjectBrief.Replace("{{PROJECT_NAME}}",$ProjectName).Replace("{{DATE}}",$now)
+[System.IO.File]::WriteAllText($ProjectBriefPath,$ProjectBrief,(New-Object System.Text.UTF8Encoding($false)))
 
 Copy-Item `
     (Join-Path $TemplateRoot "docs\product-context.md") `
@@ -166,7 +183,12 @@ $ScriptFiles = @(
     "generate-engineering-backlog.ps1",
     "materialize-engineering-backlog.ps1",
     "reconcile-engineering-backlog.ps1",
-    "repair-artifact-encoding.ps1"
+    "repair-artifact-encoding.ps1",
+    "validate-json-contract.ps1",
+    "validate-artifacts.ps1",
+    "write-operational-event.ps1",
+    "summarize-metrics.ps1",
+    "new-agent-workspace.ps1"
 )
 
 foreach ($ScriptFile in $ScriptFiles) {
@@ -187,6 +209,11 @@ if (Test-Path $ProvidersSource) {
 $ProviderConfigSource = Join-Path $ScriptRoot ".codex\provider-config.json"
 if (Test-Path $ProviderConfigSource) {
     Copy-Item $ProviderConfigSource (Join-Path $ProjectPath ".codex\provider-config.json") -Force
+}
+
+$WorkflowProfilesSource = Join-Path $ScriptRoot ".codex\workflow-profiles.json"
+if (Test-Path $WorkflowProfilesSource) {
+    Copy-Item $WorkflowProfilesSource (Join-Path $ProjectPath ".codex\workflow-profiles.json") -Force
 }
 
 # ------------------------------------------------------------
@@ -255,6 +282,11 @@ if (-not (Test-Path $BlockersPath)) {
 
 -
 "@
+}
+
+$SyncScript = Join-Path $ProjectPath "scripts\sync-company-state.ps1"
+if (Test-Path $SyncScript) {
+    & $SyncScript -TasksPath (Join-Path $ProjectPath "tasks") -SprintPath $CurrentSprintPath | Out-Null
 }
 
 Write-Host "Company OS instalado." -ForegroundColor Green

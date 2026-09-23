@@ -1,28 +1,28 @@
 # Current Sprint
 
-Generated: 2026-09-22T17:26:39Z
+Generated: 2026-09-23T15:45:00Z
 
 ## Sprint Goal
 
-Complete the AI Company OS task management core and make project work persistent.
+Harden AI Company OS into a credible, production-minded AI-assisted engineering workflow framework.
 
 ## Priorities
 
 ### P0
 
-
+-
 
 ### P1
 
-
+-
 
 ### P2
 
-
+-
 
 ### P3
 
-
+-
 
 ## Active Work
 
@@ -30,7 +30,7 @@ Complete the AI Company OS task management core and make project work persistent
 
 ## Completed Work
 
-- AICO-001 [DONE/P1] AICO-001 ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â Complete task management core - Owner: engineering-manager
+- AICO-001 [DONE/P1] Complete task management core - Owner: engineering-manager
 
 ## Blocked Work
 
@@ -44,8 +44,11 @@ Complete the AI Company OS task management core and make project work persistent
 
 - Use flat tasks/*.md files. The Status field is the source of truth.
 - Keep transition history inside each task.
+- Missing workflow profiles on legacy tasks normalize to standard.
+- Shared-workspace parallelism remains analysis-only; writable work uses isolated Git worktrees.
 
 ## Risks
 
-- Scripts are filesystem-based and should be run from the repository root.
-- Manual edits can break metadata if required fields are removed.
+- Manual task edits can break metadata if required fields are removed.
+- Provider APIs remain external dependencies and require contract validation.
+- Isolated task branches still require explicit integration/merge review.
