@@ -37,7 +37,7 @@ $tasksPath = Join-Path $root "tasks"
 $taskPath = Join-Path $tasksPath ($Id + ".md")
 if (-not (Test-Path $taskPath)) { throw "Task not found: $taskPath" }
 
-$task = Get-Content $taskPath -Raw
+$task = Get-Content $taskPath -Raw -Encoding UTF8
 $status = Read-Field $task "Status"
 $owner = Read-Field $task "Owner"
 if ($status -ne "ACTIVE") { throw "Task $Id must be ACTIVE. Current status: $status" }
@@ -108,7 +108,7 @@ if ($needsExternalContext) {
     $configPath = Join-Path $root ".codex\provider-config.json"
     if (Test-Path $configPath) {
         try {
-            $providerConfig = Get-Content $configPath -Raw | ConvertFrom-Json
+            $providerConfig = Get-Content $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
             if ($null -ne $providerConfig.context_max_chars) {
                 $maxChars = [int]$providerConfig.context_max_chars
             }
@@ -130,7 +130,7 @@ $execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $promp
 
 if (-not (Test-Path $jsonPath)) { throw "Provider runtime did not produce structured output: $jsonPath" }
 
-$result = Get-Content $jsonPath -Raw | ConvertFrom-Json
+$result = Get-Content $jsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
 foreach ($field in @("outcome","summary","report_markdown","verification","decisions","blockers","recommended_next")) {
     if ($null -eq $result.PSObject.Properties[$field]) {
         throw "Structured agent result is missing field: $field"
