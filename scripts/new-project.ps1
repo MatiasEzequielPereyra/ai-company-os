@@ -164,7 +164,12 @@ $ScriptFiles = @(
     "run-gate-agent.ps1",
     "run-pending-gates.ps1",
     "generate-engineering-backlog.ps1",
-    "materialize-engineering-backlog.ps1"
+    "materialize-engineering-backlog.ps1",
+    "validate-json-contract.ps1",
+    "validate-artifacts.ps1",
+    "write-operational-event.ps1",
+    "summarize-metrics.ps1",
+    "new-agent-workspace.ps1"
 )
 
 foreach ($ScriptFile in $ScriptFiles) {
@@ -185,6 +190,11 @@ if (Test-Path $ProvidersSource) {
 $ProviderConfigSource = Join-Path $ScriptRoot ".codex\provider-config.json"
 if (Test-Path $ProviderConfigSource) {
     Copy-Item $ProviderConfigSource (Join-Path $ProjectPath ".codex\provider-config.json") -Force
+}
+
+$WorkflowProfilesSource = Join-Path $ScriptRoot ".codex\workflow-profiles.json"
+if (Test-Path $WorkflowProfilesSource) {
+    Copy-Item $WorkflowProfilesSource (Join-Path $ProjectPath ".codex\workflow-profiles.json") -Force
 }
 
 # ------------------------------------------------------------
