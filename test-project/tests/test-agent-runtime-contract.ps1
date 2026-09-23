@@ -14,11 +14,14 @@ $required = @(
     "scripts\providers\invoke-gemini.ps1",
     "scripts\run-gate-agent.ps1",
     "scripts\run-pending-gates.ps1",
+    "scripts\generate-engineering-backlog.ps1",
+    "scripts\materialize-engineering-backlog.ps1",
     ".codex\provider-config.json",
     "schemas\agent-result.schema.json",
     "schemas\review-result.schema.json",
     "schemas\qa-gate-result.schema.json",
-    "schemas\security-gate-result.schema.json"
+    "schemas\security-gate-result.schema.json",
+    "schemas\engineering-backlog.schema.json"
 )
 
 foreach ($relative in $required) {
@@ -159,7 +162,9 @@ $parseTargets = @(
     "scripts\providers\invoke-openrouter.ps1",
     "scripts\providers\invoke-gemini.ps1",
     "scripts\run-gate-agent.ps1",
-    "scripts\run-pending-gates.ps1"
+    "scripts\run-pending-gates.ps1",
+    "scripts\generate-engineering-backlog.ps1",
+    "scripts\materialize-engineering-backlog.ps1"
 )
 
 foreach ($relative in $parseTargets) {
@@ -216,3 +221,17 @@ finally {
 }
 
 Write-Host "PASS: multi-provider agent runtime contract test" -ForegroundColor Green
+
+
+$engineeringSchema = Get-Content (Join-Path $repoRoot "schemas\engineering-backlog.schema.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+if (@($engineeringSchema.required) -notcontains "implementation_authorization_key") {
+    throw "Engineering backlog schema must require implementation_authorization_key"
+}
+
+$materializerScript = Get-Content (Join-Path $repoRoot "scripts\materialize-engineering-backlog.ps1") -Raw -Encoding UTF8
+if ($materializerScript -notmatch 'dependency cycle') {
+    throw "Engineering backlog materializer must reject dependency cycles"
+}
+if ($materializerScript -notmatch 'Test-DependsOnKey') {
+    throw "Engineering backlog materializer must enforce authorization dependency reachability"
+}
