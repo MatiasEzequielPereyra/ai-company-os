@@ -63,7 +63,7 @@ $scriptNames = @(
     "initialize-project.ps1","new-task.ps1","list-tasks.ps1","update-task.ps1","advance-task.ps1","sync-company-state.ps1",
     "new-work-request.ps1","generate-plan.ps1","materialize-plan-tasks.ps1","evaluate-readiness.ps1","dispatch-ready-tasks.ps1",
     "submit-task-result.ps1","review-task.ps1","qa-task.ps1","security-task.ps1","finalize-task.ps1","refresh-dependencies.ps1","orchestrate.ps1",
-    "run-agent-task.ps1","run-active-agents.ps1","build-agent-context.ps1","provider-router.ps1"
+    "run-agent-task.ps1","run-active-agents.ps1","build-agent-context.ps1","provider-router.ps1","run-gate-agent.ps1","run-pending-gates.ps1"
 )
 foreach ($name in $scriptNames) {
     $source = Join-Path $sourceRoot ("scripts\" + $name)
@@ -88,15 +88,23 @@ if (Test-Path $providersSource) {
     }
 }
 
-$schemaSource = Join-Path $sourceRoot "schemas\agent-result.schema.json"
-$schemaTarget = Join-Path $targetRoot "schemas\agent-result.schema.json"
-if (Test-Path $schemaSource) {
+$schemaNames = @(
+    "agent-result.schema.json",
+    "review-result.schema.json",
+    "qa-gate-result.schema.json",
+    "security-gate-result.schema.json"
+)
+foreach ($schemaName in $schemaNames) {
+    $schemaSource = Join-Path $sourceRoot ("schemas\" + $schemaName)
+    $schemaTarget = Join-Path $targetRoot ("schemas\" + $schemaName)
+    if (-not (Test-Path $schemaSource)) { continue }
+
     if ((Test-Path $schemaTarget) -and -not $Force) {
-        Write-Host "SKIP existing schema: agent-result.schema.json" -ForegroundColor DarkYellow
+        Write-Host "SKIP existing schema: $schemaName" -ForegroundColor DarkYellow
     }
     else {
         Copy-Item $schemaSource $schemaTarget -Force
-        Write-Host "INSTALLED schema: agent-result.schema.json" -ForegroundColor Green
+        Write-Host "INSTALLED schema: $schemaName" -ForegroundColor Green
     }
 }
 
