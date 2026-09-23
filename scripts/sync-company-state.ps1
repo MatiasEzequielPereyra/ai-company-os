@@ -8,7 +8,7 @@ $ErrorActionPreference = "Stop"
 function Get-TaskData {
     param([System.IO.FileInfo]$File)
 
-    $content = Get-Content -Path $File.FullName -Raw
+    $content = Get-Content -Path $File.FullName -Raw -Encoding UTF8
 
     [PSCustomObject]@{
         ID = if ($content -match '(?m)^ID:\s*(.+)$') { $Matches[1].Trim() } else { $File.BaseName }
@@ -48,7 +48,7 @@ $sprintGoal = "No current objective recorded."
 $currentObjectivePath = ".codex/state/current-objective.md"
 
 if (Test-Path $currentObjectivePath) {
-    $objectiveContent = Get-Content -Path $currentObjectivePath -Raw
+    $objectiveContent = Get-Content -Path $currentObjectivePath -Raw -Encoding UTF8
     if ($objectiveContent -match '(?m)^Objective:\s*(.+)$') {
         $sprintGoal = $Matches[1].Trim()
     }
