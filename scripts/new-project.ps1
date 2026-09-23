@@ -39,6 +39,7 @@ $Directories = @(
     ".codex\protocols",
     ".codex\state",
     ".codex\workflows",
+    ".codex\templates",
 
     ".agents",
     ".agents\skills",
@@ -102,6 +103,16 @@ Copy-Item `
     (Join-Path $TemplateRoot "agents\*.toml") `
     (Join-Path $ProjectPath ".codex\agents\") `
     -Force
+
+foreach ($CompanyFolder in @("policies","protocols","workflows","templates")) {
+    $SourceFolder = Join-Path $ScriptRoot (".codex\" + $CompanyFolder)
+    $TargetFolder = Join-Path $ProjectPath (".codex\" + $CompanyFolder)
+    if (Test-Path $SourceFolder) {
+        Get-ChildItem $SourceFolder -File | ForEach-Object {
+            Copy-Item $_.FullName (Join-Path $TargetFolder $_.Name) -Force
+        }
+    }
+}
 
 Copy-Item `
     (Join-Path $TemplateRoot "docs\PROJECT-BRIEF.md") `
@@ -269,6 +280,11 @@ if (-not (Test-Path $BlockersPath)) {
 
 -
 "@
+}
+
+$SyncScript = Join-Path $ProjectPath "scripts\sync-company-state.ps1"
+if (Test-Path $SyncScript) {
+    & $SyncScript -TasksPath (Join-Path $ProjectPath "tasks") -SprintPath $CurrentSprintPath | Out-Null
 }
 
 Write-Host "Company OS instalado." -ForegroundColor Green
