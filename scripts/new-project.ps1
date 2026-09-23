@@ -52,7 +52,8 @@ $Directories = @(
 
     "tasks",
 
-    "scripts"
+    "scripts",
+    "scripts\providers"
 )
 
 foreach ($Directory in $Directories) {
@@ -157,7 +158,9 @@ $ScriptFiles = @(
     "refresh-dependencies.ps1",
     "orchestrate.ps1",
     "run-agent-task.ps1",
-    "run-active-agents.ps1"
+    "run-active-agents.ps1",
+    "build-agent-context.ps1",
+    "provider-router.ps1"
 )
 
 foreach ($ScriptFile in $ScriptFiles) {
@@ -165,6 +168,19 @@ foreach ($ScriptFile in $ScriptFiles) {
     if (Test-Path $Source) {
         Copy-Item $Source (Join-Path $ProjectPath "scripts\$ScriptFile") -Force
     }
+}
+
+$ProvidersSource = Join-Path $ScriptsRoot "providers"
+$ProvidersTarget = Join-Path $ProjectPath "scripts\providers"
+if (Test-Path $ProvidersSource) {
+    Get-ChildItem $ProvidersSource -File | ForEach-Object {
+        Copy-Item $_.FullName (Join-Path $ProvidersTarget $_.Name) -Force
+    }
+}
+
+$ProviderConfigSource = Join-Path $ScriptRoot ".codex\provider-config.json"
+if (Test-Path $ProviderConfigSource) {
+    Copy-Item $ProviderConfigSource (Join-Path $ProjectPath ".codex\provider-config.json") -Force
 }
 
 # ------------------------------------------------------------
