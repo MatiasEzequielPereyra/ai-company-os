@@ -37,7 +37,20 @@ foreach ($phase in $phases) {
                 if ([string]::IsNullOrWhiteSpace($id)) { $id = $_.BaseName }
                 $status = Read-Field $content "Status"
 
-                if ($status -eq $phase.Status) { $id }
+                if ($status -eq $phase.Status) {
+                    if ($phase.Gate -eq "Security") {
+                        $securityArtifact = Join-Path $root ("docs\engineering\security\" + $id + "-security.md")
+                        if (Test-Path $securityArtifact) {
+                            $securityContent = Get-Content $securityArtifact -Raw
+                            $securityOutcome = Read-Field $securityContent "Outcome"
+                            if ($securityOutcome -in @("PASS","NOT_APPLICABLE")) {
+                                return
+                            }
+                        }
+                    }
+
+                    $id
+                }
             } |
             Sort-Object
     )
