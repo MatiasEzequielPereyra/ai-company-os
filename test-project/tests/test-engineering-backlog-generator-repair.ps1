@@ -55,7 +55,7 @@ try {
         implementation_authorization_key = "impl-auth"
         items = @(
             @{
-                key = "IMPLEMENTATION_AUTHORIZATION"
+                key = "AICO-006-IMPL-AUTH"
                 kind = "DECISION"
                 title = "Authorize implementation work"
                 owner = "ceo"
@@ -67,6 +67,20 @@ try {
                 affected_areas = @("planning")
                 testing_requirements = @("Record authorization evidence.")
                 risks = @("Implementation starts without authorization.")
+            },
+            @{
+                key = "AICO-006-DISCARD-SEMANTICS"
+                kind = "DECISION"
+                title = "Approve authorized discard semantics"
+                owner = "pm"
+                priority = "P1"
+                objective = "Define approved resolution semantics for permanently unresolvable sales."
+                context = "Implementation requires PM and Security approval before authorized discard behavior is introduced."
+                acceptance_criteria = @("Discard semantics are explicitly approved.")
+                dependencies = @()
+                affected_areas = @("offline")
+                testing_requirements = @("Record decision evidence.")
+                risks = @("Incorrect discard authorization.")
             },
             @{
                 key = "RELEASE_BUILD"
@@ -100,11 +114,11 @@ try {
 
     $plan = Get-Content $planPath -Raw -Encoding UTF8 | ConvertFrom-Json
 
-    if ([string]$plan.implementation_authorization_key -ne "IMPLEMENTATION_AUTHORIZATION") {
-        throw "Authorization key was not repaired to the unique authorization DECISION item."
+    if ([string]$plan.implementation_authorization_key -ne "AICO-006-IMPL-AUTH") {
+        throw "Authorization key was not repaired to the identity-matching implementation authorization DECISION item."
     }
 
-    if (@($plan.items).Count -ne 2) {
+    if (@($plan.items).Count -ne 3) {
         throw "Repair changed backlog item count unexpectedly."
     }
 }
