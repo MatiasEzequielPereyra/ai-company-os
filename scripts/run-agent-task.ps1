@@ -99,7 +99,7 @@ if ($Provider -eq "Auto" -and (
 if ($needsExternalContext) {
     if (-not (Test-Path $contextBuilderPath)) { throw "Context builder not found: $contextBuilderPath" }
 
-    $maxChars = 500000
+    $maxChars = 320000
     $configPath = Join-Path $root ".codex\provider-config.json"
     if (Test-Path $configPath) {
         try {
