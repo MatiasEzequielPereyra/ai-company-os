@@ -70,7 +70,7 @@ if (-not (Test-Path $filePath)) {
 }
 
 $now = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-$content = Get-Content -Path $filePath -Raw
+$content = Get-Content -Path $filePath -Raw -Encoding UTF8
 
 
 if ($PSBoundParameters.ContainsKey("Priority")) {
