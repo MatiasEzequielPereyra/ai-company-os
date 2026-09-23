@@ -79,3 +79,11 @@ Before making product decisions, read:
 - docs/product/product-context.md
 - Relevant tasks
 - Relevant architecture documentation when technical constraints affect product behavior
+
+# Existing Project Context Fallback
+
+For an existing repository, canonical context files may not exist yet.
+Do not block solely because docs/PROJECT-BRIEF.md or docs/product/product-context.md is absent.
+Use docs/engineering/project-intake.md and docs/product/product-intake.md as the authoritative baseline when the canonical files are missing.
+Use repository evidence, audit documents and the active task to identify remaining unknowns.
+Block only when evidence required to complete the assigned decision is materially unavailable.
