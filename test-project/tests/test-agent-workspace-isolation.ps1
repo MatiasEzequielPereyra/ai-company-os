@@ -50,7 +50,32 @@ try {
 }
 finally {
     if (Test-Path $fixtureRepo) {
-        & git -C $fixtureRepo worktree remove $workspace --force 2>$null | Out-Null
+        try {
+            $registeredWorktrees = @(& git -C $fixtureRepo worktree list --porcelain 2>$null)
+            $normalizedWorkspace = ([System.IO.Path]::GetFullPath($workspace)).TrimEnd('\','/').Replace('\','/').ToLowerInvariant()
+            $isRegistered = $false
+
+            foreach ($line in $registeredWorktrees) {
+                if ($line -notmatch '^worktree\s+(.+)) { continue }
+                $registeredPath = ([System.IO.Path]::GetFullPath($Matches[1])).TrimEnd('\','/').Replace('\','/').ToLowerInvariant()
+                if ($registeredPath -eq $normalizedWorkspace) {
+                    $isRegistered = $true
+                    break
+                }
+            }
+
+            if ($isRegistered) {
+                & git -C $fixtureRepo worktree remove $workspace --force 2>$null | Out-Null
+            }
+
+            & git -C $fixtureRepo worktree prune 2>$null | Out-Null
+        }
+        catch {
+            Write-Warning ("Worktree cleanup warning: " + $_.Exception.Message)
+        }
     }
-    if (Test-Path $tempParent) { Remove-Item $tempParent -Recurse -Force }
+
+    if (Test-Path $tempParent) {
+        Remove-Item $tempParent -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
