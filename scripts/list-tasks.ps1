@@ -13,7 +13,7 @@ if (-not (Test-Path $TasksPath)) {
 }
 
 $tasks = Get-ChildItem -Path $TasksPath -Filter "AICO-*.md" -File -ErrorAction SilentlyContinue | ForEach-Object {
-    $content = Get-Content -Path $_.FullName -Raw
+    $content = Get-Content -Path $_.FullName -Raw -Encoding UTF8
 
     $id = if ($content -match '(?m)^ID:\s*(.+)$') { $Matches[1].Trim() } else { $_.BaseName }
     $title = if ($content -match '(?m)^#\s+(.+)$') { $Matches[1].Trim() } else { $_.BaseName }
