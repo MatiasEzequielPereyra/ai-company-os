@@ -58,8 +58,25 @@ function Repair-MojibakeText {
         if ($currentScore -eq 0) { break }
 
         try {
-            $bytes = $strict1252.GetBytes($current)
-            $candidate = $utf8.GetString($bytes)
+            $byteList = New-Object "System.Collections.Generic.List[byte]"
+
+            foreach ($character in $current.ToCharArray()) {
+                $codePoint = [int][char]$character
+
+                if ($codePoint -le 255) {
+                    $byteList.Add([byte]$codePoint)
+                    continue
+                }
+
+                $encodedCharacter = $strict1252.GetBytes([string]$character)
+                if ($encodedCharacter.Length -ne 1) {
+                    throw "Character cannot be represented as a single legacy byte."
+                }
+
+                $byteList.Add($encodedCharacter[0])
+            }
+
+            $candidate = $utf8.GetString($byteList.ToArray())
         }
         catch {
             break
