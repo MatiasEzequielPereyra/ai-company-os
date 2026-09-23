@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AI Company OS normalized company state",
+  "type": "object",
+  "properties": {
+    "schema_version": { "type": "integer", "enum": [1] },
+    "generated": { "type": "string", "minLength": 1 },
+    "sprint_goal": { "type": "string", "minLength": 1 },
+    "task_count": { "type": "integer" },
+    "active_count": { "type": "integer" },
+    "blocked_count": { "type": "integer" },
+    "done_count": { "type": "integer" },
+    "active_task_ids": { "type": "array", "items": { "type": "string", "pattern": "^AICO-[0-9]{3,}$" } },
+    "blocked_task_ids": { "type": "array", "items": { "type": "string", "pattern": "^AICO-[0-9]{3,}$" } }
+  },
+  "required": ["schema_version","generated","sprint_goal","task_count","active_count","blocked_count","done_count","active_task_ids","blocked_task_ids"],
+  "additionalProperties": false
+}
