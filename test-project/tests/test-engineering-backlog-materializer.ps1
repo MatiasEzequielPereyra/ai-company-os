@@ -9,6 +9,36 @@ if (-not (Test-Path $materializer)) {
     throw "materialize-engineering-backlog.ps1 missing"
 }
 
+function Read-Field {
+    param(
+        [string]$Content,
+        [string]$Key
+    )
+
+    $pattern = "(?m)^" + [regex]::Escape($Key) + ":\s*(.+?)\r?$"
+    if ($Content -match $pattern) {
+        return $Matches[1].Trim()
+    }
+
+    return ""
+}
+
+function Read-Dependencies {
+    param([string]$Content)
+
+    $pattern = "(?ms)^## Dependencies\s*\r?\n\s*\r?\n(.*?)(?=\r?\n\r?\n---|\z)"
+    if ($Content -notmatch $pattern) {
+        return @()
+    }
+
+    return @(
+        $Matches[1] -split "\r?\n" |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { $_ -match "^-\s+AICO-\d+$" } |
+            ForEach-Object { $_ -replace "^-\s+", "" }
+    )
+}
+
 $tempRoot = Join-Path $env:TEMP ("aico-backlog-materializer-" + [Guid]::NewGuid().ToString("N"))
 
 try {
@@ -90,139 +120,91 @@ try {
 
     $planPath = Join-Path $tempRoot "docs\engineering\plans\AICO-006-engineering-backlog.json"
     $fixtureJson = $fixture | ConvertTo-Json -Depth 20
-    [System.IO.File]::WriteAllText($planPath,$fixtureJson,(New-Object System.Text.UTF8Encoding($false)))
+
+    [System.IO.File]::WriteAllText(
+        $planPath,
+        $fixtureJson,
+        (New-Object System.Text.UTF8Encoding($false))
+    )
 
     & $materializer -SourceTaskId "AICO-006" -ProjectPath $tempRoot
 
-    $created = @(Get-ChildItem (Join-Path $tempRoot "tasks") -Filter "AICO-*.md" -File | Where-Object { $_.BaseName -ne "AICO-006" } | Sort-Object Name)
+    $created = @(
+        Get-ChildItem (Join-Path $tempRoot "tasks") -Filter "AICO-*.md" -File |
+            Where-Object { $_.BaseName -ne "AICO-006" } |
+            Sort-Object Name
+    )
+
     if ($created.Count -ne 3) {
         throw "Expected 3 materialized tasks, got $($created.Count)"
     }
 
-    if ($created[0].BaseName -ne "AICO-007" -or $created[1].BaseName -ne "AICO-008" -or $created[2].BaseName -ne "AICO-009") {
-        throw "Materialized IDs are not sequential from AICO-007"
+    $expectedIds = @("AICO-007","AICO-008","AICO-009")
+    $actualIds = @($created | ForEach-Object { $_.BaseName })
+
+    if (($actualIds -join ",") -ne ($expectedIds -join ",")) {
+        throw "Materialized IDs are not sequential from AICO-007. Got: $($actualIds -join ', ')"
     }
 
-    $auth = Get-Content (Join-Path $tempRoot "tasks\AICO-007.md") -Raw -Encoding UTF8
-    $build = Get-Content (Join-Path $tempRoot "tasks\AICO-008.md") -Raw -Encoding UTF8
-    $verify = Get-Content (Join-Path $tempRoot "tasks\AICO-009.md") -Raw -Encoding UTF8
+    $taskByKey = @{}
+    $idByKey = @{}
 
-    if ($auth -notmatch '(?m)^Backlog key:\s*AUTH\r?
+    foreach ($file in $created) {
+        $taskContent = Get-Content $file.FullName -Raw -Encoding UTF8
+        $key = Read-Field -Content $taskContent -Key "Backlog key"
 
-    $mapping = Join-Path $tempRoot "docs\engineering\plans\AICO-006-engineering-backlog-tasks.md"
-    if (-not (Test-Path $mapping)) {
-        throw "Backlog mapping file was not created"
-    }
-
-    $duplicateRejected = $false
-    try {
-        & $materializer -SourceTaskId "AICO-006" -ProjectPath $tempRoot
-    }
-    catch {
-        if ($_.Exception.Message -match 'already materialized') {
-            $duplicateRejected = $true
+        if ([string]::IsNullOrWhiteSpace($key)) {
+            throw "Materialized task $($file.BaseName) has no Backlog key"
         }
-        else {
-            throw
+
+        if ($taskByKey.ContainsKey($key)) {
+            throw "Duplicate materialized backlog key: $key"
         }
+
+        $taskByKey[$key] = $taskContent
+        $idByKey[$key] = $file.BaseName
     }
 
-    if (-not $duplicateRejected) {
-        throw "Materializer did not reject duplicate materialization"
-    }
-}
-finally {
-    if (Test-Path $tempRoot) {
-        Remove-Item $tempRoot -Recurse -Force
-    }
-}
-
-Write-Host "PASS: engineering backlog materializer test" -ForegroundColor Green
-) {
-        throw "Authorization task mapping is incorrect"
-    }
-
-    if ($build -notmatch '(?m)^- AICO-007\r?
-
-    $mapping = Join-Path $tempRoot "docs\engineering\plans\AICO-006-engineering-backlog-tasks.md"
-    if (-not (Test-Path $mapping)) {
-        throw "Backlog mapping file was not created"
-    }
-
-    $duplicateRejected = $false
-    try {
-        & $materializer -SourceTaskId "AICO-006" -ProjectPath $tempRoot
-    }
-    catch {
-        if ($_.Exception.Message -match 'already materialized') {
-            $duplicateRejected = $true
-        }
-        else {
-            throw
+    foreach ($key in @("AUTH","BUILD","VERIFY")) {
+        if (-not $taskByKey.ContainsKey($key)) {
+            throw "Missing materialized task for backlog key: $key"
         }
     }
 
-    if (-not $duplicateRejected) {
-        throw "Materializer did not reject duplicate materialization"
+    $authDependencies = @(Read-Dependencies -Content $taskByKey["AUTH"])
+    if ($authDependencies.Count -ne 0) {
+        throw "Authorization task must not gain dependencies in this fixture"
     }
-}
-finally {
-    if (Test-Path $tempRoot) {
-        Remove-Item $tempRoot -Recurse -Force
-    }
-}
 
-Write-Host "PASS: engineering backlog materializer test" -ForegroundColor Green
-) {
+    $buildDependencies = @(Read-Dependencies -Content $taskByKey["BUILD"])
+    if ($buildDependencies -notcontains $idByKey["AUTH"]) {
         throw "Implementation task did not inherit authorization dependency"
     }
 
-    if ($verify -notmatch '(?m)^- AICO-008\r?
+    $verifyDependencies = @(Read-Dependencies -Content $taskByKey["VERIFY"])
+    if ($verifyDependencies -notcontains $idByKey["BUILD"]) {
+        throw "Validation task did not preserve BUILD dependency"
+    }
 
-    $mapping = Join-Path $tempRoot "docs\engineering\plans\AICO-006-engineering-backlog-tasks.md"
-    if (-not (Test-Path $mapping)) {
+    $mappingPath = Join-Path $tempRoot "docs\engineering\plans\AICO-006-engineering-backlog-tasks.md"
+    if (-not (Test-Path $mappingPath)) {
         throw "Backlog mapping file was not created"
     }
 
+    $mapping = Get-Content $mappingPath -Raw -Encoding UTF8
+    foreach ($key in @("AUTH","BUILD","VERIFY")) {
+        if ($mapping -notmatch ("(?m)^- " + [regex]::Escape($key) + " -> " + [regex]::Escape($idByKey[$key]) + "\b")) {
+            throw "Mapping file does not contain correct entry for $key"
+        }
+    }
+
     $duplicateRejected = $false
+
     try {
         & $materializer -SourceTaskId "AICO-006" -ProjectPath $tempRoot
     }
     catch {
-        if ($_.Exception.Message -match 'already materialized') {
-            $duplicateRejected = $true
-        }
-        else {
-            throw
-        }
-    }
-
-    if (-not $duplicateRejected) {
-        throw "Materializer did not reject duplicate materialization"
-    }
-}
-finally {
-    if (Test-Path $tempRoot) {
-        Remove-Item $tempRoot -Recurse -Force
-    }
-}
-
-Write-Host "PASS: engineering backlog materializer test" -ForegroundColor Green
-) {
-        throw "Validation task dependency mapping is incorrect"
-    }
-
-    $mapping = Join-Path $tempRoot "docs\engineering\plans\AICO-006-engineering-backlog-tasks.md"
-    if (-not (Test-Path $mapping)) {
-        throw "Backlog mapping file was not created"
-    }
-
-    $duplicateRejected = $false
-    try {
-        & $materializer -SourceTaskId "AICO-006" -ProjectPath $tempRoot
-    }
-    catch {
-        if ($_.Exception.Message -match 'already materialized') {
+        if ($_.Exception.Message -match "already materialized") {
             $duplicateRejected = $true
         }
         else {
