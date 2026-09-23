@@ -4,7 +4,7 @@
     "OpenRouter",
     "Gemini"
   ],
-  "context_max_chars": 500000,
+  "context_max_chars": 320000,
   "models": {
     "OpenRouter": "openrouter/free",
     "Gemini": "gemini-3.5-flash-lite"
