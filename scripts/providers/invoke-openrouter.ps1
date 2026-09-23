@@ -37,6 +37,46 @@ function Test-TransientOpenRouterError {
     return $false
 }
 
+function ConvertTo-StructuredObjectJson {
+    param([string]$Content)
+
+    $text = ([string]$Content).Trim()
+
+    try {
+        $parsed = $text | ConvertFrom-Json
+    }
+    catch {
+        throw "OpenRouter returned invalid JSON for the structured result contract."
+    }
+
+    # Some free models ignore the requested root shape and wrap the object
+    # in a JSON string. Unwrap one safe layer when it contains valid JSON.
+    if ($parsed -is [string]) {
+        $nested = ([string]$parsed).Trim()
+        try {
+            $parsed = $nested | ConvertFrom-Json
+        }
+        catch {
+            throw "OpenRouter returned a JSON string instead of a structured object."
+        }
+    }
+
+    # Some models wrap the single requested object in a one-element array.
+    if ($parsed -is [System.Array]) {
+        if ($parsed.Count -ne 1) {
+            throw ("OpenRouter returned a JSON array with " + $parsed.Count + " items; expected one object.")
+        }
+        $parsed = $parsed[0]
+    }
+
+    if ($null -eq $parsed -or ($parsed -isnot [System.Management.Automation.PSCustomObject] -and $parsed -isnot [hashtable])) {
+        $rootType = if ($null -eq $parsed) { "null" } else { $parsed.GetType().FullName }
+        throw ("OpenRouter structured result root must be an object. Actual root type: " + $rootType)
+    }
+
+    return ($parsed | ConvertTo-Json -Depth 100 -Compress)
+}
+
 function Get-HttpErrorBody {
     param([System.Management.Automation.ErrorRecord]$ErrorRecord)
 
@@ -159,11 +199,9 @@ if ($content -isnot [string]) {
 }
 
 $content = ([string]$content).Trim()
+$normalizedContent = ConvertTo-StructuredObjectJson -Content $content
 
-try { $null = $content | ConvertFrom-Json }
-catch { throw "OpenRouter returned invalid JSON for the agent result contract." }
-
-[System.IO.File]::WriteAllText($OutputPath,$content,(New-Object System.Text.UTF8Encoding($false)))
+[System.IO.File]::WriteAllText($OutputPath,$normalizedContent,(New-Object System.Text.UTF8Encoding($false)))
 
 [PSCustomObject]@{
     Provider = "OpenRouter"
