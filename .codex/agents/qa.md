@@ -75,3 +75,9 @@ Before testing, read:
 - Relevant architecture documentation
 
 Testing must be based on expected behavior, not merely implementation details.
+
+# Existing Project Context Fallback
+
+For an existing repository, use project-intake and product-intake when PROJECT-BRIEF or product-context is absent.
+Use the real test tree, verification scripts, package scripts and audit documentation as primary evidence.
+Do not block solely because canonical context templates are missing.
