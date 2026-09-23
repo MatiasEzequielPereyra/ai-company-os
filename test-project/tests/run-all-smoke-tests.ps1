@@ -15,7 +15,8 @@ $tests = @(
     "test-dependency-refresh.ps1",
     "test-orchestrator.ps1",
     "test-agent-runtime-contract.ps1",
-    "test-engineering-backlog-materializer.ps1"
+    "test-engineering-backlog-materializer.ps1",
+    "test-engineering-backlog-generator-repair.ps1"
 )
 
 $results = @()
