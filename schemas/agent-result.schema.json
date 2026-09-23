@@ -3,7 +3,11 @@
   "properties": {
     "outcome": {
       "type": "string",
-      "enum": ["COMPLETED", "BLOCKED"]
+      "enum": [
+        "COMPLETED",
+        "BLOCKED"
+      ],
+      "description": "Execution outcome for the assigned agent task. Use COMPLETED when the requested analysis/review was delivered, even if the report finds critical/P0/release blockers. Use BLOCKED only when the agent could not complete the assigned task because required evidence, access, authorization, or another prerequisite was unavailable."
     },
     "summary": {
       "type": "string"
@@ -18,10 +22,12 @@
       "type": "string"
     },
     "blockers": {
-      "type": "string"
+      "type": "string",
+      "description": "Execution blockers that prevented completion of the assigned agent task. Do not put product defects, release blockers, security findings, QA failures, or production-readiness issues here when the audit/review itself was completed. Use NONE when there is no execution blocker."
     },
     "recommended_next": {
-      "type": "string"
+      "type": "string",
+      "description": "Recommended next workflow or engineering action after this completed analysis. Do not write BLOCKED merely because the product is not release-ready."
     }
   },
   "required": [
