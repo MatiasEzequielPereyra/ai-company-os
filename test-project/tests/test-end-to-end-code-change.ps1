@@ -83,7 +83,7 @@ try {
     & (Join-Path $tempRoot "scripts\validate-artifacts.ps1") -ProjectPath $tempRoot | Out-Null
 
     $task = Get-Content (Join-Path $tasksPath "AICO-001.md") -Raw -Encoding UTF8
-    if ($task -notmatch '(?m)^Status:\s*DONE$') { throw "E2E task did not reach DONE." }
+    if ($task -notmatch '(?m)^Status:\s*DONE\r?$') { throw "E2E task did not reach DONE." }
 
     $statePath = Join-Path $tempRoot ".codex\state\company-state.json"
     if (-not (Test-Path $statePath)) { throw "Canonical company-state.json was not generated." }
