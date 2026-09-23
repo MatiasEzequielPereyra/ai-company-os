@@ -12,8 +12,13 @@ $required = @(
     "scripts\providers\invoke-codex.ps1",
     "scripts\providers\invoke-openrouter.ps1",
     "scripts\providers\invoke-gemini.ps1",
+    "scripts\run-gate-agent.ps1",
+    "scripts\run-pending-gates.ps1",
     ".codex\provider-config.json",
-    "schemas\agent-result.schema.json"
+    "schemas\agent-result.schema.json",
+    "schemas\review-result.schema.json",
+    "schemas\qa-gate-result.schema.json",
+    "schemas\security-gate-result.schema.json"
 )
 
 foreach ($relative in $required) {
@@ -48,6 +53,7 @@ if (@($config.auto_order) -notcontains "Gemini") { throw "Provider config must i
 if ([string]$config.models.OpenRouter -ne "openrouter/free") { throw "OpenRouter must default to openrouter/free" }
 if ([string]$config.models.Gemini -ne "gemini-3.5-flash-lite") { throw "Gemini must default to gemini-3.5-flash-lite" }
 if ([int]$config.context_max_chars -lt 300000) { throw "External provider context budget must be at least 300000 characters" }
+if ([int]$config.gate_context_max_chars -lt 100000) { throw "Gate context budget must be explicitly configured" }
 
 $pmInstructions = Get-Content (Join-Path $repoRoot ".codex\agents\pm.md") -Raw
 if ($pmInstructions -notmatch 'Existing Project Context Fallback') {
@@ -135,7 +141,9 @@ $parseTargets = @(
     "scripts\build-agent-context.ps1",
     "scripts\providers\invoke-codex.ps1",
     "scripts\providers\invoke-openrouter.ps1",
-    "scripts\providers\invoke-gemini.ps1"
+    "scripts\providers\invoke-gemini.ps1",
+    "scripts\run-gate-agent.ps1",
+    "scripts\run-pending-gates.ps1"
 )
 
 foreach ($relative in $parseTargets) {
