@@ -120,6 +120,11 @@ if (-not (Test-Path $tasksReadme)) {
     if (Test-Path $sourceTasksReadme) { Copy-Item $sourceTasksReadme $tasksReadme -Force }
 }
 
+$syncScript = Join-Path $targetRoot "scripts\sync-company-state.ps1"
+if (Test-Path $syncScript) {
+    & $syncScript -TasksPath (Join-Path $targetRoot "tasks") -SprintPath (Join-Path $targetRoot ".codex\state\current-sprint.md") | Out-Null
+}
+
 Write-Host ""
 Write-Host "AI Company OS installed into existing project." -ForegroundColor Green
 Write-Host "Target: $targetRoot"
