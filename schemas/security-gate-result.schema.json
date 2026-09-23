@@ -1,0 +1,26 @@
+{
+  "type": "object",
+  "properties": {
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "PASS",
+        "FAIL",
+        "NOT_APPLICABLE"
+      ],
+      "description": "Evaluate the task deliverable, not overall release readiness. PASS when security-relevant claims and handling are adequate. FAIL when the deliverable itself has a security-quality defect. NOT_APPLICABLE when the task introduced no security-relevant implementation/change and an additional security gate adds no meaningful verification."
+    },
+    "evidence": {
+      "type": "string"
+    },
+    "findings": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "outcome",
+    "evidence",
+    "findings"
+  ],
+  "additionalProperties": false
+}
