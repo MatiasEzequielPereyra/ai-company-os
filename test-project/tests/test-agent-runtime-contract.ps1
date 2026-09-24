@@ -12,6 +12,9 @@ $required = @(
     "scripts\providers\invoke-codex.ps1",
     "scripts\providers\invoke-openrouter.ps1",
     "scripts\providers\invoke-gemini.ps1",
+    "scripts\providers\invoke-ollama.ps1",
+    "scripts\providers\invoke-deepseek.ps1",
+    "scripts\providers\invoke-xai.ps1",
     "scripts\run-gate-agent.ps1",
     "scripts\run-pending-gates.ps1",
     "scripts\generate-engineering-backlog.ps1",
@@ -50,11 +53,17 @@ if ([string]$schema.properties.blockers.description -notmatch 'Execution blocker
 $configPath = Join-Path $repoRoot ".codex\provider-config.json"
 $config = Get-Content $configPath -Raw | ConvertFrom-Json
 
-if (@($config.auto_order) -notcontains "Codex") { throw "Provider config must include Codex" }
-if (@($config.auto_order) -notcontains "OpenRouter") { throw "Provider config must include OpenRouter" }
-if (@($config.auto_order) -notcontains "Gemini") { throw "Provider config must include Gemini" }
+foreach ($providerName in @("Codex","OpenRouter","Gemini","Ollama","DeepSeek","Grok")) {
+    if (@($config.auto_order) -notcontains $providerName) {
+        throw "Provider config must include $providerName"
+    }
+}
+if ([bool]$config.allow_paid_fallback -ne $false) { throw "Paid provider fallback must default to disabled" }
+if ([string]$config.models.Ollama -ne "qwen3:8b") { throw "Ollama must default to qwen3:8b" }
 if ([string]$config.models.OpenRouter -ne "openrouter/free") { throw "OpenRouter must default to openrouter/free" }
 if ([string]$config.models.Gemini -ne "gemini-3.5-flash-lite") { throw "Gemini must default to gemini-3.5-flash-lite" }
+if ([string]$config.models.DeepSeek -ne "deepseek-flash") { throw "DeepSeek must default to deepseek-flash" }
+if ([string]$config.models.Grok -ne "grok-4.7") { throw "Grok must default to grok-4.7" }
 if ([int]$config.context_max_chars -lt 300000) { throw "External provider context budget must be at least 300000 characters" }
 if ([int]$config.gate_context_max_chars -lt 100000) { throw "Gate context budget must be explicitly configured" }
 
@@ -69,8 +78,11 @@ if ($pmInstructions -notmatch 'product-intake\.md') {
 $runnerPath = Join-Path $repoRoot "scripts\run-agent-task.ps1"
 $runner = Get-Content $runnerPath -Raw
 
-if ($runner -notmatch 'ValidateSet\("Auto","Codex","OpenRouter","Gemini"\)') {
-    throw "Agent runner must expose multi-provider selection"
+if ($runner -notmatch 'ValidateSet\("Auto","Codex","OpenRouter","Gemini","Ollama","DeepSeek","Grok"\)') {
+    throw "Agent runner must expose the full multi-provider selection"
+}
+if ($runner -notmatch '\$needsExternalContext = \(\$Provider -ne "Codex"\)') {
+    throw "Agent runner must build bounded context for every non-Codex provider"
 }
 if ($runner -notmatch 'provider-router\.ps1') {
     throw "Agent runner must route through provider-router.ps1"
@@ -149,6 +161,28 @@ if ($gemini -notmatch 'responseJsonSchema') {
     throw "Gemini adapter must request structured JSON output"
 }
 
+$ollama = Get-Content (Join-Path $repoRoot "scripts\providers\invoke-ollama.ps1") -Raw
+if ($ollama -notmatch 'localhost:11434') { throw "Ollama adapter must default to the local Ollama endpoint" }
+if ($ollama -notmatch 'OLLAMA_BASE_URL') { throw "Ollama adapter must support a configurable local endpoint" }
+if ($ollama -notmatch 'format = \$schema') { throw "Ollama adapter must pass the requested JSON schema to format" }
+if ($ollama -notmatch 'Test-TransientOllamaError') { throw "Ollama adapter must classify transient failures" }
+
+$deepSeek = Get-Content (Join-Path $repoRoot "scripts\providers\invoke-deepseek.ps1") -Raw
+if ($deepSeek -notmatch 'https://api\.deepseek\.com/chat/completions') { throw "DeepSeek adapter endpoint is missing" }
+if ($deepSeek -notmatch 'DEEPSEEK_API_KEY') { throw "DeepSeek adapter must use DEEPSEEK_API_KEY" }
+if ($deepSeek -notmatch 'json_object') { throw "DeepSeek adapter must request JSON output" }
+if ($deepSeek -notmatch 'Test-TransientDeepSeekError') { throw "DeepSeek adapter must classify transient failures" }
+
+$xai = Get-Content (Join-Path $repoRoot "scripts\providers\invoke-xai.ps1") -Raw
+if ($xai -notmatch 'https://api\.x\.ai/v1/chat/completions') { throw "xAI adapter endpoint is missing" }
+if ($xai -notmatch 'XAI_API_KEY') { throw "xAI adapter must use XAI_API_KEY" }
+if ($xai -notmatch 'json_schema') { throw "xAI adapter must request schema-constrained structured output" }
+if ($xai -notmatch 'Test-TransientXaiError') { throw "xAI adapter must classify transient failures" }
+
+$router = Get-Content (Join-Path $repoRoot "scripts\provider-router.ps1") -Raw
+if ($router -notmatch 'allow_paid_fallback') { throw "Provider router must guard paid automatic fallbacks" }
+if ($router -notmatch 'DeepSeek.*Grok') { throw "Provider router must know the paid provider set" }
+
 $contextBuilder = Get-Content (Join-Path $repoRoot "scripts\build-agent-context.ps1") -Raw
 if ($contextBuilder -notmatch '\.env') { throw "Context builder must explicitly exclude environment files" }
 if (-not $contextBuilder.Contains("private[-_]?key")) { throw "Context builder must exclude private-key files" }
@@ -161,6 +195,9 @@ $parseTargets = @(
     "scripts\providers\invoke-codex.ps1",
     "scripts\providers\invoke-openrouter.ps1",
     "scripts\providers\invoke-gemini.ps1",
+    "scripts\providers\invoke-ollama.ps1",
+    "scripts\providers\invoke-deepseek.ps1",
+    "scripts\providers\invoke-xai.ps1",
     "scripts\run-gate-agent.ps1",
     "scripts\run-pending-gates.ps1",
     "scripts\generate-engineering-backlog.ps1",
