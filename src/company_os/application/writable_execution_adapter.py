@@ -93,18 +93,9 @@ class WritableExecutionAdapter:
                 f"{workspace}"
             )
 
-        environment = os.environ.copy()
-
-        environment.update(
-            self.providers.build_environment(
-                "OpenRouter"
-            )
-        )
-
-        environment.update(
-            self.providers.build_environment(
-                "Gemini"
-            )
+        environment = (
+            self.providers
+            .build_environment_all()
         )
 
         command = [
