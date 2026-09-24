@@ -103,7 +103,9 @@ class LocalRuntimeService:
 
         if not script.exists():
             return self._unavailable(
-                "Local runtime resolver is not installed."
+                "Local runtime is not installed in this project. "
+                "Run scripts/update-runtime.ps1 from the AI Company OS "
+                "engine against this project, then press F5."
             )
 
         powershell = self._powershell()
