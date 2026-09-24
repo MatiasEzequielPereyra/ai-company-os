@@ -71,6 +71,11 @@ try {
         throw "Required-file resolver did not block an explicitly requested secret-sensitive file."
     }
 
+    $negatedSecret = @(& $resolver -ProjectPath $tempRoot -SourceText @("Do not modify .env during this implementation.") -PolicyPath $policy)
+    if ($negatedSecret.Count -ne 0) {
+        throw "Required-file resolver treated a negated secret reference as required context."
+    }
+
     $ambiguousRoot = Join-Path $tempRoot "ambiguous"
     Write-NoBom (Join-Path $ambiguousRoot "a\index.html") "A"
     Write-NoBom (Join-Path $ambiguousRoot "b\index.html") "B"
