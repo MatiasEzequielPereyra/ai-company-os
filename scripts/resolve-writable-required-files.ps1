@@ -127,22 +127,43 @@ $scanLines = @(
 )
 $scanText = $scanLines -join [Environment]::NewLine
 
+if ($null -eq (Get-Command git -ErrorAction SilentlyContinue)) {
+    throw "git is required for writable required-file resolution."
+}
+
+$gitRootLines = @(& git -C $root rev-parse --show-toplevel 2>$null)
+if ($LASTEXITCODE -ne 0 -or $gitRootLines.Count -lt 1) {
+    throw "Writable required-file resolution requires a Git worktree."
+}
+
+$gitRoot = [System.IO.Path]::GetFullPath(([string]$gitRootLines[0]).Trim()).TrimEnd([char[]]@("\","/"))
+$expectedRoot = [System.IO.Path]::GetFullPath($root).TrimEnd([char[]]@("\","/"))
+
+if (-not [string]::Equals($gitRoot,$expectedRoot,[System.StringComparison]::OrdinalIgnoreCase)) {
+    throw "Writable required-file resolution must run at the task worktree root."
+}
+
 $inventory = @(
-    foreach ($relativeName in @(Get-ChildItem $root -File -Recurse -Force -Name -ErrorAction SilentlyContinue)) {
-        $relative = ([string]$relativeName).Replace("\","/")
-        $lower = $relative.ToLowerInvariant().Replace("/","\")
+    & git -C $root ls-files --cached --others --exclude-standard 2>$null |
+        ForEach-Object {
+            $relative = ([string]$_).Trim().Replace("\","/")
+            if ([string]::IsNullOrWhiteSpace($relative)) { return }
 
-        if ($lower -match '(^|\\)(node_modules|\.git|dist|dist-refactor-modular|build|coverage|\.next|vendor)(\\|$)') {
-            continue
-        }
+            $lower = $relative.ToLowerInvariant().Replace("/","\")
+            if ($lower -match '(^|\\)(node_modules|\.git|dist|dist-refactor-modular|build|coverage|\.next|vendor)(\\|$)') {
+                return
+            }
 
-        [PSCustomObject]@{
-            Relative = $relative
-            Name = (Split-Path $relative -Leaf)
-            FullPath = (Join-Path $root ($relative.Replace("/","\")))
+            [PSCustomObject]@{
+                Relative = $relative
+                Name = (Split-Path $relative -Leaf)
+            }
         }
-    }
 )
+
+if ($LASTEXITCODE -ne 0) {
+    throw "git ls-files failed during writable required-file resolution."
+}
 
 $byRelative = @{}
 $byName = @{}
