@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from company_os.application.corrective_reactivation_service import (
     CorrectiveReactivationService,
 )
@@ -55,6 +57,7 @@ def test_writable_workspace_accepts_ready_existing_workspace(
             SimpleNamespace(
                 id="AICO-001",
                 status="READY",
+                work_kind="IMPLEMENTATION",
             )
         ],
     )
@@ -360,3 +363,91 @@ git diff --check PASS
     assert details.retry_reason == "CHANGES_REQUIRED"
     assert details.changed_paths == ("index.html",)
     assert details.verification == "git diff --check PASS"
+
+
+def test_planning_task_is_never_prepared_for_writable_execution(
+    tmp_path,
+    monkeypatch,
+):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    scripts = root / "scripts"
+    scripts.mkdir()
+
+    (
+        scripts
+        / "new-agent-workspace.ps1"
+    ).write_text(
+        "# fixture",
+        encoding="utf-8",
+    )
+
+    implementation_workspace = (
+        tmp_path
+        / "project-worktrees"
+        / "AICO-002"
+    )
+    implementation_workspace.mkdir(parents=True)
+
+    service = WritableWorkspaceService()
+
+    monkeypatch.setattr(
+        service.control,
+        "get_tasks",
+        lambda *_args, **_kwargs: [
+            SimpleNamespace(
+                id="AICO-001",
+                status="READY",
+                work_kind="",
+            ),
+            SimpleNamespace(
+                id="AICO-002",
+                status="READY",
+                work_kind="IMPLEMENTATION",
+            ),
+        ],
+    )
+
+    result = service.prepare(
+        root,
+        ["AICO-001", "AICO-002"],
+    )
+
+    assert [
+        workspace.task_id
+        for workspace in result.workspaces
+    ] == ["AICO-002"]
+
+
+def test_writable_rejects_scope_without_implementation(
+    tmp_path,
+    monkeypatch,
+):
+    root = tmp_path / "project"
+    root.mkdir()
+
+    (root / "scripts").mkdir()
+
+    service = WritableWorkspaceService()
+
+    monkeypatch.setattr(
+        service.control,
+        "get_tasks",
+        lambda *_args, **_kwargs: [
+            SimpleNamespace(
+                id="AICO-001",
+                status="ACTIVE",
+                work_kind="",
+            )
+        ],
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="IMPLEMENTATION",
+    ):
+        service.prepare(
+            root,
+            ["AICO-001"],
+        )
