@@ -3,7 +3,6 @@ from __future__ import annotations
 import shutil
 import subprocess
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 
 from company_os.application.agent_control_service import (
@@ -172,148 +171,24 @@ class GateControlService:
         done: list[str] = []
 
         for task_id in finalizable:
-            task_path = (
-                root
-                / "tasks"
-                / f"{task_id}.md"
-            )
-
-            task_content = task_path.read_text(
-                encoding="utf-8-sig"
-            )
-
-            profile = (
-                self._field(
-                    task_content,
-                    "Workflow profile",
-                )
-                or "standard"
-            )
-
-            qa_path = (
-                root
-                / "docs"
-                / "engineering"
-                / "qa"
-                / f"{task_id}-qa.md"
-            )
-
-            security_path = (
-                root
-                / "docs"
-                / "engineering"
-                / "security"
-                / f"{task_id}-security.md"
-            )
-
-            qa_outcome = self._artifact_field(
-                qa_path,
-                "Outcome",
-            )
-
-            security_outcome = (
-                self._artifact_field(
-                    security_path,
-                    "Outcome",
-                )
-            )
-
-            if qa_outcome != "PASS":
-                raise RuntimeError(
-                    f"{task_id}: QA is not PASS."
-                )
-
-            allowed_security = {
-                "PASS",
-                "NOT_APPLICABLE",
-            }
-
-            if profile == "high-assurance":
-                allowed_security = {
-                    "PASS"
-                }
-
-            if (
-                security_outcome
-                not in allowed_security
-            ):
-                raise RuntimeError(
-                    f"{task_id}: security gate "
-                    "is not satisfied."
-                )
-
-            final_dir = (
-                root
-                / "docs"
-                / "engineering"
-                / "final-approvals"
-            )
-
-            final_dir.mkdir(
-                parents=True,
-                exist_ok=True,
-            )
-
-            final_path = (
-                final_dir
-                / f"{task_id}-final.md"
-            )
-
-            now = datetime.now(
-                timezone.utc
-            ).strftime(
-                "%Y-%m-%dT%H:%M:%SZ"
-            )
-
-            final_content = (
-                f"# Final Approval - {task_id}\n\n"
-                f"Recorded: {now}\n"
-                "Approver: ceo\n"
-                "Decision: APPROVE\n\n"
-                "## Verification\n\n"
-                "Approved from AI Company OS TUI "
-                "after verified QA and Security "
-                "gate artifacts.\n\n"
-                "## Gate Evidence\n\n"
-                f"- QA: {qa_outcome}\n"
-                f"- Security: {security_outcome}\n\n"
-                "## Rule\n\n"
-                "- APPROVE confirms applicable gates "
-                "and original task objective were verified.\n"
-            )
-
-            final_path.write_text(
-                final_content,
-                encoding="utf-8",
-            )
-
-            relative = (
-                "docs/engineering/"
-                "final-approvals/"
-                f"{task_id}-final.md"
-            )
-
             output.append(
                 self._run_script(
                     root
                     / "scripts"
-                    / "advance-task.ps1",
+                    / "finalize-task.ps1",
                     [
                         "-Id",
                         task_id,
-                        "-Status",
-                        "DONE",
-                        "-Actor",
-                        "ceo",
-                        "-Reason",
+                        "-Decision",
+                        "APPROVE",
+                        "-Verification",
                         (
-                            "CEO final verification approved "
-                            "all applicable gates."
+                            "Explicit CEO approval from "
+                            "AI Company OS TUI after "
+                            "verified QA and Security gates."
                         ),
-                        "-Evidence",
-                        f"Final approval: {relative}",
-                        "-TasksPath",
-                        str(root / "tasks"),
+                        "-ProjectPath",
+                        str(root),
                     ],
                     timeout=120,
                 )
