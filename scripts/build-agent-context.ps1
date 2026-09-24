@@ -141,11 +141,11 @@ foreach ($candidate in @($AdditionalRequiredFiles)) {
 }
 
 $required = @(
-    "AGENTS.md",
-    ".codex\agents\$Owner.md",
     "tasks\$Id.md",
-    "docs\engineering\dispatch\$Id.md"
+    "docs\engineering\dispatch\$Id.md",
+    ".codex\agents\$Owner.md"
 ) + $additionalRequired + @(
+    "AGENTS.md",
     "docs\PROJECT-BRIEF.md",
     "docs\product\product-context.md",
     "docs\architecture\architecture-context.md",
