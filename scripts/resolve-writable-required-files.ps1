@@ -181,7 +181,7 @@ foreach ($entry in $inventory) {
 
 $candidates = New-Object System.Collections.Generic.List[string]
 
-$pathPattern = '(?i)(?<![A-Za-z0-9_.-])((?:[A-Za-z0-9_.-]+[\\/])*[A-Za-z0-9_.-]+\.(?:html?|css|scss|js|jsx|ts|tsx|mjs|cjs|json|md|txt|toml|ya?ml|sql|ps1|sh|py|go|rs|java|cs|xml|pem|key|p12|pfx))(?![A-Za-z0-9_.-])'
+$pathPattern = '(?i)(?<![A-Za-z0-9_.-])((?:[A-Za-z0-9_.-]+[\\/])*[A-Za-z0-9_.-]+\.(?:html?|css|scss|js|jsx|ts|tsx|mjs|cjs|json|md|txt|toml|ya?ml|sql|ps1|sh|py|go|rs|java|cs|xml|pem|key|p12|pfx))(?=$|[\s,;:)\]}>"]|\x60|\.(?=\s|$))'
 foreach ($match in [regex]::Matches($scanText,$pathPattern)) {
     $value = $match.Groups[1].Value.Trim().Replace("\","/")
     if (-not [string]::IsNullOrWhiteSpace($value) -and -not $candidates.Contains($value)) {
@@ -189,7 +189,7 @@ foreach ($match in [regex]::Matches($scanText,$pathPattern)) {
     }
 }
 
-$specialPattern = '(?i)(?<![A-Za-z0-9_.-])((?:[A-Za-z0-9_.-]+[\\/])*(?:\.env(?:\.[A-Za-z0-9_.-]+)?|Dockerfile|\.npmrc))(?![A-Za-z0-9_.-])'
+$specialPattern = '(?i)(?<![A-Za-z0-9_.-])((?:[A-Za-z0-9_.-]+[\\/])*(?:\.env(?:\.[A-Za-z0-9_.-]+)?|Dockerfile|\.npmrc))(?=$|[\s,;:)\]}>"]|\x60|\.(?=\s|$))'
 foreach ($match in [regex]::Matches($scanText,$specialPattern)) {
     $value = $match.Groups[1].Value.Trim().Replace("\","/")
     if (-not [string]::IsNullOrWhiteSpace($value) -and -not $candidates.Contains($value)) {
