@@ -181,49 +181,59 @@ $allowedExtensions = @(
     ".html",".css",".scss",".sql",".ps1",".sh"
 )
 
-$allFiles = Get-ChildItem $root -File -Recurse -ErrorAction SilentlyContinue | Where-Object {
-    $relative = $_.FullName.Substring($root.Length).TrimStart("\")
-    $lower = $relative.ToLowerInvariant()
-    $name = $_.Name.ToLowerInvariant()
-    $ext = $_.Extension.ToLowerInvariant()
+$allFiles = @(
+    foreach ($relativeName in @(Get-ChildItem $root -File -Recurse -Force -Name -ErrorAction SilentlyContinue)) {
+        $relative = ([string]$relativeName).Replace("/","\")
+        $fullPath = Join-Path $root $relative
 
-    if ($lower -match '(^|\\)(node_modules|\.git|dist|dist-refactor-modular|build|coverage|\.next|vendor)(\\|$)') {
-        $false
+        try {
+            $fileInfo = Get-Item $fullPath -Force -ErrorAction Stop
+        }
+        catch {
+            continue
+        }
+
+        $lower = $relative.ToLowerInvariant()
+        $name = $fileInfo.Name.ToLowerInvariant()
+        $ext = $fileInfo.Extension.ToLowerInvariant()
+        $allowed = $false
+
+        if ($lower -match '(^|\\)(node_modules|\.git|dist|dist-refactor-modular|build|coverage|\.next|vendor)(\\|$)') {
+            $allowed = $false
+        }
+        elseif ($lower -match '^\.codex\\runtime\\|^docs\\engineering\\agent-reports\\') {
+            $allowed = $false
+        }
+        elseif ($name -like ".env*") {
+            $allowed = $false
+        }
+        elseif ($name -match 'secret|credential|private[-_]?key|service[-_]?account') {
+            $allowed = $false
+        }
+        elseif ($name -in @("package-lock.json","pnpm-lock.yaml","yarn.lock")) {
+            $allowed = $false
+        }
+        elseif ($ext -in @(".pem",".key",".p12",".pfx",".crt",".cer")) {
+            $allowed = $false
+        }
+        elseif ($fileInfo.Length -gt 500000) {
+            $allowed = $false
+        }
+        elseif ($allowedExtensions -contains $ext) {
+            $allowed = $true
+        }
+        elseif ($fileInfo.Name -in @("Dockerfile",".gitignore",".npmrc")) {
+            $allowed = $true
+        }
+
+        if ($allowed) {
+            [PSCustomObject]@{
+                Relative = $relative
+                Score = Get-RoleScore -RelativePath $relative -Role $Owner
+            }
+        }
     }
-    elseif ($lower -match '^\.codex\\runtime\\|^docs\\engineering\\agent-reports\\') {
-        $false
-    }
-    elseif ($name -like ".env*") {
-        $false
-    }
-    elseif ($name -match 'secret|credential|private[-_]?key|service[-_]?account') {
-        $false
-    }
-    elseif ($name -in @("package-lock.json","pnpm-lock.yaml","yarn.lock")) {
-        $false
-    }
-    elseif ($ext -in @(".pem",".key",".p12",".pfx",".crt",".cer")) {
-        $false
-    }
-    elseif ($_.Length -gt 500000) {
-        $false
-    }
-    elseif ($allowedExtensions -contains $ext) {
-        $true
-    }
-    elseif ($_.Name -in @("Dockerfile",".gitignore",".npmrc")) {
-        $true
-    }
-    else {
-        $false
-    }
-} | ForEach-Object {
-    $relative = $_.FullName.Substring($root.Length).TrimStart("\")
-    [PSCustomObject]@{
-        Relative = $relative
-        Score = Get-RoleScore -RelativePath $relative -Role $Owner
-    }
-}
+)
 
 $inventoryReserve = [Math]::Min(30000,[Math]::Max(2000,[int]($MaxChars * 0.15)))
 $contentBudget = [Math]::Max(0,$MaxChars - $inventoryReserve)
