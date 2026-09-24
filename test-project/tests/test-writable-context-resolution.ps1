@@ -17,6 +17,7 @@ try {
 
     Write-NoBom (Join-Path $tempRoot "index.html") "<html><body>REQUIRED_INDEX_SENTINEL</body></html>"
     Write-NoBom (Join-Path $tempRoot "src\other.ts") "export const other = true;"
+    Write-NoBom (Join-Path $tempRoot "app.js") ("A" * 131674)
     Write-NoBom (Join-Path $tempRoot ".env") "SECRET_VALUE=must-not-leak"
 
     & git -C $tempRoot init | Out-Null
@@ -38,7 +39,7 @@ try {
         "",
         "## Acceptance Criteria",
         "",
-        "- index.html loads the required runtime modules before the compatibility entry."
+        "- Update index.html so the required runtime modules load before app.js."
     ) -join [Environment]::NewLine
 
     $dispatchText = @(
@@ -50,6 +51,27 @@ try {
 
     if ($required -notcontains "index.html") {
         throw "Required-file resolver did not resolve index.html from explicit task/dispatch references."
+    }
+
+    if ($required -contains "app.js") {
+        throw "Required-file resolver incorrectly promoted contextual app.js to a mandatory full-file target."
+    }
+
+    $oversizedTargetBlocked = $false
+    try {
+        & $resolver -ProjectPath $tempRoot -SourceText @("Update app.js for this implementation.") -PolicyPath $policy | Out-Null
+    }
+    catch {
+        if ($_.Exception.Message -match "exceeds policy size limit") {
+            $oversizedTargetBlocked = $true
+        }
+        else {
+            throw
+        }
+    }
+
+    if (-not $oversizedTargetBlocked) {
+        throw "Required-file resolver did not block an oversized direct writable target."
     }
 
     $context = & $builder -ProjectPath $tempRoot -Id "AICO-013" -Owner "frontend" -MaxChars 12000 -RequiredFiles $required
