@@ -1,7 +1,7 @@
 param(
     [string]$ProjectPath = ".",
     [switch]$Parallel,
-    [ValidateSet("Auto","Codex","OpenRouter","Gemini")]
+    [ValidateSet("Auto","Codex","OpenRouter","Gemini","Ollama","DeepSeek","Grok")]
     [string]$Provider = "Auto",
     [string]$Model = "",
     [ValidateSet("Auto","ChatGPT","ApiKey")]
@@ -22,7 +22,7 @@ if ($PSBoundParameters.ContainsKey("AuthMode") -and -not $PSBoundParameters.Cont
         $Provider = "Codex"
     }
     elseif ($AuthMode -eq "ApiKey") {
-        throw "Legacy -AuthMode ApiKey is disabled. Use -Provider OpenRouter or -Provider Gemini."
+        throw "Legacy -AuthMode ApiKey is disabled. Select an explicit provider such as OpenRouter, Gemini, Ollama, DeepSeek, or Grok."
     }
 }
 
