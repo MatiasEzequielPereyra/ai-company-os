@@ -61,6 +61,7 @@ if ([string]$config.models.Gemini -ne "gemini-3.5-flash-lite") { throw "Gemini m
 if (@($config.writable_auto_order) -join "," -ne "OpenRouter,Gemini") { throw "Writable Auto must be limited to OpenRouter then Gemini" }
 if ([string]$config.writable_models.OpenRouter -ne "openrouter/free") { throw "Writable OpenRouter must default to openrouter/free" }
 if ([string]$config.writable_models.Gemini -ne "gemini-3.5-flash-lite") { throw "Writable Gemini must default to gemini-3.5-flash-lite" }
+if ([int]$config.writable_context_max_chars -gt 160000 -or [int]$config.writable_context_max_chars -lt 60000) { throw "Writable context budget must remain bounded for free-tier execution" }
 if ([int]$config.context_max_chars -lt 300000) { throw "External provider context budget must be at least 300000 characters" }
 if ([int]$config.gate_context_max_chars -lt 100000) { throw "Gate context budget must be explicitly configured" }
 
