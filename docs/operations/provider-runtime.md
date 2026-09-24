@@ -6,7 +6,7 @@ AI Company OS routes all model execution through `scripts/provider-router.ps1`. 
 
 | Provider | Authentication | Default model | Cost behavior |
 | --- | --- | --- | --- |
-| Ollama | none for local runtime | `qwen2.5-coder:14b` | local compute, no per-token API billing |
+| Ollama | none for local runtime | `llama3.1:8b` | local compute, no per-token API billing |
 | OpenRouter | `OPENROUTER_API_KEY` | `openrouter/free` | free route by default |
 | Gemini | `GEMINI_API_KEY` | `gemini-3.5-flash-lite` | provider quota/tier applies |
 | DeepSeek | `DEEPSEEK_API_KEY` | `deepseek-flash` | paid API |
@@ -32,10 +32,10 @@ ollama list
 Invoke-RestMethod http://localhost:11434/api/tags
 ```
 
-The default local model is `qwen2.5-coder:14b` (32K model context). The adapter currently requests a 16K runtime context and bounds repository context to keep local inference practical. Install the default model if needed:
+The default local model is `llama3.1:8b`, chosen as the practical local baseline for CPU/shared-memory machines. The adapter currently requests a 16K runtime context and bounds repository context to keep local inference practical. Install the default model if needed:
 
 ```powershell
-ollama pull qwen2.5-coder:14b
+ollama pull llama3.1:8b
 ```
 
 Use another Ollama server by setting:
@@ -53,7 +53,7 @@ Run an active task with Ollama:
 Override the model:
 
 ```powershell
-.\scripts\run-agent-task.ps1 -Id AICO-XXX -Provider Ollama -Model "qwen2.5-coder:14b"
+.\scripts\run-agent-task.ps1 -Id AICO-XXX -Provider Ollama -Model "llama3.1:8b"
 ```
 
 ## DeepSeek
