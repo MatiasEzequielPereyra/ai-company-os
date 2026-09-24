@@ -131,13 +131,27 @@ foreach ($candidate in $attempts) {
             $env:OLLAMA_BASE_URL.TrimEnd('/')
         }
 
-        try {
-            $null = Invoke-RestMethod -Method Get -Uri ($ollamaBaseUrl + "/api/tags") -TimeoutSec 3
+        $ollamaReachable = $false
+        $ollamaHealthError = ""
+
+        for ($healthAttempt = 1; $healthAttempt -le 3; $healthAttempt++) {
+            try {
+                $null = Invoke-RestMethod -Method Get -Uri ($ollamaBaseUrl + "/api/tags") -TimeoutSec 5
+                $ollamaReachable = $true
+                break
+            }
+            catch {
+                $ollamaHealthError = $_.Exception.Message
+                if ($healthAttempt -lt 3) {
+                    Start-Sleep -Seconds 1
+                }
+            }
         }
-        catch {
-            $errors += "Ollama: local server unavailable"
+
+        if (-not $ollamaReachable) {
+            $errors += ("Ollama: local server unavailable - " + $ollamaHealthError)
             if ($Provider -ne "Auto") {
-                throw "Ollama is not reachable. Start Ollama or set OLLAMA_BASE_URL."
+                throw "Ollama is not reachable after 3 health checks. Start Ollama or set OLLAMA_BASE_URL."
             }
             continue
         }
