@@ -115,6 +115,7 @@ def test_local_runtime_service_handles_missing_resolver(
 
     assert status.available is False
     assert (
-        "resolver is not installed"
+        "Local runtime is not installed"
         in status.reason
     )
+    assert "update-runtime.ps1" in status.reason
