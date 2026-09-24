@@ -98,6 +98,66 @@ class CorrectiveReactivationService:
             task_ids=reactivated
         )
 
+    def unblock(
+        self,
+        project_root: str | Path,
+        task_ids: list[str],
+    ) -> ReactivationResult:
+        root = Path(project_root).resolve()
+        reactivated: list[str] = []
+
+        for task_id in task_ids:
+            task_path = (
+                root
+                / "tasks"
+                / f"{task_id}.md"
+            )
+
+            if not task_path.exists():
+                continue
+
+            content = task_path.read_text(
+                encoding="utf-8-sig"
+            )
+
+            if self._field(
+                content,
+                "Status",
+            ) != "BLOCKED":
+                continue
+
+            self._run_script(
+                root
+                / "scripts"
+                / "advance-task.ps1",
+                [
+                    "-Id",
+                    task_id,
+                    "-Status",
+                    "READY",
+                    "-Actor",
+                    "engineering-manager",
+                    "-Reason",
+                    (
+                        "Operator reviewed blocker and "
+                        "requested a canonical retry."
+                    ),
+                    "-Evidence",
+                    (
+                        "Retry requested from AI Company "
+                        "OS TUI after blocker review."
+                    ),
+                    "-TasksPath",
+                    str(root / "tasks"),
+                ],
+            )
+
+            reactivated.append(task_id)
+
+        return ReactivationResult(
+            task_ids=reactivated
+        )
+
     def _field(
         self,
         content: str,
