@@ -90,7 +90,7 @@ foreach ($required in @($schemaPath,$routerPath,$contextBuilderPath)) {
 }
 
 $localRuntime = $null
-if ($Provider -in @("Auto","Ollama") -and (Test-Path $localResolverPath -PathType Leaf)) {
+if ($Provider -in @("Auto","Ollama") -and (Test-Path $localResolverPath -PathType Leaf) -and (Test-Path $localRuntimeConfigPath -PathType Leaf)) {
     $localArgs = @{
         ProjectPath = $root
         Role = $reviewerRole
