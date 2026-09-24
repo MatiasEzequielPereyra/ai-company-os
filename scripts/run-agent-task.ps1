@@ -86,7 +86,13 @@ $promptLines = @(
     "The blockers field is only for execution blockers that prevented task completion. Product defects, release blockers, security findings and QA failures belong in report_markdown/decisions/recommended_next.",
     "If the report contains a substantive completed assessment and no execution prerequisite prevented delivery, outcome must be COMPLETED and blockers should be NONE.",
     "",
-    "The report_markdown field must contain the complete role report with findings, evidence, risks and recommended actions.",
+    "Keep the structured result concise and evidence-dense.",
+    "Do not reproduce repository files or large code excerpts.",
+    "summary must stay within 800 characters.",
+    "report_markdown must stay within 8000 characters and should prefer concise evidence-backed bullets.",
+    "verification and decisions must each stay within 2000 characters.",
+    "blockers and recommended_next must each stay within 1500 characters.",
+    "The report_markdown field must still contain the complete role deliverable within those limits.",
     "The summary field must be concise.",
     "Return only the structured result required by the supplied JSON schema."
 )
@@ -104,18 +110,66 @@ if ($Provider -eq "Auto" -and (
 if ($needsExternalContext) {
     if (-not (Test-Path $contextBuilderPath)) { throw "Context builder not found: $contextBuilderPath" }
 
-    $maxChars = 320000
+    $defaultGlobalAnalysisMax = 120000
+    $defaultRoleBudgets = @{
+        "pm" = 70000
+        "cto" = 110000
+        "engineering-manager" = 120000
+        "qa" = 90000
+        "security" = 100000
+        "devops" = 90000
+    }
+
+    $globalAnalysisMax = $defaultGlobalAnalysisMax
+    $maxChars = if ($defaultRoleBudgets.ContainsKey($owner.ToLowerInvariant())) {
+        [int]$defaultRoleBudgets[$owner.ToLowerInvariant()]
+    }
+    else {
+        $defaultGlobalAnalysisMax
+    }
+
     $configPath = Join-Path $root ".codex\provider-config.json"
     if (Test-Path $configPath) {
         try {
             $providerConfig = Get-Content $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
-            if ($null -ne $providerConfig.context_max_chars) {
-                $maxChars = [int]$providerConfig.context_max_chars
+
+            if ($null -ne $providerConfig.analysis_context_max_chars) {
+                $globalAnalysisMax = [int]$providerConfig.analysis_context_max_chars
+            }
+            elseif ($null -ne $providerConfig.context_max_chars) {
+                # Legacy configs may still contain the old 320k generic budget.
+                # Clamp that legacy value so upgraded runtimes become safe without
+                # requiring an immediate provider-config rewrite in client projects.
+                $globalAnalysisMax = [Math]::Min(
+                    [int]$providerConfig.context_max_chars,
+                    $defaultGlobalAnalysisMax
+                )
+            }
+
+            $maxChars = if ($defaultRoleBudgets.ContainsKey($owner.ToLowerInvariant())) {
+                [Math]::Min(
+                    [int]$defaultRoleBudgets[$owner.ToLowerInvariant()],
+                    $globalAnalysisMax
+                )
+            }
+            else {
+                $globalAnalysisMax
+            }
+
+            if ($null -ne $providerConfig.analysis_context_max_chars_by_role) {
+                $roleProperty = $providerConfig.analysis_context_max_chars_by_role.PSObject.Properties[$owner]
+                if ($null -ne $roleProperty -and $null -ne $roleProperty.Value) {
+                    $maxChars = [int]$roleProperty.Value
+                }
             }
         }
         catch {
             throw "Invalid provider configuration: $configPath"
         }
+    }
+
+    if ($maxChars -lt 10000) {
+        throw "Analysis context budget is too small for canonical task context: $maxChars"
     }
 
     Write-Host "Building role-aware repository context for $owner..." -ForegroundColor DarkGray

@@ -296,6 +296,27 @@ if (Test-Path $SyncScript) {
     & $SyncScript -TasksPath (Join-Path $ProjectPath "tasks") -SprintPath $CurrentSprintPath | Out-Null
 }
 
+$resolvedProjectPath = (Resolve-Path $ProjectPath).Path
+$managedManifestPath = Join-Path $resolvedProjectPath ".codex\managed-files.json"
+$managedFiles = @(
+    Get-ChildItem $resolvedProjectPath -File -Recurse -Force -Name |
+        ForEach-Object { ([string]$_).Replace("\","/") } |
+        Where-Object { $_ -ne ".codex/managed-files.json" }
+)
+$managedFiles += ".codex/managed-files.json"
+$managedFiles = @($managedFiles | Sort-Object -Unique)
+
+$managedPayload = [ordered]@{
+    version = 1
+    managed_files = $managedFiles
+} | ConvertTo-Json -Depth 10
+
+[System.IO.File]::WriteAllText(
+    $managedManifestPath,
+    $managedPayload,
+    (New-Object System.Text.UTF8Encoding($false))
+)
+
 Write-Host "Company OS instalado." -ForegroundColor Green
 
 Write-Host ""

@@ -51,6 +51,21 @@ if ([string]$schema.properties.blockers.description -notmatch 'Execution blocker
     throw "Runtime schema blockers field must mean execution blockers"
 }
 
+$maxLengths = @{
+    summary = 1000
+    report_markdown = 12000
+    verification = 2500
+    decisions = 2500
+    blockers = 2000
+    recommended_next = 2000
+}
+foreach ($field in $maxLengths.Keys) {
+    $actual = [int]$schema.properties.$field.maxLength
+    if ($actual -lt 1 -or $actual -gt [int]$maxLengths[$field]) {
+        throw "Runtime schema must bound $field output. Actual maxLength=$actual"
+    }
+}
+
 $configPath = Join-Path $repoRoot ".codex\provider-config.json"
 $config = Get-Content $configPath -Raw | ConvertFrom-Json
 
@@ -63,7 +78,17 @@ if (@($config.writable_auto_order) -join "," -ne "OpenRouter,Gemini") { throw "W
 if ([string]$config.writable_models.OpenRouter -ne "qwen/qwen3.8-27b:free") { throw "Writable OpenRouter must default to the pinned free structured coding model" }
 if ([string]$config.writable_models.Gemini -ne "gemini-3.5-flash-lite") { throw "Writable Gemini must default to gemini-3.5-flash-lite" }
 if ([int]$config.writable_context_max_chars -gt 160000 -or [int]$config.writable_context_max_chars -lt 60000) { throw "Writable context budget must remain bounded for free-tier execution" }
-if ([int]$config.context_max_chars -lt 300000) { throw "External provider context budget must be at least 300000 characters" }
+if ($null -eq $config.analysis_context_max_chars) { throw "Analysis context budget must be explicitly configured" }
+if ([int]$config.analysis_context_max_chars -gt 160000 -or [int]$config.analysis_context_max_chars -lt 60000) {
+    throw "Analysis context budget must remain bounded and useful"
+}
+if ($null -eq $config.analysis_context_max_chars_by_role) {
+    throw "Analysis context must support role-specific budgets"
+}
+$pmBudget = [int]$config.analysis_context_max_chars_by_role.pm
+if ($pmBudget -lt 20000 -or $pmBudget -gt 100000) {
+    throw "PM analysis context budget must be substantially below the historical 320000-character budget"
+}
 if ([int]$config.gate_context_max_chars -lt 100000) { throw "Gate context budget must be explicitly configured" }
 
 $pmInstructions = Get-Content (Join-Path $repoRoot ".codex\agents\pm.md") -Raw
@@ -94,6 +119,15 @@ if ($runner -notmatch 'COMPLETED means you completed the assigned audit') {
 }
 if ($runner -notmatch 'BLOCKED means you could not complete the assigned agent task itself') {
     throw "Agent runner must reserve BLOCKED for execution blockers"
+}
+if ($runner -notmatch 'analysis_context_max_chars_by_role') {
+    throw "Agent runner must honor role-specific analysis context budgets"
+}
+if ($runner -notmatch 'analysis_context_max_chars') {
+    throw "Agent runner must honor the global analysis context budget"
+}
+if ($runner -notmatch 'structured result concise|Keep the structured result concise') {
+    throw "Agent runner must instruct schema-critical analysis results to stay concise"
 }
 $writableRunner = Get-Content (Join-Path $repoRoot "scripts\run-writable-agent.ps1") -Raw
 if ($writableRunner -notmatch 'ValidateSet\("Auto","OpenRouter","Gemini"\)') {
@@ -207,6 +241,12 @@ if ($openRouter -notmatch 'StatusCode -eq 429') {
 if ($openRouter -notmatch 'StatusCode -ge 500') {
     throw "OpenRouter adapter must retry server errors"
 }
+if ($openRouter -notmatch 'finish_reason') {
+    throw "OpenRouter adapter must inspect completion finish_reason"
+}
+if ($openRouter -notmatch 'length') {
+    throw "OpenRouter adapter must explicitly reject length-truncated structured completions"
+}
 
 $gemini = Get-Content (Join-Path $repoRoot "scripts\providers\invoke-gemini.ps1") -Raw
 if ($gemini -notmatch 'generativelanguage\.googleapis\.com') {
@@ -224,6 +264,8 @@ if ($contextBuilder -notmatch '\.env') { throw "Context builder must explicitly 
 if (-not $contextBuilder.Contains("private[-_]?key")) { throw "Context builder must exclude private-key files" }
 if ($contextBuilder -notmatch 'RequiredFiles') { throw "Context builder must support prioritized required files" }
 if ($contextBuilder -notmatch 'RequireComplete') { throw "Required context files must not be silently truncated" }
+if ($contextBuilder -notmatch 'managed-files\.json') { throw "Context builder must load the managed runtime manifest" }
+if ($contextBuilder -notmatch 'managed_files') { throw "Context builder must exclude manifest-owned runtime paths from generic context" }
 
 $requiredResolver = Get-Content (Join-Path $repoRoot "scripts\resolve-writable-required-files.ps1") -Raw
 if ($requiredResolver -notmatch 'ambiguous') { throw "Required-file resolver must reject ambiguous basenames" }
