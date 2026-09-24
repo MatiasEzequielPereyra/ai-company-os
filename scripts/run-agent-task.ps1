@@ -109,6 +109,16 @@ if ($needsExternalContext) {
             if ($null -ne $providerConfig.context_max_chars) {
                 $maxChars = [int]$providerConfig.context_max_chars
             }
+
+            if (
+                $Provider -in @("Auto","Ollama") -and
+                $null -ne $providerConfig.ollama_context_max_chars
+            ) {
+                $maxChars = [Math]::Min(
+                    $maxChars,
+                    [int]$providerConfig.ollama_context_max_chars
+                )
+            }
         }
         catch {
             throw "Invalid provider configuration: $configPath"
