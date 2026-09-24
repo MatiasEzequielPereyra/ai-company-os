@@ -174,7 +174,7 @@ if ($ollama -notmatch 'OLLAMA_BASE_URL') { throw "Ollama adapter must support a 
 if ($ollama -notmatch 'format = \$schema') { throw "Ollama adapter must pass the requested JSON schema to format" }
 if ($ollama -notmatch 'Test-TransientOllamaError') { throw "Ollama adapter must classify transient failures" }
 if ($ollama -notmatch 'num_ctx = 8192') { throw "Ollama adapter must use a practical local context window" }
-if ($ollama -notmatch 'num_predict = 2048') { throw "Ollama adapter must bound local generation length" }
+if ($ollama -notmatch 'num_predict = 1024') { throw "Ollama adapter must bound local generation length" }
 if ($ollama -notmatch 'OLLAMA_TIMEOUT_SEC') { throw "Ollama adapter must support a configurable timeout" }
 
 $deepSeek = Get-Content (Join-Path $repoRoot "scripts\providers\invoke-deepseek.ps1") -Raw
