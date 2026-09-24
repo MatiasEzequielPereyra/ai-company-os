@@ -95,6 +95,7 @@ if (-not [string]::IsNullOrWhiteSpace($ModelOverride)) {
         return [PSCustomObject]@{
             Available = $false
             Profile = $profileName
+            CapabilityScore = [int]$hardware.capability_score
             Model = $ModelOverride
             Reason = "Requested Ollama model is not installed."
             NumCtx = [int]$profile.num_ctx
@@ -110,6 +111,7 @@ if (-not [string]::IsNullOrWhiteSpace($ModelOverride)) {
         return [PSCustomObject]@{
             Available = $false
             Profile = $profileName
+            CapabilityScore = [int]$hardware.capability_score
             Model = $ModelOverride
             Reason = "Requested Ollama model exceeds the safe model size for $profileName. Set AICO_OLLAMA_ALLOW_OVERSIZE=1 to force it."
             NumCtx = [int]$profile.num_ctx
@@ -194,6 +196,7 @@ if ($benchmarksByModel.ContainsKey([string]$selected.name)) {
 [PSCustomObject]@{
     Available = $true
     Profile = $profileName
+    CapabilityScore = [int]$hardware.capability_score
     Model = [string]$selected.name
     ModelSizeBytes = [long]$selected.size
     Reason = $reason
