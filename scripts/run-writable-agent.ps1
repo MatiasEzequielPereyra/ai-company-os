@@ -464,7 +464,7 @@ $requiredResolverPath = Join-Path $PSScriptRoot "resolve-writable-required-files
 $localResolverPath = Join-Path $PSScriptRoot "local-runtime\resolve-local-runtime.ps1"
 $submitPath = Join-Path $PSScriptRoot "submit-task-result.ps1"
 
-foreach ($required in @($dispatchPath,$rolePath,$schemaPath,$policyPath,$routerPath,$contextBuilderPath,$requiredResolverPath,$localResolverPath,$submitPath)) {
+foreach ($required in @($dispatchPath,$rolePath,$schemaPath,$policyPath,$routerPath,$contextBuilderPath,$requiredResolverPath,$submitPath)) {
     if (-not (Test-Path $required)) {
         throw "Required writable runtime component not found: $required"
     }
@@ -484,23 +484,28 @@ $roleText = Get-Content $rolePath -Raw -Encoding UTF8
 
 $localRuntime = $null
 if ($Provider -in @("Auto","Ollama")) {
-    $localArgs = @{
-        ProjectPath = $root
-        Role = $owner
-        Workload = "writable"
-    }
+    if (Test-Path $localResolverPath -PathType Leaf) {
+        $localArgs = @{
+            ProjectPath = $root
+            Role = $owner
+            Workload = "writable"
+        }
 
-    if ($Provider -eq "Ollama" -and -not [string]::IsNullOrWhiteSpace($Model)) {
-        $localArgs.ModelOverride = $Model
-    }
+        if ($Provider -eq "Ollama" -and -not [string]::IsNullOrWhiteSpace($Model)) {
+            $localArgs.ModelOverride = $Model
+        }
 
-    $localRuntime = & $localResolverPath @localArgs
-    if ($Provider -eq "Ollama" -and -not [bool]$localRuntime.Available) {
-        throw ("Ollama local runtime unavailable: " + [string]$localRuntime.Reason)
-    }
+        $localRuntime = & $localResolverPath @localArgs
+        if ($Provider -eq "Ollama" -and -not [bool]$localRuntime.Available) {
+            throw ("Ollama local runtime unavailable: " + [string]$localRuntime.Reason)
+        }
 
-    if ([bool]$localRuntime.Available) {
-        Write-Host ("Writable local runtime: " + $localRuntime.Profile + " -> " + $localRuntime.Model) -ForegroundColor DarkGray
+        if ([bool]$localRuntime.Available) {
+            Write-Host ("Writable local runtime: " + $localRuntime.Profile + " -> " + $localRuntime.Model) -ForegroundColor DarkGray
+        }
+    }
+    elseif ($Provider -eq "Ollama") {
+        throw "Ollama local runtime resolver is not installed."
     }
 }
 
