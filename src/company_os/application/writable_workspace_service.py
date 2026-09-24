@@ -40,15 +40,18 @@ class WritableWorkspaceService:
             allowed_task_ids,
         )
 
-        active = [
+        writable_tasks = [
             task
             for task in tasks
-            if task.status == "ACTIVE"
+            if task.status in {
+                "READY",
+                "ACTIVE",
+            }
         ]
 
-        if not active:
+        if not writable_tasks:
             raise RuntimeError(
-                "No ACTIVE tasks are available "
+                "No READY/ACTIVE tasks are available "
                 "for writable workspace preparation."
             )
 
@@ -70,7 +73,7 @@ class WritableWorkspaceService:
 
         result: list[WritableWorkspace] = []
 
-        for task in active:
+        for task in writable_tasks:
             workspace = (
                 workspace_root
                 / task.id
