@@ -9,5 +9,13 @@
     "OpenRouter": "openrouter/free",
     "Gemini": "gemini-3.5-flash-lite"
   },
-  "gate_context_max_chars": 180000
+  "gate_context_max_chars": 180000,
+  "writable_auto_order": [
+    "OpenRouter",
+    "Gemini"
+  ],
+  "writable_models": {
+    "OpenRouter": "openrouter/free",
+    "Gemini": "gemini-3.5-flash-lite"
+  }
 }
