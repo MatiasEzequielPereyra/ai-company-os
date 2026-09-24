@@ -25,7 +25,6 @@ class CEOPlan:
     intent: str
     strategy: str
     strategy_id: str
-    strategy_id: str
 
     engine_type: str
     project_name: str

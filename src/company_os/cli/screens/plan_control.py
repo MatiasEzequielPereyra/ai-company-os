@@ -24,6 +24,9 @@ from company_os.application.agent_control_service import (
 from company_os.application.task_result_service import (
     TaskResultService,
 )
+from company_os.application.work_request_service import (
+    WorkRequestService,
+)
 from company_os.application.writable_workspace_service import WritableWorkspaceService
 from company_os.application.writable_execution_adapter import WritableExecutionAdapter
 from company_os.application.corrective_reactivation_service import CorrectiveReactivationService
@@ -68,6 +71,7 @@ class PlanControlScreen(Screen):
 
         self.control = AgentControlService()
         self.task_results = TaskResultService()
+        self.work_requests = WorkRequestService()
         self.gates = GateControlService()
         self.writable = WritableWorkspaceService()
         self.writable_runner = WritableExecutionAdapter()
@@ -107,9 +111,35 @@ class PlanControlScreen(Screen):
         self._refresh_view()
 
     def _task_ids(self) -> list[str]:
-        return list(
+        task_ids = set(
             self.preparation_result.created_task_ids
         )
+
+        request_ids = (
+            getattr(
+                self.preparation_result,
+                "work_request_ids",
+                [],
+            )
+            or []
+        )
+
+        for request_id in request_ids:
+            try:
+                reopened = (
+                    self.work_requests.reopen(
+                        self.plan_data.project_root,
+                        request_id,
+                    )
+                )
+            except FileNotFoundError:
+                continue
+
+            task_ids.update(
+                reopened.summary.task_ids
+            )
+
+        return sorted(task_ids)
 
     def _tasks(self):
         return self.control.get_tasks(
@@ -784,12 +814,10 @@ class PlanControlScreen(Screen):
                 task.id
             )
 
-            if (
-                details is not None
-                and details.recommended_next
-            ):
-                next_action = self._compact(
-                    details.recommended_next
+            if task.status == "DONE":
+                next_action = _t(
+                    self,
+                    "pc_task_next_done",
                 )
 
             elif task.id in finalizable:
@@ -797,6 +825,20 @@ class PlanControlScreen(Screen):
                     self,
                     "pc_task_next_final",
                 )
+
+            elif task.status == "BLOCKED":
+                if (
+                    details is not None
+                    and details.recommended_next
+                ):
+                    next_action = self._compact(
+                        details.recommended_next
+                    )
+                else:
+                    next_action = _t(
+                        self,
+                        "pc_task_next_blocked",
+                    )
 
             elif task.status in {
                 "BACKLOG",
@@ -821,18 +863,6 @@ class PlanControlScreen(Screen):
                 next_action = _t(
                     self,
                     "pc_task_next_gates",
-                )
-
-            elif task.status == "BLOCKED":
-                next_action = _t(
-                    self,
-                    "pc_task_next_blocked",
-                )
-
-            elif task.status == "DONE":
-                next_action = _t(
-                    self,
-                    "pc_task_next_done",
                 )
 
             else:

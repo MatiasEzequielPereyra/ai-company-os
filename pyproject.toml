@@ -4,13 +4,16 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ai-company-os-cli"
-version = "0.1.0"
+version = "1.0.1"
 description = "CLI interface for AI Company OS"
 requires-python = ">=3.11"
 dependencies = [
   "pydantic>=2.7,<3",
   "rich>=14.2,<16",
   "typer>=0.12,<1",
+  "textual",
+  "keyring",
+  "prompt-toolkit>=3,<4",
 ]
 
 [project.optional-dependencies]

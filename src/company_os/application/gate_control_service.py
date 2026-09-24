@@ -182,12 +182,9 @@ class GateControlService:
                 encoding="utf-8-sig"
             )
 
-            profile = (
-                self._field(
-                    task_content,
-                    "Workflow profile",
-                )
-                or "standard"
+            profile = self._workflow_profile(
+                root,
+                task_id,
             )
 
             qa_path = (
@@ -382,10 +379,44 @@ class GateControlService:
             "Outcome",
         )
 
+        profile = self._workflow_profile(
+            root,
+            task_id,
+        )
+
+        if profile == "high-assurance":
+            return outcome == "PASS"
+
         return outcome in {
             "PASS",
             "NOT_APPLICABLE",
         }
+
+    def _workflow_profile(
+        self,
+        root: Path,
+        task_id: str,
+    ) -> str:
+        task_path = (
+            root
+            / "tasks"
+            / f"{task_id}.md"
+        )
+
+        if not task_path.exists():
+            return "standard"
+
+        content = task_path.read_text(
+            encoding="utf-8-sig"
+        )
+
+        return (
+            self._field(
+                content,
+                "Workflow profile",
+            )
+            or "standard"
+        )
 
     def _artifact_field(
         self,
