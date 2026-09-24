@@ -48,6 +48,7 @@ $rolePath = Join-Path $root (".codex\agents\" + $owner + ".md")
 $schemaPath = Join-Path $root "schemas\agent-result.schema.json"
 $routerPath = Join-Path $PSScriptRoot "provider-router.ps1"
 $contextBuilderPath = Join-Path $PSScriptRoot "build-agent-context.ps1"
+$localResolverPath = Join-Path $PSScriptRoot "local-runtime\resolve-local-runtime.ps1"
 
 if (-not (Test-Path $dispatchPath)) { throw "Dispatch packet not found: $dispatchPath" }
 if (-not (Test-Path $rolePath)) { throw "Role instructions not found: $rolePath" }
@@ -92,6 +93,28 @@ $promptLines = @(
 )
 $prompt = $promptLines -join [Environment]::NewLine
 
+$localRuntime = $null
+if ($Provider -in @("Auto","Ollama") -and (Test-Path $localResolverPath -PathType Leaf)) {
+    $localArgs = @{
+        ProjectPath = $root
+        Role = $owner
+        Workload = "analysis"
+    }
+
+    if ($Provider -eq "Ollama" -and -not [string]::IsNullOrWhiteSpace($Model)) {
+        $localArgs.ModelOverride = $Model
+    }
+
+    $localRuntime = & $localResolverPath @localArgs
+    if ($Provider -eq "Ollama" -and -not [bool]$localRuntime.Available) {
+        throw ("Ollama local runtime unavailable: " + [string]$localRuntime.Reason)
+    }
+
+    if ([bool]$localRuntime.Available) {
+        Write-Host ("Local runtime: " + $localRuntime.Profile + " -> " + $localRuntime.Model) -ForegroundColor DarkGray
+    }
+}
+
 $context = ""
 # Codex can inspect the repository directly. Every other provider, including
 # local Ollama, requires the bounded Repository Context Pack. Auto always builds
@@ -110,14 +133,14 @@ if ($needsExternalContext) {
                 $maxChars = [int]$providerConfig.context_max_chars
             }
 
-            if (
-                $Provider -in @("Auto","Ollama") -and
+            if ($null -ne $localRuntime -and [bool]$localRuntime.Available) {
+                $maxChars = [Math]::Min($maxChars,[int]$localRuntime.ContextMaxChars)
+            }
+            elseif (
+                $Provider -eq "Ollama" -and
                 $null -ne $providerConfig.ollama_context_max_chars
             ) {
-                $maxChars = [Math]::Min(
-                    $maxChars,
-                    [int]$providerConfig.ollama_context_max_chars
-                )
+                $maxChars = [Math]::Min($maxChars,[int]$providerConfig.ollama_context_max_chars)
             }
         }
         catch {
@@ -133,7 +156,7 @@ if ($needsExternalContext) {
 Write-Host "Running agent: $owner -> $Id" -ForegroundColor Cyan
 Write-Host "Provider mode: $Provider" -ForegroundColor DarkGray
 
-$execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $jsonPath -Model $Model
+$execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $jsonPath -Model $Model -Role $owner -Workload "analysis"
 
 if (-not (Test-Path $jsonPath)) { throw "Provider runtime did not produce structured output: $jsonPath" }
 
