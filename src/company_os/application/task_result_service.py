@@ -15,6 +15,9 @@ class TaskResultDetails:
     model: str = ""
     result_path: str = ""
     evidence_path: str = ""
+    changed_paths: tuple[str, ...] = ()
+    verification: str = ""
+    retry_reason: str = ""
 
 
 class TaskResultService:
@@ -112,7 +115,110 @@ class TaskResultService:
                 if evidence_path.exists()
                 else ""
             ),
+            changed_paths=self._bullet_section(
+                evidence_text,
+                "Changed Paths",
+            ),
+            verification=self._section(
+                evidence_text,
+                "Verification",
+            ),
+            retry_reason=self._retry_reason(
+                root,
+                task_id,
+            ),
         )
+
+    def _bullet_section(
+        self,
+        content: str,
+        heading: str,
+    ) -> tuple[str, ...]:
+        section = self._section(
+            content,
+            heading,
+        )
+
+        if not section:
+            return ()
+
+        values = []
+
+        for line in section.splitlines():
+            value = line.strip()
+
+            if value.startswith("- "):
+                value = value[2:].strip()
+
+            if value:
+                values.append(value)
+
+        return tuple(values)
+
+    def _retry_reason(
+        self,
+        root: Path,
+        task_id: str,
+    ) -> str:
+        review_dir = (
+            root
+            / "docs"
+            / "engineering"
+            / "reviews"
+        )
+
+        if review_dir.exists():
+            reviews = sorted(
+                review_dir.glob(
+                    f"{task_id}-review-*.md"
+                ),
+                key=lambda item: item.name,
+                reverse=True,
+            )
+
+            if reviews:
+                recommendation = self._field(
+                    reviews[0].read_text(
+                        encoding="utf-8-sig"
+                    ),
+                    "Recommendation",
+                )
+
+                if recommendation == "CHANGES_REQUIRED":
+                    return "CHANGES_REQUIRED"
+
+        for folder, suffix, value in (
+            ("qa", "qa", "QA FAIL"),
+            ("security", "security", "SECURITY FAIL"),
+            ("final-approvals", "final", "FINAL REJECT"),
+        ):
+            path = (
+                root
+                / "docs"
+                / "engineering"
+                / folder
+                / f"{task_id}-{suffix}.md"
+            )
+
+            if not path.exists():
+                continue
+
+            text = path.read_text(
+                encoding="utf-8-sig"
+            )
+
+            outcome = (
+                self._field(text, "Outcome")
+                or self._field(text, "Decision")
+            )
+
+            if outcome in {
+                "FAIL",
+                "REJECT",
+            }:
+                return value
+
+        return ""
 
     def _field(
         self,
