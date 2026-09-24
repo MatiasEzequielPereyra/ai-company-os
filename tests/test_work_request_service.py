@@ -169,3 +169,56 @@ Work request: WR-003
     assert len(items) == 1
     assert items[0].request_type == "FEATURE"
     assert items[0].display_status == "ENGINEERING_PENDING"
+
+
+def test_dynamic_scope_discovers_materialized_downstream_tasks(tmp_path):
+    write(
+        tmp_path
+        / "tasks"
+        / "AICO-030.md",
+        """# AICO-030
+
+ID: AICO-030
+Status: DONE
+Owner: engineering-manager
+Work request: WR-030
+""",
+    )
+
+    service = WorkRequestService()
+
+    assert service.resolve_task_ids(
+        tmp_path,
+        ["WR-030"],
+    ) == ["AICO-030"]
+
+    write(
+        tmp_path
+        / "tasks"
+        / "AICO-031.md",
+        """# AICO-031
+
+ID: AICO-031
+Status: BACKLOG
+Owner: frontend
+Work request: WR-030
+Source plan: AICO-030
+Work kind: IMPLEMENTATION
+""",
+    )
+
+    assert service.resolve_task_ids(
+        tmp_path,
+        ["WR-030"],
+    ) == [
+        "AICO-030",
+        "AICO-031",
+    ]
+
+    downstream = service.tasks_for_request(
+        tmp_path,
+        "WR-030",
+    )[1]
+
+    assert downstream.work_kind == "IMPLEMENTATION"
+    assert downstream.source_plan == "AICO-030"
