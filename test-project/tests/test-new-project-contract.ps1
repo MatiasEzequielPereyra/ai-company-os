@@ -18,6 +18,7 @@ try {
         ".codex\workflow-profiles.json",
         ".codex\policies\workflow-policy.md",
         ".codex\protocols\task-lifecycle.md",
+        ".codex\protocols\writable-execution.md",
         ".codex\templates\ticket.md",
         "scripts\validate-artifacts.ps1",
         "scripts\new-agent-workspace.ps1",
