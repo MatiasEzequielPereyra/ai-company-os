@@ -4,7 +4,7 @@
     "OpenRouter",
     "Gemini"
   ],
-  "context_max_chars": 320000,
+  "context_max_chars": 120000,
   "models": {
     "OpenRouter": "openrouter/free",
     "Gemini": "gemini-3.5-flash-lite"
@@ -18,5 +18,14 @@
     "OpenRouter": "qwen/qwen3.8-27b:free",
     "Gemini": "gemini-3.5-flash-lite"
   },
-  "writable_context_max_chars": 120000
+  "writable_context_max_chars": 120000,
+  "analysis_context_max_chars": 120000,
+  "analysis_context_max_chars_by_role": {
+    "pm": 70000,
+    "cto": 110000,
+    "engineering-manager": 120000,
+    "qa": 90000,
+    "security": 100000,
+    "devops": 90000
+  }
 }
