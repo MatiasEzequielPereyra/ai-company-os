@@ -17,6 +17,8 @@ from textual.widgets import Footer, Header, Label, ListItem, ListView, Static
 from company_os.application.config_service import ConfigService
 from company_os.cli.screens.projects import ProjectManagerScreen
 from company_os.cli.screens.work_requests import WorkRequestsScreen
+from company_os.cli.screens.help import HelpScreen
+from company_os.cli.i18n import navigation_label
 from company_os.cli.screens.command_center import CommandCenterScreen
 from company_os.application.project_service import ProjectService
 from company_os.application.provider_service import ProviderService
@@ -46,6 +48,7 @@ NAVIGATION = [
     ("Quality Gates", "gates"),
     ("Doctor", "doctor"),
     ("Diagnostics", "diagnostics"),
+    ("Help / Guide", "help"),
 ]
 
 
@@ -825,12 +828,33 @@ class AICompanyTUI(App):
     """
 
     BINDINGS = [
-        Binding("q", "quit", "Quit"),
-        Binding("r", "refresh_data", "Refresh"),
+        Binding(
+            "q",
+            "quit",
+            "Salir / Quit",
+        ),
+        Binding(
+            "r",
+            "refresh_data",
+            "Actualizar / Refresh",
+        ),
+        Binding(
+            "f1",
+            "open_help",
+            "Ayuda / Help",
+        ),
+        Binding(
+            "f2",
+            "toggle_language",
+            "ES / EN",
+        ),
     ]
 
     def __init__(self, project: Path) -> None:
         super().__init__()
+
+        self.language = "es"
+        self.current_view = "overview"
 
         self.project = project
         self.snapshot = None
@@ -848,7 +872,7 @@ class AICompanyTUI(App):
             yield ListView(
                 *[
                     ListItem(
-                        Label(label),
+                        Label(self._nav_label(view)),
                         id=f"nav-{view}",
                     )
                     for label, view in NAVIGATION
@@ -858,7 +882,7 @@ class AICompanyTUI(App):
 
             with VerticalScroll(id="content-scroll"):
                 yield Static(
-                    "Overview",
+                    self._nav_label("overview"),
                     id="content-title",
                 )
 
@@ -960,15 +984,23 @@ class AICompanyTUI(App):
             )
             return
 
+        if view == "help":
+            self.push_screen(
+                HelpScreen()
+            )
+            return
+
         self._show_view(view)
 
     def _show_view(
         self,
         view: str,
     ) -> None:
+        self.current_view = view
+
         titles = {
-            key: label
-            for label, key in NAVIGATION
+            key: self._nav_label(key)
+            for _label, key in NAVIGATION
         }
 
         self.query_one(
@@ -1372,6 +1404,86 @@ class AICompanyTUI(App):
             )
 
         return table
+
+    def _nav_label(
+        self,
+        view: str,
+    ) -> str:
+        return navigation_label(
+            self.language,
+            view,
+        )
+
+    def action_open_help(self) -> None:
+        current = self.screen
+
+        if (
+            current.__class__.__name__
+            == "HelpScreen"
+        ):
+            return
+
+        self.push_screen(
+            HelpScreen()
+        )
+
+    def action_toggle_language(self) -> None:
+        self.language = (
+            "en"
+            if self.language == "es"
+            else "es"
+        )
+
+        self._refresh_navigation_language()
+
+        current = self.screen
+
+        refresh_language = getattr(
+            current,
+            "refresh_language",
+            None,
+        )
+
+        if callable(refresh_language):
+            refresh_language()
+
+        language_name = (
+            "English"
+            if self.language == "en"
+            else "Espa?ol"
+        )
+
+        self.notify(
+            f"Interface: {language_name}"
+        )
+
+    def _refresh_navigation_language(
+        self,
+    ) -> None:
+        for _label, view in NAVIGATION:
+            matches = list(
+                self.query(
+                    f"#nav-{view} Label"
+                )
+            )
+
+            if matches:
+                matches[0].update(
+                    self._nav_label(view)
+                )
+
+        titles = list(
+            self.query(
+                "#content-title"
+            )
+        )
+
+        if titles:
+            titles[0].update(
+                self._nav_label(
+                    self.current_view
+                )
+            )
 
     def action_refresh_data(self) -> None:
         try:
