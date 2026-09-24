@@ -21,6 +21,9 @@ from textual.widgets import (
 from company_os.application.agent_control_service import (
     AgentControlService,
 )
+from company_os.application.engineering_backlog_service import (
+    EngineeringBacklogService,
+)
 from company_os.application.writable_workspace_service import WritableWorkspaceService
 from company_os.application.writable_execution_adapter import WritableExecutionAdapter
 from company_os.application.corrective_reactivation_service import CorrectiveReactivationService
@@ -30,6 +33,9 @@ from company_os.application.gate_control_service import (
 from company_os.application.task_result_service import (
     TaskResultService,
 )
+from company_os.application.work_request_service import (
+    WorkRequestService,
+)
 
 
 class PlanControlScreen(Screen):
@@ -37,6 +43,7 @@ class PlanControlScreen(Screen):
         Binding("escape", "back", "Back"),
         Binding("a", "activate", "Activate"),
         Binding("r", "run_agents", "Analysis agent"),
+        Binding("b", "engineering_backlog", "Engineering backlog"),
         Binding("w", "prepare_writable", "Writable implementation"),
         Binding("u", "unblock", "Retry blocked"),
         Binding("g", "run_gates", "Run gates"),
@@ -56,6 +63,8 @@ class PlanControlScreen(Screen):
         self.preparation_result = preparation_result
 
         self.control = AgentControlService()
+        self.work_requests = WorkRequestService()
+        self.engineering_backlog = EngineeringBacklogService()
         self.gates = GateControlService()
         self.writable = WritableWorkspaceService()
         self.writable_runner = WritableExecutionAdapter()
@@ -91,7 +100,24 @@ class PlanControlScreen(Screen):
     def action_refresh_tasks(self) -> None:
         self._refresh_view()
 
+    def _work_request_ids(self) -> list[str]:
+        return [
+            value
+            for value in (
+                self.preparation_result.work_request_ids
+            )
+            if value
+        ]
+
     def _task_ids(self) -> list[str]:
+        work_request_ids = self._work_request_ids()
+
+        if work_request_ids:
+            return self.work_requests.resolve_task_ids(
+                self.plan_data.project_root,
+                work_request_ids,
+            )
+
         return list(
             self.preparation_result.created_task_ids
         )
@@ -101,6 +127,26 @@ class PlanControlScreen(Screen):
             self.plan_data.project_root,
             self._task_ids(),
         )
+
+    def _analysis_task_ids(self) -> list[str]:
+        return [
+            task.id
+            for task in self._tasks()
+            if task.work_kind != "IMPLEMENTATION"
+        ]
+
+    def _writable_task_ids(self) -> list[str]:
+        return [
+            task.id
+            for task in self._tasks()
+            if (
+                task.work_kind == "IMPLEMENTATION"
+                and task.status in {
+                    "READY",
+                    "ACTIVE",
+                }
+            )
+        ]
 
     def action_activate(self) -> None:
         if self.busy:
@@ -192,7 +238,10 @@ class PlanControlScreen(Screen):
         active = [
             task.id
             for task in self._tasks()
-            if task.status == "ACTIVE"
+            if (
+                task.status == "ACTIVE"
+                and task.work_kind != "IMPLEMENTATION"
+            )
         ]
 
         if not active:
@@ -225,7 +274,7 @@ class PlanControlScreen(Screen):
                 self.control
                 .run_active_agents(
                     self.plan_data.project_root,
-                    self._task_ids(),
+                    self._analysis_task_ids(),
                     provider="Auto",
                 )
             )
@@ -245,23 +294,94 @@ class PlanControlScreen(Screen):
                 str(exc),
             )
 
+    def action_engineering_backlog(self) -> None:
+        if self.busy:
+            return
+
+        pending = self.engineering_backlog.pending_sources(
+            self.plan_data.project_root,
+            self._work_request_ids(),
+        )
+
+        if not pending:
+            self.notify(
+                "No DONE Engineering Manager plan is ready "
+                "for backlog materialization.",
+                severity="warning",
+            )
+            return
+
+        self.busy = True
+
+        self._working(
+            "Generating and materializing engineering "
+            "backlog from:\n\n"
+            + "\n".join(
+                source.task_id
+                for source in pending
+            ),
+            "ENGINEERING BACKLOG",
+        )
+
+        self.engineering_backlog_worker()
+
+    @work(
+        thread=True,
+        exclusive=True,
+        group="engineering-backlog",
+        exit_on_error=False,
+    )
+    def engineering_backlog_worker(self) -> None:
+        try:
+            result = (
+                self.engineering_backlog
+                .generate_and_materialize(
+                    self.plan_data.project_root,
+                    self._work_request_ids(),
+                    provider="Auto",
+                )
+            )
+
+            message = (
+                "Materialized from: "
+                + (
+                    ", ".join(
+                        result.materialized_source_ids
+                    )
+                    or "none"
+                )
+            )
+
+            if result.skipped_source_ids:
+                message += (
+                    "\nAlready materialized: "
+                    + ", ".join(
+                        result.skipped_source_ids
+                    )
+                )
+
+            self.app.call_from_thread(
+                self._operation_finished,
+                message,
+            )
+
+        except Exception as exc:
+            self.app.call_from_thread(
+                self._operation_failed,
+                "Engineering backlog failed",
+                str(exc),
+            )
+
     def action_prepare_writable(self) -> None:
         if self.busy:
             return
 
-        writable_ids = [
-            task.id
-            for task in self._tasks()
-            if task.status in {
-                "READY",
-                "ACTIVE",
-            }
-        ]
+        writable_ids = self._writable_task_ids()
 
         if not writable_ids:
             self.notify(
-                "No READY/ACTIVE tasks are available "
-                "for writable execution.",
+                "No READY/ACTIVE IMPLEMENTATION tasks are "
+                "available for writable execution.",
                 severity="warning",
             )
             return
@@ -286,7 +406,7 @@ class PlanControlScreen(Screen):
         try:
             result = self.writable.prepare(
                 self.plan_data.project_root,
-                self._task_ids(),
+                self._writable_task_ids(),
             )
 
             lines = []
@@ -818,6 +938,7 @@ class PlanControlScreen(Screen):
         table.add_column("ID")
         table.add_column("Status")
         table.add_column("Owner")
+        table.add_column("Kind")
         table.add_column("Task")
         table.add_column("Retry / Evidence")
 
@@ -845,6 +966,7 @@ class PlanControlScreen(Screen):
                 task.id,
                 status,
                 task.owner,
+                task.work_kind or "PLANNING",
                 task.title,
                 indicator or "-",
             )
@@ -902,18 +1024,37 @@ class PlanControlScreen(Screen):
             )
 
         if any(
-            task.status == "ACTIVE"
+            (
+                task.status == "ACTIVE"
+                and task.work_kind != "IMPLEMENTATION"
+            )
             for task in tasks
         ):
             controls.append(
                 "R = Run analysis-only agent"
             )
 
+        pending_backlog = (
+            self.engineering_backlog
+            .pending_sources(
+                self.plan_data.project_root,
+                self._work_request_ids(),
+            )
+        )
+
+        if pending_backlog:
+            controls.append(
+                "B = Generate/materialize engineering backlog"
+            )
+
         if any(
-            task.status in {
-                "READY",
-                "ACTIVE",
-            }
+            (
+                task.status in {
+                    "READY",
+                    "ACTIVE",
+                }
+                and task.work_kind == "IMPLEMENTATION"
+            )
             for task in tasks
         ):
             controls.append(
@@ -962,8 +1103,7 @@ class PlanControlScreen(Screen):
 
         work_request = (
             ", ".join(
-                self.preparation_result
-                .work_request_ids
+                self._work_request_ids()
             )
             or "unknown"
         )
@@ -1000,6 +1140,9 @@ class PlanControlScreen(Screen):
                     "CHANGES_REQUIRED / QA FAIL / SECURITY FAIL "
                     "-> READY -> W\n"
                     "BLOCKED -> U -> READY -> W\n\n"
+                    "Planning/non-IMPLEMENTATION ACTIVE -> R\n"
+                    "Engineering Manager DONE -> B\n"
+                    "IMPLEMENTATION READY/ACTIVE -> W\n\n"
                     "When a wave reaches DONE, press A "
                     "again to activate newly eligible "
                     "dependent tasks.",
