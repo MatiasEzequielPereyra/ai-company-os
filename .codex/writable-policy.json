@@ -37,7 +37,12 @@
     "^pytest(?:\\.exe)?(?: .*)?$"
   ],
   "free_provider_models": {
-    "OpenRouter": ["openrouter/free"],
-    "Gemini": ["gemini-3.5-flash-lite"]
+    "OpenRouter": [
+      "qwen/qwen3.8-27b:free",
+      "openrouter/free"
+    ],
+    "Gemini": [
+      "gemini-3.5-flash-lite"
+    ]
   }
 }
