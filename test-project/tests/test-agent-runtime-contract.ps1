@@ -7,6 +7,7 @@ $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $required = @(
     "scripts\run-agent-task.ps1",
     "scripts\run-active-agents.ps1",
+    "scripts\run-writable-agent.ps1",
     "scripts\provider-router.ps1",
     "scripts\build-agent-context.ps1",
     "scripts\providers\invoke-codex.ps1",
@@ -18,6 +19,8 @@ $required = @(
     "scripts\materialize-engineering-backlog.ps1",
     ".codex\provider-config.json",
     "schemas\agent-result.schema.json",
+    "schemas\writable-change-set.schema.json",
+    ".codex\writable-policy.json",
     "schemas\review-result.schema.json",
     "schemas\qa-gate-result.schema.json",
     "schemas\security-gate-result.schema.json",
@@ -55,6 +58,9 @@ if (@($config.auto_order) -notcontains "OpenRouter") { throw "Provider config mu
 if (@($config.auto_order) -notcontains "Gemini") { throw "Provider config must include Gemini" }
 if ([string]$config.models.OpenRouter -ne "openrouter/free") { throw "OpenRouter must default to openrouter/free" }
 if ([string]$config.models.Gemini -ne "gemini-3.5-flash-lite") { throw "Gemini must default to gemini-3.5-flash-lite" }
+if (@($config.writable_auto_order) -join "," -ne "OpenRouter,Gemini") { throw "Writable Auto must be limited to OpenRouter then Gemini" }
+if ([string]$config.writable_models.OpenRouter -ne "openrouter/free") { throw "Writable OpenRouter must default to openrouter/free" }
+if ([string]$config.writable_models.Gemini -ne "gemini-3.5-flash-lite") { throw "Writable Gemini must default to gemini-3.5-flash-lite" }
 if ([int]$config.context_max_chars -lt 300000) { throw "External provider context budget must be at least 300000 characters" }
 if ([int]$config.gate_context_max_chars -lt 100000) { throw "Gate context budget must be explicitly configured" }
 
@@ -87,6 +93,50 @@ if ($runner -notmatch 'COMPLETED means you completed the assigned audit') {
 if ($runner -notmatch 'BLOCKED means you could not complete the assigned agent task itself') {
     throw "Agent runner must reserve BLOCKED for execution blockers"
 }
+$writableRunner = Get-Content (Join-Path $repoRoot "scripts\run-writable-agent.ps1") -Raw
+if ($writableRunner -notmatch 'ValidateSet\("Auto","OpenRouter","Gemini"\)') {
+    throw "Writable runner must expose only Auto/OpenRouter/Gemini provider selection"
+}
+if ($writableRunner -notmatch 'refuses to use the primary checkout') {
+    throw "Writable runner must reject the primary checkout as a writable workspace"
+}
+if ($writableRunner -notmatch 'writable-change-set\.schema\.json') {
+    throw "Writable runner must require the writable structured change contract"
+}
+if ($writableRunner -notmatch 'writable-policy\.json') {
+    throw "Writable runner must enforce the writable policy"
+}
+if ($writableRunner -match 'Invoke-Expression') {
+    throw "Writable runner must never execute model-provided PowerShell through Invoke-Expression"
+}
+if ($writableRunner -notmatch 'protected control-plane path') {
+    throw "Writable runner must reject protected control-plane paths"
+}
+if ($writableRunner -notmatch 'symlink/junction/reparse point') {
+    throw "Writable runner must block reparse-point escapes"
+}
+if ($writableRunner -notmatch 'submit-task-result\.ps1') {
+    throw "Writable runner must reuse the canonical Result Intake Engine"
+}
+
+$writableSchema = Get-Content (Join-Path $repoRoot "schemas\writable-change-set.schema.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+foreach ($field in @("outcome","summary","report_markdown","changes","verification_commands","verification","decisions","blockers","recommended_next")) {
+    if (@($writableSchema.required) -notcontains $field) {
+        throw "Writable change-set schema missing required field: $field"
+    }
+}
+
+$writablePolicy = Get-Content (Join-Path $repoRoot ".codex\writable-policy.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+if (@($writablePolicy.free_provider_models.OpenRouter) -notcontains "openrouter/free") {
+    throw "Writable policy must identify openrouter/free as an automatic free provider model"
+}
+if (@($writablePolicy.protected_path_prefixes) -notcontains ".git") {
+    throw "Writable policy must protect .git"
+}
+if (@($writablePolicy.secret_name_patterns).Count -lt 1) {
+    throw "Writable policy must define secret-path rejection patterns"
+}
+
 $gateBatch = Get-Content (Join-Path $repoRoot "scripts\run-pending-gates.ps1") -Raw
 if ($gateBatch -notmatch 'securityOutcome -in @\("PASS","NOT_APPLICABLE"\)') {
     throw "Pending gate runner must skip already satisfied security gates"
@@ -156,6 +206,7 @@ if (-not $contextBuilder.Contains("private[-_]?key")) { throw "Context builder m
 $parseTargets = @(
     "scripts\run-agent-task.ps1",
     "scripts\run-active-agents.ps1",
+    "scripts\run-writable-agent.ps1",
     "scripts\provider-router.ps1",
     "scripts\build-agent-context.ps1",
     "scripts\providers\invoke-codex.ps1",
