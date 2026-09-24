@@ -86,6 +86,46 @@ function Test-MatchesAnyPattern {
     return $false
 }
 
+function Assert-NoReparseEscape {
+    param(
+        [string]$Workspace,
+        [string]$TargetPath
+    )
+
+    $workspaceFull = [System.IO.Path]::GetFullPath($Workspace).TrimEnd([char[]]@("\","/"))
+    $current = Split-Path $TargetPath -Parent
+
+    while (-not [string]::IsNullOrWhiteSpace($current)) {
+        $currentFull = [System.IO.Path]::GetFullPath($current).TrimEnd([char[]]@("\","/"))
+
+        if ([string]::Equals($currentFull,$workspaceFull,[System.StringComparison]::OrdinalIgnoreCase)) {
+            break
+        }
+
+        if (-not $currentFull.StartsWith($workspaceFull + [System.IO.Path]::DirectorySeparatorChar,[System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Writable path parent escaped the task worktree."
+        }
+
+        if (Test-Path $currentFull) {
+            $item = Get-Item $currentFull -Force
+            if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+                throw "Writable change path traverses a symlink/junction/reparse point: $currentFull"
+            }
+        }
+
+        $parent = Split-Path $currentFull -Parent
+        if ($parent -eq $currentFull) { break }
+        $current = $parent
+    }
+
+    if (Test-Path $TargetPath) {
+        $targetItem = Get-Item $TargetPath -Force
+        if (($targetItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+            throw "Writable change target is a symlink/junction/reparse point: $TargetPath"
+        }
+    }
+}
+
 function Resolve-SafeChangePath {
     param(
         [string]$Workspace,
@@ -133,13 +173,15 @@ function Resolve-SafeChangePath {
         throw "Writable change path looks secret-sensitive and is prohibited: $normalized"
     }
 
-    $workspaceFull = [System.IO.Path]::GetFullPath($Workspace).TrimEnd("\","/")
+    $workspaceFull = [System.IO.Path]::GetFullPath($Workspace).TrimEnd([char[]]@("\","/"))
     $targetFull = [System.IO.Path]::GetFullPath((Join-Path $workspaceFull ($normalized.Replace("/","\"))))
     $prefixFull = $workspaceFull + [System.IO.Path]::DirectorySeparatorChar
 
     if (-not $targetFull.StartsWith($prefixFull,[System.StringComparison]::OrdinalIgnoreCase)) {
         throw "Writable change path escapes the task worktree: $normalized"
     }
+
+    Assert-NoReparseEscape -Workspace $workspaceFull -TargetPath $targetFull
 
     return [PSCustomObject]@{
         Relative = $normalized
@@ -349,21 +391,21 @@ if (-not (Test-Path $WorkspacePath)) {
 $workspace = (Resolve-Path $WorkspacePath).Path
 
 if ([string]::Equals(
-    [System.IO.Path]::GetFullPath($workspace).TrimEnd("\","/"),
-    [System.IO.Path]::GetFullPath($root).TrimEnd("\","/"),
+    [System.IO.Path]::GetFullPath($workspace).TrimEnd([char[]]@("\","/")),
+    [System.IO.Path]::GetFullPath($root).TrimEnd([char[]]@("\","/")),
     [System.StringComparison]::OrdinalIgnoreCase
 )) {
     throw "Writable execution refuses to use the primary checkout as its workspace."
 }
 
 $registered = $false
-$workspaceFull = [System.IO.Path]::GetFullPath($workspace).TrimEnd("\","/")
+$workspaceFull = [System.IO.Path]::GetFullPath($workspace).TrimEnd([char[]]@("\","/"))
 $worktreeLines = @(& git -C $root worktree list --porcelain 2>$null)
 if ($LASTEXITCODE -ne 0) { throw "git worktree list failed." }
 
 foreach ($line in $worktreeLines) {
     if (-not $line.StartsWith("worktree ")) { continue }
-    $candidate = [System.IO.Path]::GetFullPath($line.Substring(9).Trim()).TrimEnd("\","/")
+    $candidate = [System.IO.Path]::GetFullPath($line.Substring(9).Trim()).TrimEnd([char[]]@("\","/"))
 
     if ([string]::Equals($candidate,$workspaceFull,[System.StringComparison]::OrdinalIgnoreCase)) {
         $registered = $true
