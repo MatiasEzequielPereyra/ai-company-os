@@ -2,7 +2,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Id,
     [string]$ProjectPath = ".",
-    [ValidateSet("Auto","Codex","OpenRouter","Gemini")]
+    [ValidateSet("Auto","Codex","OpenRouter","Gemini","Ollama","DeepSeek","Grok")]
     [string]$Provider = "Auto",
     [string]$Model = "",
     [ValidateSet("Auto","ChatGPT","ApiKey")]
@@ -28,7 +28,7 @@ if ($PSBoundParameters.ContainsKey("AuthMode") -and -not $PSBoundParameters.Cont
         $Provider = "Codex"
     }
     elseif ($AuthMode -eq "ApiKey") {
-        throw "Legacy -AuthMode ApiKey is disabled to prevent accidental OpenAI API spend. Use -Provider OpenRouter or -Provider Gemini for free-tier providers."
+        throw "Legacy -AuthMode ApiKey is disabled to prevent accidental OpenAI API spend. Select an explicit provider such as OpenRouter, Gemini, Ollama, DeepSeek, or Grok."
     }
 }
 
@@ -93,13 +93,10 @@ $promptLines = @(
 $prompt = $promptLines -join [Environment]::NewLine
 
 $context = ""
-$needsExternalContext = ($Provider -eq "OpenRouter" -or $Provider -eq "Gemini")
-if ($Provider -eq "Auto" -and (
-    -not [string]::IsNullOrWhiteSpace($env:OPENROUTER_API_KEY) -or
-    -not [string]::IsNullOrWhiteSpace($env:GEMINI_API_KEY)
-)) {
-    $needsExternalContext = $true
-}
+# Codex can inspect the repository directly. Every other provider, including
+# local Ollama, requires the bounded Repository Context Pack. Auto always builds
+# it because the selected fallback provider is not known until routing time.
+$needsExternalContext = ($Provider -ne "Codex")
 
 if ($needsExternalContext) {
     if (-not (Test-Path $contextBuilderPath)) { throw "Context builder not found: $contextBuilderPath" }
@@ -111,6 +108,16 @@ if ($needsExternalContext) {
             $providerConfig = Get-Content $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
             if ($null -ne $providerConfig.context_max_chars) {
                 $maxChars = [int]$providerConfig.context_max_chars
+            }
+
+            if (
+                $Provider -in @("Auto","Ollama") -and
+                $null -ne $providerConfig.ollama_context_max_chars
+            ) {
+                $maxChars = [Math]::Min(
+                    $maxChars,
+                    [int]$providerConfig.ollama_context_max_chars
+                )
             }
         }
         catch {

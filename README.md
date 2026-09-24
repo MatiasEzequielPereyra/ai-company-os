@@ -47,7 +47,7 @@ The framework includes:
 - project intake and repository discovery;
 - durable Markdown tasks under `tasks/`;
 - readiness, dispatch, result intake, review, QA, security, and final approval scripts;
-- provider routing for Codex CLI, OpenRouter, and Gemini;
+- provider routing for Codex CLI, OpenRouter, Gemini, local Ollama, DeepSeek, and xAI/Grok;
 - structured provider result schemas;
 - engineering backlog generation/materialization;
 - state synchronization;
@@ -107,7 +107,9 @@ See `docs/PROJECT-BRIEF.md` and `docs/architecture/system-architecture.md` for t
 
 AI Company OS deliberately separates **analysis authority** from **mutation authority**.
 
-The built-in Codex adapter uses a read-only sandbox. External API providers receive a bounded repository context pack. A task being READY or ACTIVE does not by itself authorize unrestricted code changes, deployment, secret access, or merge/push operations.
+The built-in Codex adapter uses a read-only sandbox. External API providers and local Ollama receive a bounded repository context pack. A task being READY or ACTIVE does not by itself authorize unrestricted code changes, deployment, secret access, or merge/push operations.
+
+Paid automatic fallbacks are disabled by default. DeepSeek and Grok can be selected explicitly, while `-Provider Auto` will skip them unless `.codex/provider-config.json` sets `allow_paid_fallback` to `true`.
 
 Parallel mutating agents must not share a writable checkout. Use task-specific branches/worktrees and explicit integration review.
 
