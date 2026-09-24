@@ -3,7 +3,7 @@ param(
     [Parameter(Mandatory = $true)][string]$Context,
     [Parameter(Mandatory = $true)][string]$SchemaPath,
     [Parameter(Mandatory = $true)][string]$OutputPath,
-    [string]$Model = "qwen3:8b"
+    [string]$Model = "qwen2.5-coder:14b"
 )
 
 $ErrorActionPreference = "Stop"
@@ -90,6 +90,8 @@ $body = @{
     format = $schema
     options = @{
         temperature = 0
+        num_ctx = 16384
+        num_predict = 4096
     }
 } | ConvertTo-Json -Depth 100 -Compress
 
