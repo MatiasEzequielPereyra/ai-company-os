@@ -143,20 +143,15 @@ def test_writable_adapter_accepts_ready_and_exposes_diff(
     )
 
     calls = []
+    streamed_calls = []
 
-    def fake_run(command, **_kwargs):
+    def fake_git_run(command, **_kwargs):
         calls.append(command)
 
-        if command[0] == "git":
-            if "--stat" in command:
-                stdout = " index.html | 2 ++"
-            else:
-                stdout = "diff --git a/index.html b/index.html"
+        if "--stat" in command:
+            stdout = " index.html | 2 ++"
         else:
-            stdout = (
-                "Provider: OpenRouter\n"
-                "Model: qwen-test\n"
-            )
+            stdout = "diff --git a/index.html b/index.html"
 
         return SimpleNamespace(
             returncode=0,
@@ -164,11 +159,36 @@ def test_writable_adapter_accepts_ready_and_exposes_diff(
             stderr="",
         )
 
+    def fake_streamed_process(command, **_kwargs):
+        streamed_calls.append(command)
+        progress = _kwargs.get("on_line")
+
+        for line in (
+            "Provider: OpenRouter",
+            "Model: qwen-test",
+        ):
+            if progress is not None:
+                progress(line)
+
+        return SimpleNamespace(
+            returncode=0,
+            output=(
+                "Provider: OpenRouter\n"
+                "Model: qwen-test"
+            ),
+        )
+
     monkeypatch.setattr(
         "company_os.application."
         "writable_execution_adapter."
         "subprocess.run",
-        fake_run,
+        fake_git_run,
+    )
+    monkeypatch.setattr(
+        "company_os.application."
+        "writable_execution_adapter."
+        "run_streamed_process",
+        fake_streamed_process,
     )
 
     result = adapter.run(
@@ -186,8 +206,7 @@ def test_writable_adapter_accepts_ready_and_exposes_diff(
     assert any(
         "run-writable-agent.ps1"
         in " ".join(command)
-        for command in calls
-        if command[0] != "git"
+        for command in streamed_calls
     )
 
 
