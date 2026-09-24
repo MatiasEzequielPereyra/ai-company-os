@@ -155,7 +155,7 @@ $inventory = @(
                 if ($lower -notmatch '(^|\\)(node_modules|\.git|dist|dist-refactor-modular|build|coverage|\.next|vendor)(\\|$)') {
                     [PSCustomObject]@{
                         Relative = $relative
-                        Name = (Split-Path $relative -Leaf)
+                        Name = [System.IO.Path]::GetFileName($relative.Replace("/","\"))
                     }
                 }
             }
