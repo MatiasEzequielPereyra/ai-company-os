@@ -4,7 +4,8 @@ param(
     [string]$Id,
     [Parameter(Mandatory = $true)]
     [string]$Owner,
-    [int]$MaxChars = 320000
+    [int]$MaxChars = 320000,
+    [string[]]$RequiredFiles = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -14,7 +15,8 @@ function Add-ContextFile {
         [System.Text.StringBuilder]$Builder,
         [string]$Root,
         [string]$RelativePath,
-        [int]$Remaining
+        [int]$Remaining,
+        [switch]$RequireComplete
     )
 
     $fullPath = Join-Path $Root $RelativePath
@@ -32,13 +34,21 @@ function Add-ContextFile {
     $header = [Environment]::NewLine + [Environment]::NewLine + "===== FILE: " + $RelativePath + " =====" + [Environment]::NewLine
     if ($header.Length -ge $Remaining) { return 0 }
 
-    $allowed = [Math]::Min(($Remaining - $header.Length),60000)
-    if ($allowed -le 0) { return 0 }
+    $available = $Remaining - $header.Length
+    if ($available -le 0) { return 0 }
 
-    if ($content.Length -gt $allowed) {
-        $marker = [Environment]::NewLine + "[TRUNCATED BY AI COMPANY OS CONTEXT BUILDER]"
-        $take = [Math]::Max(0, $allowed - $marker.Length)
-        $content = $content.Substring(0,$take) + $marker
+    if ($RequireComplete) {
+        if ($content.Length -gt $available) {
+            throw "Required context file cannot fit completely within the context budget: $RelativePath"
+        }
+    }
+    else {
+        $allowed = [Math]::Min($available,60000)
+        if ($content.Length -gt $allowed) {
+            $marker = [Environment]::NewLine + "[TRUNCATED BY AI COMPANY OS CONTEXT BUILDER]"
+            $take = [Math]::Max(0, $allowed - $marker.Length)
+            $content = $content.Substring(0,$take) + $marker
+        }
     }
 
     [void]$Builder.Append($header)
@@ -136,6 +146,24 @@ $required = @(
 
 $included = @{}
 $used = $builder.Length
+
+foreach ($relative in @($RequiredFiles)) {
+    if ([string]::IsNullOrWhiteSpace($relative)) { continue }
+    if ($used -ge $MaxChars) {
+        throw "Required context files exhausted the configured context budget."
+    }
+
+    $key = $relative.ToLowerInvariant().Replace("/","\")
+    if ($included.ContainsKey($key)) { continue }
+
+    $added = Add-ContextFile -Builder $builder -Root $root -RelativePath $relative -Remaining ($MaxChars - $used) -RequireComplete
+    if ($added -le 0) {
+        throw "Required context file was resolved but could not be included: $relative"
+    }
+
+    $included[$key] = $true
+    $used += $added
+}
 
 foreach ($relative in $required) {
     if ($used -ge $MaxChars) { break }
