@@ -1572,11 +1572,66 @@ UX3_TEXT = {
 }
 
 
+
+PROGRESS_TEXT = {
+    "es": {
+        "progress_title": "Operacion en curso",
+        "progress_task": "Tarea",
+        "progress_action": "Accion",
+        "progress_stage": "Etapa actual",
+        "progress_agent": "Agente",
+        "progress_context": "Contexto",
+        "progress_elapsed": "Tiempo",
+        "progress_activity": "Actividad",
+        "progress_last_event": "Ultimo evento",
+        "progress_recent_events": "Eventos recientes",
+        "progress_working": "Trabajando...",
+        "progress_already_running": "Operacion ya en curso",
+        "progress_success": "SUCCESS",
+        "progress_error": "ERROR",
+        "progress_blocked": "BLOCKED",
+        "progress_duration": "Duracion",
+        "progress_summary": "Resumen",
+        "progress_last_operation": "Ultima operacion",
+        "progress_preparing_worktree": "Preparando worktree aislado...",
+        "progress_waiting_provider": "Esperando respuesta del provider...",
+    },
+    "en": {
+        "progress_title": "Operation running",
+        "progress_task": "Task",
+        "progress_action": "Action",
+        "progress_stage": "Current stage",
+        "progress_agent": "Agent",
+        "progress_context": "Context",
+        "progress_elapsed": "Elapsed",
+        "progress_activity": "Activity",
+        "progress_last_event": "Last event",
+        "progress_recent_events": "Recent events",
+        "progress_working": "Working...",
+        "progress_already_running": "Operation already running",
+        "progress_success": "SUCCESS",
+        "progress_error": "ERROR",
+        "progress_blocked": "BLOCKED",
+        "progress_duration": "Duration",
+        "progress_summary": "Summary",
+        "progress_last_operation": "Last operation",
+        "progress_preparing_worktree": "Preparing isolated worktree...",
+        "progress_waiting_provider": "Waiting for provider response...",
+    },
+}
+
+
 def ui_text(
     language: str,
     key: str,
 ) -> str:
     language = normalize_language(language)
+
+    if key in PROGRESS_TEXT.get(
+        language,
+        {},
+    ):
+        return PROGRESS_TEXT[language][key]
 
     if key in UX3_TEXT.get(
         language,

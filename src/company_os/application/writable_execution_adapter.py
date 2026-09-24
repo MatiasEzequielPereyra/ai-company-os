@@ -13,6 +13,10 @@ from company_os.application.agent_control_service import (
 from company_os.application.provider_service import (
     ProviderService,
 )
+from company_os.application.process_stream import (
+    ProgressCallback,
+    run_streamed_process,
+)
 from company_os.application.task_result_service import (
     TaskResultService,
 )
@@ -45,6 +49,7 @@ class WritableExecutionAdapter:
         workspace_path: str | Path,
         provider: str = "Auto",
         model: str = "",
+        progress: ProgressCallback | None = None,
     ) -> WritableExecutionResult:
         root = Path(project_root).resolve()
         workspace = Path(workspace_path).resolve()
@@ -123,22 +128,28 @@ class WritableExecutionAdapter:
                 ]
             )
 
-        process = subprocess.run(
+        if progress is not None:
+            progress(
+                f"Task: {task_id}"
+            )
+            progress(
+                f"Provider requested: {provider}"
+            )
+            progress(
+                f"Worktree: {workspace}"
+            )
+            progress(
+                "Starting writable runtime..."
+            )
+
+        process = run_streamed_process(
             command,
-            capture_output=True,
-            text=True,
             timeout=1800,
             env=environment,
+            on_line=progress,
         )
 
-        output = (
-            (process.stdout or "")
-            + (
-                "\n" + process.stderr
-                if process.stderr
-                else ""
-            )
-        ).strip()
+        output = process.output
 
         if process.returncode != 0:
             raise RuntimeError(
@@ -147,6 +158,11 @@ class WritableExecutionAdapter:
                     "Writable agent execution "
                     "failed."
                 )
+            )
+
+        if progress is not None:
+            progress(
+                "Refreshing task state..."
             )
 
         updated = self.control.get_tasks(
@@ -164,6 +180,11 @@ class WritableExecutionAdapter:
             root,
             task_id,
         )
+
+        if progress is not None:
+            progress(
+                "Execution result loaded."
+            )
 
         stdout_provider = self._output_field(
             output,
