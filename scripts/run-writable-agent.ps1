@@ -21,6 +21,14 @@ function Read-Field {
     return ""
 }
 
+function Read-Section {
+    param([string]$Content,[string]$Section)
+    $pattern = "(?ms)^## " + [regex]::Escape($Section) + "\s*\r?\n\s*\r?\n(.+?)(?:\r?\n\r?\n---|\r?\n\r?\n##|\z)"
+    if ($Content -match $pattern) { return $Matches[1].Trim() }
+    return ""
+}
+
+
 function Write-Utf8NoBom {
     param([string]$Path,[string]$Value)
     [System.IO.File]::WriteAllText($Path,$Value,(New-Object System.Text.UTF8Encoding($false)))
@@ -481,7 +489,20 @@ elseif ($null -ne $config -and $null -ne $config.context_max_chars) {
     $maxChars = [Math]::Min([int]$config.context_max_chars,120000)
 }
 
-$requiredFiles = @(& $requiredResolverPath -ProjectPath $workspace -SourceText @($taskText,$dispatchText) -PolicyPath $policyPath)
+$requiredSourceText = @(
+    (Read-Section -Content $taskText -Section "Objective"),
+    (Read-Section -Content $taskText -Section "Context"),
+    (Read-Section -Content $taskText -Section "Requirements"),
+    (Read-Section -Content $taskText -Section "Acceptance Criteria"),
+    (Read-Section -Content $taskText -Section "Testing Requirements"),
+    (Read-Section -Content $dispatchText -Section "Objective"),
+    (Read-Section -Content $dispatchText -Section "Context"),
+    (Read-Section -Content $dispatchText -Section "Expected Output"),
+    (Read-Section -Content $dispatchText -Section "Acceptance Criteria"),
+    (Read-Section -Content $dispatchText -Section "Testing Requirements")
+) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
+$requiredFiles = @(& $requiredResolverPath -ProjectPath $workspace -SourceText $requiredSourceText -PolicyPath $policyPath)
 
 if ($requiredFiles.Count -gt 0) {
     Write-Host ("Writable required files: " + ($requiredFiles -join ", ")) -ForegroundColor DarkGray
