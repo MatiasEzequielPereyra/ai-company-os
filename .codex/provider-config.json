@@ -15,7 +15,7 @@
     "Gemini"
   ],
   "writable_models": {
-    "OpenRouter": "openrouter/free",
+    "OpenRouter": "qwen/qwen3.8-27b:free",
     "Gemini": "gemini-3.5-flash-lite"
   },
   "writable_context_max_chars": 120000
