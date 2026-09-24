@@ -148,7 +148,9 @@ param(
     [string]$Context,
     [string]$SchemaPath,
     [string]$OutputPath,
-    [string]$Model
+    [string]$Model,
+    [string]$Role = "",
+    [string]$Workload = "general"
 )
 $source = Join-Path (Split-Path -Parent $PSScriptRoot) ".codex\fake-writable-result.json"
 Copy-Item $source $OutputPath -Force
