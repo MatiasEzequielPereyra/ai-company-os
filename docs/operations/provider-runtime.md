@@ -6,7 +6,7 @@ AI Company OS routes all model execution through `scripts/provider-router.ps1`. 
 
 | Provider | Authentication | Default model | Cost behavior |
 | --- | --- | --- | --- |
-| Ollama | none for local runtime | `llama3.1:8b` | local compute, no per-token API billing |
+| Ollama | none for local runtime | hardware/role-selected; `llama3.1:8b` is the low-resource baseline | local compute, no per-token API billing |
 | OpenRouter | `OPENROUTER_API_KEY` | `openrouter/free` | free route by default |
 | Gemini | `GEMINI_API_KEY` | `gemini-3.5-flash-lite` | provider quota/tier applies |
 | DeepSeek | `DEEPSEEK_API_KEY` | `deepseek-flash` | paid API |
@@ -32,11 +32,23 @@ ollama list
 Invoke-RestMethod http://localhost:11434/api/tags
 ```
 
-The default local model is `llama3.1:8b`, chosen as the practical local baseline for CPU/shared-memory machines. The adapter currently requests a 16K runtime context and bounds repository context to keep local inference practical. Install the default model if needed:
+Ollama is hardware-aware. AI Company OS detects RAM, CPU, discrete GPU/VRAM, installed Ollama models, and a local capability profile before selecting a model and inference budget. `llama3.1:8b` remains the low-resource baseline, while stronger machines can automatically select a larger installed model for technical roles.
+
+Initialize and benchmark a machine:
+
+```powershell
+.\scripts\local-runtime\initialize-local-runtime.ps1
+```
+
+This writes machine-local capability/benchmark data under `.codex/runtime/` (already ignored by Git). The benchmark only considers installed models that fit the detected safe model-size profile unless an operator explicitly overrides the safety guard.
+
+Install a baseline model if needed:
 
 ```powershell
 ollama pull llama3.1:8b
 ```
+
+For coding-oriented machines, additional installed models such as `qwen2.5-coder:14b` can be selected automatically when the hardware profile safely supports them. AI Company OS never auto-pulls models.
 
 Use another Ollama server by setting:
 
@@ -55,6 +67,14 @@ Override the model:
 ```powershell
 .\scripts\run-agent-task.ps1 -Id AICO-XXX -Provider Ollama -Model "llama3.1:8b"
 ```
+
+Explicit overrides are still checked against the detected safe model size. To deliberately bypass that guard for diagnostics:
+
+```powershell
+$env:AICO_OLLAMA_ALLOW_OVERSIZE = "1"
+```
+
+Use that override only when you knowingly want to test a model that may spill heavily into system RAM or time out.
 
 ## DeepSeek
 
@@ -108,10 +128,11 @@ Keep this disabled when the goal is to prevent accidental API spend.
 
 ## Validation
 
-Run the runtime contract test:
+Run the runtime contract tests:
 
 ```powershell
 .\test-project\tests\test-agent-runtime-contract.ps1
+.\test-project\tests\test-local-runtime-profile.ps1
 ```
 
 Run the complete suite:
