@@ -9,6 +9,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from company_os.application.provider_service import ProviderService
+from company_os.application.process_stream import (
+    ProgressCallback,
+    run_streamed_process,
+)
 
 from company_os.repository.task_repository import TaskRepository
 
@@ -243,6 +247,7 @@ class AgentControlService:
         allowed_task_ids: list[str],
         provider: str = "Auto",
         model: str = "",
+        progress: ProgressCallback | None = None,
     ) -> AgentRunResult:
         root = Path(project_root).resolve()
         allowed = set(allowed_task_ids)
@@ -320,10 +325,20 @@ class AgentControlService:
                 "-Parallel"
             )
 
+        if progress is not None:
+            progress(
+                "Running analysis for "
+                + ", ".join(selected)
+            )
+            progress(
+                f"Provider requested: {provider}"
+            )
+
         output = self._run_script(
             script,
             args,
             timeout=1800,
+            progress=progress,
         )
 
         self._sync_state(root)
@@ -563,6 +578,7 @@ class AgentControlService:
         script: Path,
         arguments: list[str],
         timeout: int,
+        progress: ProgressCallback | None = None,
     ) -> str:
         if not script.exists():
             raise FileNotFoundError(
@@ -596,22 +612,14 @@ class AgentControlService:
             )
         )
 
-        process = subprocess.run(
+        process = run_streamed_process(
             command,
-            capture_output=True,
-            text=True,
             timeout=timeout,
             env=environment,
+            on_line=progress,
         )
 
-        output = (
-            (process.stdout or "")
-            + (
-                "\n" + process.stderr
-                if process.stderr
-                else ""
-            )
-        ).strip()
+        output = process.output
 
         if process.returncode != 0:
             raise RuntimeError(
