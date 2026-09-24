@@ -296,12 +296,13 @@ if (Test-Path $SyncScript) {
     & $SyncScript -TasksPath (Join-Path $ProjectPath "tasks") -SprintPath $CurrentSprintPath | Out-Null
 }
 
-$managedManifestPath = Join-Path $ProjectPath ".codex\managed-files.json"
+$resolvedProjectPath = (Resolve-Path $ProjectPath).Path
+$managedManifestPath = Join-Path $resolvedProjectPath ".codex\managed-files.json"
 $managedFiles = @(
-    Get-ChildItem $ProjectPath -File -Recurse -Force |
+    Get-ChildItem $resolvedProjectPath -File -Recurse -Force |
         Where-Object { $_.FullName -ne $managedManifestPath } |
         ForEach-Object {
-            $_.FullName.Substring($ProjectPath.Length + 1).Replace("\","/")
+            $_.FullName.Substring($resolvedProjectPath.Length + 1).Replace("\","/")
         }
 )
 $managedFiles += ".codex/managed-files.json"
