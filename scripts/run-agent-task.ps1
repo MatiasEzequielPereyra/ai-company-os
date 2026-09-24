@@ -2,7 +2,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Id,
     [string]$ProjectPath = ".",
-    [ValidateSet("Auto","Codex","OpenRouter","Gemini")]
+    [ValidateSet("Auto","Codex","OpenRouter","Gemini","Ollama","DeepSeek","Grok")]
     [string]$Provider = "Auto",
     [string]$Model = "",
     [ValidateSet("Auto","ChatGPT","ApiKey")]
@@ -28,7 +28,7 @@ if ($PSBoundParameters.ContainsKey("AuthMode") -and -not $PSBoundParameters.Cont
         $Provider = "Codex"
     }
     elseif ($AuthMode -eq "ApiKey") {
-        throw "Legacy -AuthMode ApiKey is disabled to prevent accidental OpenAI API spend. Use -Provider OpenRouter or -Provider Gemini for free-tier providers."
+        throw "Legacy -AuthMode ApiKey is disabled to prevent accidental OpenAI API spend. Select an explicit provider such as OpenRouter, Gemini, Ollama, DeepSeek, or Grok."
     }
 }
 
@@ -48,6 +48,7 @@ $rolePath = Join-Path $root (".codex\agents\" + $owner + ".md")
 $schemaPath = Join-Path $root "schemas\agent-result.schema.json"
 $routerPath = Join-Path $PSScriptRoot "provider-router.ps1"
 $contextBuilderPath = Join-Path $PSScriptRoot "build-agent-context.ps1"
+$localResolverPath = Join-Path $PSScriptRoot "local-runtime\resolve-local-runtime.ps1"
 
 if (-not (Test-Path $dispatchPath)) { throw "Dispatch packet not found: $dispatchPath" }
 if (-not (Test-Path $rolePath)) { throw "Role instructions not found: $rolePath" }
@@ -92,14 +93,33 @@ $promptLines = @(
 )
 $prompt = $promptLines -join [Environment]::NewLine
 
-$context = ""
-$needsExternalContext = ($Provider -eq "OpenRouter" -or $Provider -eq "Gemini")
-if ($Provider -eq "Auto" -and (
-    -not [string]::IsNullOrWhiteSpace($env:OPENROUTER_API_KEY) -or
-    -not [string]::IsNullOrWhiteSpace($env:GEMINI_API_KEY)
-)) {
-    $needsExternalContext = $true
+$localRuntime = $null
+if ($Provider -in @("Auto","Ollama") -and (Test-Path $localResolverPath -PathType Leaf)) {
+    $localArgs = @{
+        ProjectPath = $root
+        Role = $owner
+        Workload = "analysis"
+    }
+
+    if ($Provider -eq "Ollama" -and -not [string]::IsNullOrWhiteSpace($Model)) {
+        $localArgs.ModelOverride = $Model
+    }
+
+    $localRuntime = & $localResolverPath @localArgs
+    if ($Provider -eq "Ollama" -and -not [bool]$localRuntime.Available) {
+        throw ("Ollama local runtime unavailable: " + [string]$localRuntime.Reason)
+    }
+
+    if ([bool]$localRuntime.Available) {
+        Write-Host ("Local runtime: " + $localRuntime.Profile + " -> " + $localRuntime.Model) -ForegroundColor DarkGray
+    }
 }
+
+$context = ""
+# Codex can inspect the repository directly. Every other provider, including
+# local Ollama, requires the bounded Repository Context Pack. Auto always builds
+# it because the selected fallback provider is not known until routing time.
+$needsExternalContext = ($Provider -ne "Codex")
 
 if ($needsExternalContext) {
     if (-not (Test-Path $contextBuilderPath)) { throw "Context builder not found: $contextBuilderPath" }
@@ -111,6 +131,16 @@ if ($needsExternalContext) {
             $providerConfig = Get-Content $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
             if ($null -ne $providerConfig.context_max_chars) {
                 $maxChars = [int]$providerConfig.context_max_chars
+            }
+
+            if ($null -ne $localRuntime -and [bool]$localRuntime.Available) {
+                $maxChars = [Math]::Min($maxChars,[int]$localRuntime.ContextMaxChars)
+            }
+            elseif (
+                $Provider -eq "Ollama" -and
+                $null -ne $providerConfig.ollama_context_max_chars
+            ) {
+                $maxChars = [Math]::Min($maxChars,[int]$providerConfig.ollama_context_max_chars)
             }
         }
         catch {
@@ -126,7 +156,7 @@ if ($needsExternalContext) {
 Write-Host "Running agent: $owner -> $Id" -ForegroundColor Cyan
 Write-Host "Provider mode: $Provider" -ForegroundColor DarkGray
 
-$execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $jsonPath -Model $Model
+$execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $jsonPath -Model $Model -Role $owner -Workload "analysis"
 
 if (-not (Test-Path $jsonPath)) { throw "Provider runtime did not produce structured output: $jsonPath" }
 
