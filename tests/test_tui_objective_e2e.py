@@ -556,7 +556,7 @@ def test_objective_to_done_is_operated_from_tui(
                 assert any(
                     value == "REVIEW"
                     for value in statuses.values()
-                )
+                ), control.last_error_text
 
                 await pilot.press("g")
                 await wait_idle(
