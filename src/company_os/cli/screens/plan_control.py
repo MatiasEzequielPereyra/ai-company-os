@@ -27,6 +27,9 @@ from company_os.application.corrective_reactivation_service import CorrectiveRea
 from company_os.application.gate_control_service import (
     GateControlService,
 )
+from company_os.application.task_result_service import (
+    TaskResultService,
+)
 
 
 class PlanControlScreen(Screen):
@@ -34,7 +37,8 @@ class PlanControlScreen(Screen):
         Binding("escape", "back", "Back"),
         Binding("a", "activate", "Activate"),
         Binding("r", "run_agents", "Analysis agent"),
-        Binding("w", "prepare_writable", "Writable workspace"),
+        Binding("w", "prepare_writable", "Writable implementation"),
+        Binding("u", "unblock", "Retry blocked"),
         Binding("g", "run_gates", "Run gates"),
         Binding("f", "finalize", "Final approval"),
         Binding("f5", "refresh_tasks", "Refresh"),
@@ -56,6 +60,7 @@ class PlanControlScreen(Screen):
         self.writable = WritableWorkspaceService()
         self.writable_runner = WritableExecutionAdapter()
         self.corrective = CorrectiveReactivationService()
+        self.results = TaskResultService()
 
         self.busy = False
         self.last_error_text = ""
@@ -244,15 +249,18 @@ class PlanControlScreen(Screen):
         if self.busy:
             return
 
-        active = [
+        writable_ids = [
             task.id
             for task in self._tasks()
-            if task.status == "ACTIVE"
+            if task.status in {
+                "READY",
+                "ACTIVE",
+            }
         ]
 
-        if not active:
+        if not writable_ids:
             self.notify(
-                "No ACTIVE tasks are available "
+                "No READY/ACTIVE tasks are available "
                 "for writable execution.",
                 severity="warning",
             )
@@ -262,7 +270,7 @@ class PlanControlScreen(Screen):
 
         self._working(
             "Preparing isolated Git worktrees:\n\n"
-            + "\n".join(active),
+            + "\n".join(writable_ids),
             "WRITABLE WORKSPACES",
         )
 
@@ -372,6 +380,71 @@ class PlanControlScreen(Screen):
                             ]
                         )
 
+                    if execution.changed_paths:
+                        details.extend(
+                            [
+                                "",
+                                "Changed paths:",
+                                *[
+                                    f"- {path}"
+                                    for path in execution.changed_paths
+                                ],
+                            ]
+                        )
+
+                    if execution.verification:
+                        details.extend(
+                            [
+                                "",
+                                "Verification:",
+                                execution.verification,
+                            ]
+                        )
+
+                    if execution.result_path:
+                        details.extend(
+                            [
+                                "",
+                                "Result artifact:",
+                                execution.result_path,
+                            ]
+                        )
+
+                    if execution.evidence_path:
+                        details.extend(
+                            [
+                                "",
+                                "Evidence artifact:",
+                                execution.evidence_path,
+                            ]
+                        )
+
+                    if execution.diff_stat:
+                        details.extend(
+                            [
+                                "",
+                                "Git diff stat:",
+                                execution.diff_stat,
+                            ]
+                        )
+
+                    if execution.diff_text:
+                        preview = execution.diff_text
+
+                        if len(preview) > 12000:
+                            preview = (
+                                preview[:12000]
+                                + "\n[DIFF PREVIEW TRUNCATED]"
+                            )
+
+                        details.extend(
+                            [
+                                "",
+                                "Git diff preview:",
+                                preview,
+                            ]
+                        )
+
                     lines.append(
                         "\n".join(details)
                     )
@@ -432,6 +505,62 @@ class PlanControlScreen(Screen):
         else:
             self.notify(
                 "Writable execution finished."
+            )
+
+    def action_unblock(self) -> None:
+        if self.busy:
+            return
+
+        blocked = [
+            task.id
+            for task in self._tasks()
+            if task.status == "BLOCKED"
+        ]
+
+        if not blocked:
+            self.notify(
+                "No BLOCKED tasks are available for retry.",
+                severity="warning",
+            )
+            return
+
+        self.busy = True
+
+        self._working(
+            "Returning reviewed blockers to READY:\n\n"
+            + "\n".join(blocked),
+            "BLOCKED RECOVERY",
+        )
+
+        self.unblock_worker()
+
+    @work(
+        thread=True,
+        exclusive=True,
+        group="unblock-plan",
+        exit_on_error=False,
+    )
+    def unblock_worker(self) -> None:
+        try:
+            result = self.corrective.unblock(
+                self.plan_data.project_root,
+                self._task_ids(),
+            )
+
+            self.app.call_from_thread(
+                self._operation_finished,
+                "Ready for retry: "
+                + (
+                    ", ".join(result.task_ids)
+                    or "none"
+                ),
+            )
+
+        except Exception as exc:
+            self.app.call_from_thread(
+                self._operation_failed,
+                "BLOCKED recovery failed",
+                str(exc),
             )
 
     def action_run_gates(self) -> None:
@@ -690,6 +819,7 @@ class PlanControlScreen(Screen):
         table.add_column("Status")
         table.add_column("Owner")
         table.add_column("Task")
+        table.add_column("Retry / Evidence")
 
         for task in tasks:
             status = task.status
@@ -697,11 +827,26 @@ class PlanControlScreen(Screen):
             if task.id in finalizable:
                 status += " / FINAL READY"
 
+            details = self.results.read_latest(
+                self.plan_data.project_root,
+                task.id,
+            )
+
+            indicator = details.retry_reason
+
+            if (
+                not indicator
+                and task.status == "BLOCKED"
+                and details.blockers
+            ):
+                indicator = details.blockers
+
             table.add_row(
                 task.id,
                 status,
                 task.owner,
                 task.title,
+                indicator or "-",
             )
 
         counts: dict[str, int] = {}
@@ -763,8 +908,24 @@ class PlanControlScreen(Screen):
             controls.append(
                 "R = Run analysis-only agent"
             )
+
+        if any(
+            task.status in {
+                "READY",
+                "ACTIVE",
+            }
+            for task in tasks
+        ):
             controls.append(
-                "W = Run writable implementation"
+                "W = Run writable implementation / retry"
+            )
+
+        if any(
+            task.status == "BLOCKED"
+            for task in tasks
+        ):
+            controls.append(
+                "U = Review blocker -> READY"
             )
 
         pending_gates = False
@@ -835,6 +996,10 @@ class PlanControlScreen(Screen):
                     "REVIEW -> QA\n"
                     "QA -> SECURITY\n"
                     "SECURITY -> DONE\n\n"
+                    "Retry paths:\n"
+                    "CHANGES_REQUIRED / QA FAIL / SECURITY FAIL "
+                    "-> READY -> W\n"
+                    "BLOCKED -> U -> READY -> W\n\n"
                     "When a wave reaches DONE, press A "
                     "again to activate newly eligible "
                     "dependent tasks.",
