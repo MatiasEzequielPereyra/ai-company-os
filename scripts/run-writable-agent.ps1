@@ -472,9 +472,12 @@ $taskText = Get-Content $taskPath -Raw -Encoding UTF8
 $dispatchText = Get-Content $dispatchPath -Raw -Encoding UTF8
 $roleText = Get-Content $rolePath -Raw -Encoding UTF8
 
-$maxChars = 320000
-if ($null -ne $config -and $null -ne $config.context_max_chars) {
-    $maxChars = [int]$config.context_max_chars
+$maxChars = 120000
+if ($null -ne $config -and $null -ne $config.writable_context_max_chars) {
+    $maxChars = [int]$config.writable_context_max_chars
+}
+elseif ($null -ne $config -and $null -ne $config.context_max_chars) {
+    $maxChars = [Math]::Min([int]$config.context_max_chars,120000)
 }
 
 Write-Host "Building writable repository context from isolated worktree..." -ForegroundColor DarkGray
