@@ -19,6 +19,14 @@ try {
     Write-NoBom (Join-Path $tempRoot "src\other.ts") "export const other = true;"
     Write-NoBom (Join-Path $tempRoot ".env") "SECRET_VALUE=must-not-leak"
 
+    & git -C $tempRoot init | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "git init failed for writable context fixture." }
+    & git -C $tempRoot config user.email "aico-test@example.invalid"
+    & git -C $tempRoot config user.name "AI Company OS Test"
+    & git -C $tempRoot add .
+    & git -C $tempRoot commit -m "fixture" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "fixture commit failed." }
+
     $resolver = Join-Path $repoRoot "scripts\resolve-writable-required-files.ps1"
     $builder = Join-Path $repoRoot "scripts\build-agent-context.ps1"
     $policy = Join-Path $repoRoot ".codex\writable-policy.json"
@@ -79,6 +87,14 @@ try {
     $ambiguousRoot = Join-Path $tempRoot "ambiguous"
     Write-NoBom (Join-Path $ambiguousRoot "a\index.html") "A"
     Write-NoBom (Join-Path $ambiguousRoot "b\index.html") "B"
+
+    & git -C $ambiguousRoot init | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "git init failed for ambiguous fixture." }
+    & git -C $ambiguousRoot config user.email "aico-test@example.invalid"
+    & git -C $ambiguousRoot config user.name "AI Company OS Test"
+    & git -C $ambiguousRoot add .
+    & git -C $ambiguousRoot commit -m "ambiguous fixture" | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "ambiguous fixture commit failed." }
 
     $ambiguousBlocked = $false
     try {
