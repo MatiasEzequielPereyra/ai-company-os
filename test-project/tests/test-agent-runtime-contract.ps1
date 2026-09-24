@@ -10,6 +10,7 @@ $required = @(
     "scripts\run-writable-agent.ps1",
     "scripts\provider-router.ps1",
     "scripts\build-agent-context.ps1",
+    "scripts\resolve-writable-required-files.ps1",
     "scripts\providers\invoke-codex.ps1",
     "scripts\providers\invoke-openrouter.ps1",
     "scripts\providers\invoke-gemini.ps1",
@@ -119,6 +120,12 @@ if ($writableRunner -notmatch 'symlink/junction/reparse point') {
 if ($writableRunner -notmatch 'submit-task-result\.ps1') {
     throw "Writable runner must reuse the canonical Result Intake Engine"
 }
+if ($writableRunner -notmatch 'resolve-writable-required-files\.ps1') {
+    throw "Writable runner must resolve explicit task/dispatch file requirements before provider execution"
+}
+if ($writableRunner -notmatch '-RequiredFiles') {
+    throw "Writable runner must pass resolved required files into the context builder"
+}
 
 $writableSchema = Get-Content (Join-Path $repoRoot "schemas\writable-change-set.schema.json") -Raw -Encoding UTF8 | ConvertFrom-Json
 foreach ($field in @("outcome","summary","report_markdown","changes","verification_commands","verification","decisions","blockers","recommended_next")) {
@@ -136,6 +143,12 @@ if (@($writablePolicy.protected_path_prefixes) -notcontains ".git") {
 }
 if (@($writablePolicy.secret_name_patterns).Count -lt 1) {
     throw "Writable policy must define secret-path rejection patterns"
+}
+if ([int]$writablePolicy.required_context_max_files -lt 1) {
+    throw "Writable policy must bound explicit required context file count"
+}
+if ([long]$writablePolicy.required_context_max_total_bytes -lt 1) {
+    throw "Writable policy must bound explicit required context total size"
 }
 
 $gateBatch = Get-Content (Join-Path $repoRoot "scripts\run-pending-gates.ps1") -Raw
@@ -209,6 +222,13 @@ if ($gemini -notmatch 'responseJsonSchema') {
 $contextBuilder = Get-Content (Join-Path $repoRoot "scripts\build-agent-context.ps1") -Raw
 if ($contextBuilder -notmatch '\.env') { throw "Context builder must explicitly exclude environment files" }
 if (-not $contextBuilder.Contains("private[-_]?key")) { throw "Context builder must exclude private-key files" }
+if ($contextBuilder -notmatch 'RequiredFiles') { throw "Context builder must support prioritized required files" }
+if ($contextBuilder -notmatch 'RequireComplete') { throw "Required context files must not be silently truncated" }
+
+$requiredResolver = Get-Content (Join-Path $repoRoot "scripts\resolve-writable-required-files.ps1") -Raw
+if ($requiredResolver -notmatch 'ambiguous') { throw "Required-file resolver must reject ambiguous basenames" }
+if ($requiredResolver -notmatch 'secret-sensitive') { throw "Required-file resolver must reject secret-sensitive required files" }
+if ($requiredResolver -notmatch 'reparse point') { throw "Required-file resolver must reject reparse-point escapes" }
 
 $parseTargets = @(
     "scripts\run-agent-task.ps1",
