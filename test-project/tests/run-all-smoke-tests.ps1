@@ -21,6 +21,7 @@ $tests = @(
     "test-canonical-contracts.ps1",
     "test-provider-router-contract.ps1",
     "test-agent-workspace-isolation.ps1",
+    "test-writable-agent-runtime.ps1",
     "test-workflow-profiles.ps1",
     "test-end-to-end-code-change.ps1",
     "test-engineering-backlog-materializer.ps1",
