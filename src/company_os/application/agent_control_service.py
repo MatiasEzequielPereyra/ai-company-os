@@ -549,20 +549,9 @@ class AgentControlService:
             *arguments,
         ]
 
-        environment = os.environ.copy()
-
         providers = ProviderService()
-
-        environment.update(
-            providers.build_environment(
-                "OpenRouter"
-            )
-        )
-
-        environment.update(
-            providers.build_environment(
-                "Gemini"
-            )
+        environment = (
+            providers.build_environment_all()
         )
 
         process = subprocess.run(
