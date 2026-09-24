@@ -4,7 +4,10 @@ from rich.panel import Panel
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, VerticalScroll
+from textual.containers import (
+    Horizontal,
+    VerticalScroll,
+)
 from textual.screen import Screen
 from textual.widgets import (
     Footer,
@@ -15,6 +18,7 @@ from textual.widgets import (
     Static,
 )
 
+from company_os.cli.widgets import CircularListView
 from company_os.cli.i18n import (
     HELP_SECTION_IDS,
     help_section_content,
@@ -27,7 +31,17 @@ class HelpScreen(Screen):
         Binding(
             "escape",
             "back",
-            "Volver / Back",
+            "Atras / Back",
+        ),
+        Binding(
+            "left",
+            "back",
+            "Atras / Back",
+        ),
+        Binding(
+            "right",
+            "open_current",
+            "Abrir / Open",
         ),
     ]
 
@@ -57,11 +71,18 @@ class HelpScreen(Screen):
     }
     """
 
+    def __init__(
+        self,
+        initial_section: str = "getting-started",
+    ) -> None:
+        super().__init__()
+        self.initial_section = initial_section
+
     def compose(self) -> ComposeResult:
         yield Header()
 
         with Horizontal(id="help-main"):
-            yield ListView(
+            yield CircularListView(
                 *[
                     ListItem(
                         Label(
@@ -93,13 +114,48 @@ class HelpScreen(Screen):
             ListView,
         )
 
-        section_list.index = 0
+        index = 0
+
+        if self.initial_section in HELP_SECTION_IDS:
+            index = HELP_SECTION_IDS.index(
+                self.initial_section
+            )
+
+        section_list.index = index
         section_list.focus()
 
-        self._show_section(0)
+        self._show_section(index)
 
     def action_back(self) -> None:
         self.app.pop_screen()
+
+    def action_open_current(self) -> None:
+        section_list = self.query_one(
+            "#help-sections",
+            ListView,
+        )
+
+        index = section_list.index
+
+        if index is None:
+            return
+
+        self._show_section(index)
+
+    def on_list_view_highlighted(
+        self,
+        event: ListView.Highlighted,
+    ) -> None:
+        if event.list_view.id != "help-sections":
+            return
+
+        index = event.list_view.index
+
+        if index is None:
+            return
+
+        # Preview immediately while navigating.
+        self._show_section(index)
 
     def on_list_view_selected(
         self,

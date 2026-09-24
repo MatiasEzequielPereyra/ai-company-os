@@ -21,24 +21,39 @@ from textual.widgets import (
 from company_os.application.agent_control_service import (
     AgentControlService,
 )
+from company_os.application.task_result_service import (
+    TaskResultService,
+)
 from company_os.application.writable_workspace_service import WritableWorkspaceService
 from company_os.application.writable_execution_adapter import WritableExecutionAdapter
 from company_os.application.corrective_reactivation_service import CorrectiveReactivationService
+from company_os.cli.i18n import ui_text
 from company_os.application.gate_control_service import (
     GateControlService,
 )
 
 
+def _t(widget, key: str) -> str:
+    return ui_text(
+        getattr(
+            widget.app,
+            "language",
+            "es",
+        ),
+        key,
+    )
+
+
 class PlanControlScreen(Screen):
     BINDINGS = [
-        Binding("escape", "back", "Back"),
-        Binding("a", "activate", "Activate"),
-        Binding("r", "run_agents", "Analysis agent"),
-        Binding("w", "prepare_writable", "Writable workspace"),
-        Binding("g", "run_gates", "Run gates"),
-        Binding("f", "finalize", "Final approval"),
-        Binding("f5", "refresh_tasks", "Refresh"),
-        Binding("c", "copy_error", "Copy error"),
+        Binding("escape", "back", "Atras / Back"),
+        Binding("a", "activate", "Activar / Activate"),
+        Binding("r", "run_agents", "Analisis / Analysis"),
+        Binding("w", "prepare_writable", "Writable"),
+        Binding("g", "run_gates", "Gates"),
+        Binding("f", "finalize", "Aprobacion / Approval"),
+        Binding("f5", "refresh_tasks", "Actualizar / Refresh"),
+        Binding("c", "copy_error", "Copiar / Copy"),
     ]
 
     def __init__(
@@ -52,6 +67,7 @@ class PlanControlScreen(Screen):
         self.preparation_result = preparation_result
 
         self.control = AgentControlService()
+        self.task_results = TaskResultService()
         self.gates = GateControlService()
         self.writable = WritableWorkspaceService()
         self.writable_runner = WritableExecutionAdapter()
@@ -73,10 +89,14 @@ class PlanControlScreen(Screen):
     def on_mount(self) -> None:
         self._refresh_view()
 
+    def refresh_language(self) -> None:
+        if not self.busy:
+            self._refresh_view()
+
     def action_back(self) -> None:
         if self.busy:
             self.notify(
-                "An operation is currently running.",
+                _t(self, "pc_busy"),
                 severity="warning",
             )
             return
@@ -117,7 +137,7 @@ class PlanControlScreen(Screen):
                 self._refresh_view()
 
                 self.notify(
-                    "Reactivated: "
+                    f"{_t(self, 'pc_reactivated')}: "
                     + ", ".join(
                         result.task_ids
                     )
@@ -133,15 +153,14 @@ class PlanControlScreen(Screen):
             for task in self._tasks()
         ):
             self.notify(
-                "No BACKLOG/READY tasks from this plan.",
+                _t(self, "pc_no_backlog_ready"),
                 severity="warning",
             )
             return
 
         self.busy = True
         self._working(
-            "Evaluating scoped readiness and "
-            "activating eligible tasks...",
+            _t(self, "pc_evaluating"),
             "ACTIVATE",
         )
 
@@ -163,12 +182,12 @@ class PlanControlScreen(Screen):
             self.app.call_from_thread(
                 self._operation_finished,
                 (
-                    "Activated: "
+                    f"{_t(self, 'pc_activated')}: "
                     + (
                         ", ".join(
                             result.active_task_ids
                         )
-                        or "none"
+                        or _t(self, "pc_none")
                     )
                 ),
             )
@@ -176,7 +195,7 @@ class PlanControlScreen(Screen):
         except Exception as exc:
             self.app.call_from_thread(
                 self._operation_failed,
-                "ACTIVATE failed",
+                _t(self, "pc_activate_failed"),
                 str(exc),
             )
 
@@ -192,7 +211,7 @@ class PlanControlScreen(Screen):
 
         if not active:
             self.notify(
-                "No ACTIVE tasks from this plan.",
+                _t(self, "pc_no_active_analysis"),
                 severity="warning",
             )
             return
@@ -200,10 +219,11 @@ class PlanControlScreen(Screen):
         self.busy = True
 
         self._working(
-            "Running ACTIVE agents:\n\n"
+            _t(self, "pc_running_agents")
+            + ":\n\n"
             + "\n".join(active)
             + "\n\nProvider: Auto",
-            "RUN AGENTS",
+            _t(self, "pc_run_agents_title"),
         )
 
         self.run_agents_worker()
@@ -227,7 +247,7 @@ class PlanControlScreen(Screen):
 
             self.app.call_from_thread(
                 self._operation_finished,
-                "Agent batch finished: "
+                f"{_t(self, 'pc_agent_batch_finished')}: "
                 + ", ".join(
                     result.task_ids
                 ),
@@ -236,7 +256,7 @@ class PlanControlScreen(Screen):
         except Exception as exc:
             self.app.call_from_thread(
                 self._operation_failed,
-                "Agent execution failed",
+                _t(self, "pc_agent_execution_failed"),
                 str(exc),
             )
 
@@ -252,8 +272,7 @@ class PlanControlScreen(Screen):
 
         if not active:
             self.notify(
-                "No ACTIVE tasks are available "
-                "for writable execution.",
+                _t(self, "pc_no_active_writable"),
                 severity="warning",
             )
             return
@@ -261,9 +280,10 @@ class PlanControlScreen(Screen):
         self.busy = True
 
         self._working(
-            "Preparing isolated Git worktrees:\n\n"
+            _t(self, "pc_preparing_worktrees")
+            + ":\n\n"
             + "\n".join(active),
-            "WRITABLE WORKSPACES",
+            _t(self, "pc_writable_workspaces"),
         )
 
         self.prepare_writable_worker()
@@ -299,7 +319,11 @@ class PlanControlScreen(Screen):
 
             if result.runner_available:
                 lines.append(
-                    "\nWritable runner: AVAILABLE"
+                    "\n"
+                    + _t(
+                        self,
+                        "pc_writable_runner_available",
+                    )
                 )
 
                 for workspace in result.workspaces:
@@ -314,33 +338,35 @@ class PlanControlScreen(Screen):
 
                     if execution.status == "REVIEW":
                         heading = (
-                            "IMPLEMENTATION COMPLETE"
+                            _t(self, "pc_implementation_complete")
                         )
                     elif execution.status == "BLOCKED":
                         heading = (
-                            "WRITABLE EXECUTION BLOCKED"
+                            _t(self, "pc_writable_blocked")
                         )
                         blocked_execution = True
                     elif execution.status == "ACTIVE":
                         heading = (
-                            "EXECUTION FINISHED - "
-                            "STATE UNCHANGED"
+                            _t(
+                                self,
+                                "pc_execution_unchanged",
+                            )
                         )
                     else:
                         heading = (
-                            "WRITABLE EXECUTION FINISHED "
+                            f"{_t(self, 'pc_writable_finished')} "
                             f"- {execution.status}"
                         )
 
                     details = [
                         f"\n{heading}",
                         f"Task: {execution.task_id}",
-                        f"Provider: {execution.provider}",
-                        f"Model: {execution.model}",
+                        f"{_t(self, 'pc_provider')}: {execution.provider}",
+                        f"{_t(self, 'pc_model')}: {execution.model}",
                         f"Status: {execution.status}",
-                        f"Outcome: {execution.outcome}",
+                        f"{_t(self, 'pc_outcome')}: {execution.outcome}",
                         (
-                            "Worktree: "
+                            f"{_t(self, 'pc_worktree')}: "
                             f"{execution.workspace_path}"
                         ),
                     ]
@@ -349,7 +375,7 @@ class PlanControlScreen(Screen):
                         details.extend(
                             [
                                 "",
-                                "Summary:",
+                                f"{_t(self, 'pc_summary')}:",
                                 execution.summary,
                             ]
                         )
@@ -358,7 +384,7 @@ class PlanControlScreen(Screen):
                         details.extend(
                             [
                                 "",
-                                "Blocker:",
+                                f"{_t(self, 'pc_blocker')}:",
                                 execution.blockers,
                             ]
                         )
@@ -367,7 +393,7 @@ class PlanControlScreen(Screen):
                         details.extend(
                             [
                                 "",
-                                "Recommended next:",
+                                f"{_t(self, 'pc_recommended_next')}:",
                                 execution.recommended_next,
                             ]
                         )
@@ -378,10 +404,11 @@ class PlanControlScreen(Screen):
 
             else:
                 lines.append(
-                    "\nWritable runner: NOT INSTALLED\n"
-                    "The workspace is ready, but the "
-                    "engine cannot execute code-writing "
-                    "agents yet."
+                    "\n"
+                    + _t(
+                        self,
+                        "pc_writable_runner_missing",
+                    )
                 )
 
             self.app.call_from_thread(
@@ -393,7 +420,7 @@ class PlanControlScreen(Screen):
         except Exception as exc:
             self.app.call_from_thread(
                 self._operation_failed,
-                "Writable execution failed",
+                _t(self, "pc_writable_failed"),
                 str(exc),
             )
 
@@ -407,12 +434,17 @@ class PlanControlScreen(Screen):
         if blocked:
             self.last_error_text = message
             footer = (
-                "\n\nC = Copy details"
-                "\nF5 = Return to plan"
+                "\n\n"
+                + _t(self, "pc_copy_details")
+                + "\n"
+                + _t(self, "pc_return_plan")
             )
         else:
             self.last_error_text = ""
-            footer = "\n\nF5 = Return to plan"
+            footer = (
+                "\n\n"
+                + _t(self, "pc_return_plan")
+            )
 
         self.query_one(
             "#plan-control-content",
@@ -420,18 +452,18 @@ class PlanControlScreen(Screen):
         ).update(
             Panel(
                 message + footer,
-                title="Writable Execution",
+                title=_t(self, "pc_writable_title"),
             )
         )
 
         if blocked:
             self.notify(
-                "Writable execution is BLOCKED.",
+                _t(self, "pc_writable_blocked_notify"),
                 severity="warning",
             )
         else:
             self.notify(
-                "Writable execution finished."
+                _t(self, "pc_writable_finished_notify")
             )
 
     def action_run_gates(self) -> None:
@@ -450,7 +482,7 @@ class PlanControlScreen(Screen):
 
         if not gate_tasks:
             self.notify(
-                "No pending gate tasks.",
+                _t(self, "pc_no_gate_tasks"),
                 severity="warning",
             )
             return
@@ -458,10 +490,11 @@ class PlanControlScreen(Screen):
         self.busy = True
 
         self._working(
-            "Running independent gates:\n\n"
+            _t(self, "pc_running_gates")
+            + ":\n\n"
             + "\n".join(gate_tasks)
             + "\n\nReview -> QA -> Security",
-            "QUALITY GATES",
+            _t(self, "pc_quality_gates"),
         )
 
         self.gates_worker()
@@ -485,19 +518,19 @@ class PlanControlScreen(Screen):
 
             self.app.call_from_thread(
                 self._operation_finished,
-                "Gate batch finished: "
+                f"{_t(self, 'pc_gate_batch_finished')}: "
                 + (
                     ", ".join(
                         result.task_ids
                     )
-                    or "no changes"
+                    or _t(self, "pc_no_changes")
                 ),
             )
 
         except Exception as exc:
             self.app.call_from_thread(
                 self._operation_failed,
-                "Gate execution failed",
+                _t(self, "pc_gate_failed"),
                 str(exc),
             )
 
@@ -515,7 +548,7 @@ class PlanControlScreen(Screen):
 
         if not finalizable:
             self.notify(
-                "No tasks are ready for final approval.",
+                _t(self, "pc_no_finalizable"),
                 severity="warning",
             )
             return
@@ -523,10 +556,12 @@ class PlanControlScreen(Screen):
         self.busy = True
 
         self._working(
-            "Recording final CEO approval for:\n\n"
+            _t(self, "pc_recording_final")
+            + ":\n\n"
             + "\n".join(finalizable)
-            + "\n\nThis will move these tasks to DONE.",
-            "FINAL APPROVAL",
+            + "\n\n"
+            + _t(self, "pc_final_impact"),
+            _t(self, "pc_final_approval"),
         )
 
         self.finalize_worker()
@@ -558,7 +593,7 @@ class PlanControlScreen(Screen):
         except Exception as exc:
             self.app.call_from_thread(
                 self._operation_failed,
-                "Final approval failed",
+                _t(self, "pc_final_failed"),
                 str(exc),
             )
 
@@ -607,10 +642,12 @@ class PlanControlScreen(Screen):
                 ),
                 Text(""),
                 Panel(
-                    "C = Copy error\n"
-                    "F5 = Refresh\n"
-                    "Esc = Back",
-                    title="Recovery",
+                    _t(self, "pc_copy_error")
+                    + "\n"
+                    + _t(self, "pc_refresh_control")
+                    + "\n"
+                    + _t(self, "pc_back_control"),
+                    title=_t(self, "pc_recovery"),
                 ),
             )
         )
@@ -623,7 +660,7 @@ class PlanControlScreen(Screen):
     def action_copy_error(self) -> None:
         if not self.last_error_text:
             self.notify(
-                "There is no error to copy.",
+                _t(self, "pc_no_error"),
                 severity="warning",
             )
             return
@@ -649,7 +686,7 @@ class PlanControlScreen(Screen):
                 )
 
             self.notify(
-                "Error copied to clipboard."
+                _t(self, "pc_error_copied")
             )
 
         except Exception as exc:
@@ -662,14 +699,34 @@ class PlanControlScreen(Screen):
                 )
 
                 self.notify(
-                    "Error copied to clipboard."
+                    _t(self, "pc_error_copied")
                 )
 
             except Exception:
                 self.notify(
-                    f"Could not copy error: {exc}",
+                    f"{_t(self, 'pc_copy_failed')}: {exc}",
                     severity="error",
                 )
+
+    @staticmethod
+    def _compact(
+        value: str,
+        limit: int = 70,
+    ) -> str:
+        if not value:
+            return "-"
+
+        result = " ".join(
+            value.split()
+        )
+
+        if len(result) <= limit:
+            return result
+
+        return (
+            result[: limit - 3]
+            + "..."
+        )
 
     def _refresh_view(self) -> None:
         tasks = self._tasks()
@@ -681,28 +738,226 @@ class PlanControlScreen(Screen):
             )
         )
 
+        result_details = {}
+        result_errors = []
+
+        for task in tasks:
+            try:
+                result_details[task.id] = (
+                    self.task_results.read_latest(
+                        self.plan_data.project_root,
+                        task.id,
+                    )
+                )
+            except Exception as exc:
+                result_errors.append(
+                    f"{task.id}: {exc}"
+                )
+
         table = Table(
-            title="Plan Tasks",
+            title=_t(
+                self,
+                "pc_plan_tasks",
+            ),
             show_lines=True,
         )
 
         table.add_column("ID")
-        table.add_column("Status")
-        table.add_column("Owner")
-        table.add_column("Task")
+        table.add_column(
+            _t(self, "status")
+        )
+        table.add_column(
+            _t(self, "owner")
+        )
+        table.add_column(
+            _t(self, "task")
+        )
+        table.add_column(
+            _t(
+                self,
+                "pc_task_next",
+            )
+        )
 
         for task in tasks:
-            status = task.status
+            details = result_details.get(
+                task.id
+            )
 
-            if task.id in finalizable:
-                status += " / FINAL READY"
+            if (
+                details is not None
+                and details.recommended_next
+            ):
+                next_action = self._compact(
+                    details.recommended_next
+                )
+
+            elif task.id in finalizable:
+                next_action = _t(
+                    self,
+                    "pc_task_next_final",
+                )
+
+            elif task.status in {
+                "BACKLOG",
+                "READY",
+            }:
+                next_action = _t(
+                    self,
+                    "pc_task_next_activate",
+                )
+
+            elif task.status == "ACTIVE":
+                next_action = _t(
+                    self,
+                    "pc_task_next_execute",
+                )
+
+            elif task.status in {
+                "REVIEW",
+                "QA",
+                "SECURITY",
+            }:
+                next_action = _t(
+                    self,
+                    "pc_task_next_gates",
+                )
+
+            elif task.status == "BLOCKED":
+                next_action = _t(
+                    self,
+                    "pc_task_next_blocked",
+                )
+
+            elif task.status == "DONE":
+                next_action = _t(
+                    self,
+                    "pc_task_next_done",
+                )
+
+            else:
+                next_action = "-"
 
             table.add_row(
                 task.id,
-                status,
+                task.status,
                 task.owner,
                 task.title,
+                next_action,
             )
+
+        evidence_table = Table(
+            title=_t(
+                self,
+                "pc_execution_evidence",
+            ),
+            show_lines=True,
+        )
+
+        evidence_table.add_column("ID")
+        evidence_table.add_column(
+            _t(
+                self,
+                "pc_provider",
+            )
+        )
+        evidence_table.add_column(
+            _t(
+                self,
+                "pc_model",
+            )
+        )
+        evidence_table.add_column(
+            _t(
+                self,
+                "pc_outcome",
+            )
+        )
+        evidence_table.add_column(
+            _t(
+                self,
+                "pc_task_blocker",
+            )
+        )
+
+        evidence_count = 0
+        result_notes = []
+
+        for task in tasks:
+            details = result_details.get(
+                task.id
+            )
+
+            if details is None:
+                continue
+
+            has_evidence = any(
+                (
+                    details.result_path,
+                    details.evidence_path,
+                    details.provider,
+                    details.model,
+                    details.outcome,
+                    details.summary,
+                    details.blockers,
+                    details.recommended_next,
+                )
+            )
+
+            if not has_evidence:
+                continue
+
+            evidence_count += 1
+
+            evidence_table.add_row(
+                task.id,
+                details.provider or "-",
+                details.model or "-",
+                details.outcome or "-",
+                (
+                    _t(self, "yes")
+                    if details.blockers
+                    else _t(self, "no")
+                ),
+            )
+
+            note_lines = []
+
+            if details.summary:
+                note_lines.extend(
+                    [
+                        f"{task.id} - "
+                        f"{_t(self, 'pc_summary')}:",
+                        details.summary,
+                    ]
+                )
+
+            if details.blockers:
+                if note_lines:
+                    note_lines.append("")
+
+                note_lines.extend(
+                    [
+                        f"{_t(self, 'pc_blocker')}:",
+                        details.blockers,
+                    ]
+                )
+
+            if details.recommended_next:
+                if note_lines:
+                    note_lines.append("")
+
+                note_lines.extend(
+                    [
+                        f"{_t(self, 'pc_recommended_next')}:",
+                        details.recommended_next,
+                    ]
+                )
+
+            if note_lines:
+                result_notes.append(
+                    "\n".join(note_lines)
+                )
 
         counts: dict[str, int] = {}
 
@@ -720,8 +975,15 @@ class PlanControlScreen(Screen):
             box=None,
         )
 
-        summary.add_column("Status")
-        summary.add_column("Count")
+        summary.add_column(
+            _t(self, "status")
+        )
+        summary.add_column(
+            _t(
+                self,
+                "pc_count",
+            )
+        )
 
         for status in (
             "BACKLOG",
@@ -753,7 +1015,10 @@ class PlanControlScreen(Screen):
             for task in tasks
         ):
             controls.append(
-                "A = Activate eligible wave"
+                _t(
+                    self,
+                    "pc_activate_control",
+                )
             )
 
         if any(
@@ -761,10 +1026,16 @@ class PlanControlScreen(Screen):
             for task in tasks
         ):
             controls.append(
-                "R = Run analysis-only agent"
+                _t(
+                    self,
+                    "pc_analysis_control",
+                )
             )
             controls.append(
-                "W = Run writable implementation"
+                _t(
+                    self,
+                    "pc_writable_control",
+                )
             )
 
         pending_gates = False
@@ -784,20 +1055,90 @@ class PlanControlScreen(Screen):
 
         if pending_gates:
             controls.append(
-                "G = Run Review/QA/Security gates"
+                _t(
+                    self,
+                    "pc_gates_control",
+                )
             )
 
         if finalizable:
             controls.append(
-                "F = Final CEO approval -> DONE"
+                _t(
+                    self,
+                    "pc_final_control",
+                )
             )
 
         controls.extend(
             [
-                "F5 = Refresh",
-                "Esc = Back",
+                _t(
+                    self,
+                    "pc_refresh_control",
+                ),
+                _t(
+                    self,
+                    "pc_back_control",
+                ),
             ]
         )
+
+        statuses = {
+            task.status
+            for task in tasks
+        }
+
+        if "BLOCKED" in statuses:
+            next_action = _t(
+                self,
+                "pc_next_blocked",
+            )
+
+        elif finalizable:
+            next_action = _t(
+                self,
+                "pc_next_final",
+            )
+
+        elif pending_gates:
+            next_action = _t(
+                self,
+                "pc_next_gates",
+            )
+
+        elif "ACTIVE" in statuses:
+            next_action = _t(
+                self,
+                "pc_next_active",
+            )
+
+        elif statuses.intersection(
+            {
+                "BACKLOG",
+                "READY",
+            }
+        ):
+            next_action = _t(
+                self,
+                "pc_next_activate",
+            )
+
+        elif (
+            tasks
+            and all(
+                task.status == "DONE"
+                for task in tasks
+            )
+        ):
+            next_action = _t(
+                self,
+                "pc_next_done",
+            )
+
+        else:
+            next_action = _t(
+                self,
+                "pc_next_wait",
+            )
 
         work_request = (
             ", ".join(
@@ -807,38 +1148,117 @@ class PlanControlScreen(Screen):
             or "unknown"
         )
 
+        renderables = [
+            Panel(
+                f"{_t(self, 'pc_project')}: "
+                f"{self.plan_data.project_name}\n"
+                f"{_t(self, 'pc_work_request')}: "
+                f"{work_request}",
+                title=_t(
+                    self,
+                    "pc_control_title",
+                ),
+            ),
+            Text(""),
+            summary,
+            Text(""),
+            table,
+            Text(""),
+        ]
+
+        if evidence_count:
+            renderables.extend(
+                [
+                    evidence_table,
+                    Text(""),
+                ]
+            )
+        else:
+            renderables.extend(
+                [
+                    Panel(
+                        _t(
+                            self,
+                            "pc_no_execution_evidence",
+                        ),
+                        title=_t(
+                            self,
+                            "pc_execution_evidence",
+                        ),
+                    ),
+                    Text(""),
+                ]
+            )
+
+        if result_notes:
+            renderables.extend(
+                [
+                    Panel(
+                        "\n\n"
+                        + ("\n\n" + ("-" * 50) + "\n\n").join(
+                            result_notes
+                        ),
+                        title=_t(
+                            self,
+                            "pc_result_details",
+                        ),
+                    ),
+                    Text(""),
+                ]
+            )
+
+        if result_errors:
+            renderables.extend(
+                [
+                    Panel(
+                        "\n".join(
+                            result_errors
+                        ),
+                        title=_t(
+                            self,
+                            "pc_result_read_errors",
+                        ),
+                    ),
+                    Text(""),
+                ]
+            )
+
+        renderables.extend(
+            [
+                Panel(
+                    "\n".join(controls),
+                    title=_t(
+                        self,
+                        "pc_controls",
+                    ),
+                ),
+                Text(""),
+                Panel(
+                    next_action,
+                    title=_t(
+                        self,
+                        "pc_next_action",
+                    ),
+                ),
+                Text(""),
+                Panel(
+                    _t(
+                        self,
+                        "pc_workflow_body",
+                    ),
+                    title=_t(
+                        self,
+                        "pc_workflow_title",
+                    ),
+                ),
+            ]
+        )
+
         self.query_one(
             "#plan-control-content",
             Static,
         ).update(
             Group(
-                Panel(
-                    f"Project: "
-                    f"{self.plan_data.project_name}\n"
-                    f"Work Request: {work_request}",
-                    title="Plan Control",
-                ),
-                Text(""),
-                summary,
-                Text(""),
-                table,
-                Text(""),
-                Panel(
-                    "\n".join(controls),
-                    title="Controls",
-                ),
-                Text(""),
-                Panel(
-                    "Lifecycle:\n\n"
-                    "BACKLOG -> READY -> ACTIVE\n"
-                    "ACTIVE -> REVIEW\n"
-                    "REVIEW -> QA\n"
-                    "QA -> SECURITY\n"
-                    "SECURITY -> DONE\n\n"
-                    "When a wave reaches DONE, press A "
-                    "again to activate newly eligible "
-                    "dependent tasks.",
-                    title="Workflow",
-                ),
+                *renderables
             )
         )

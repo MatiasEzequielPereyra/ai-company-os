@@ -21,14 +21,27 @@ from textual.widgets import (
     Static,
 )
 
+from company_os.cli.widgets import CircularListView
 from company_os.application.ceo_planning_service import (
     CEOPlanningService,
 )
 from company_os.cli.screens.prepare_plan import PreparePlanScreen
 
+from company_os.cli.i18n import ui_text
 from company_os.application.command_service import (
     CommandService,
 )
+
+
+def _t(widget, key: str) -> str:
+    return ui_text(
+        getattr(
+            widget.app,
+            "language",
+            "es",
+        ),
+        key,
+    )
 
 
 class PlanPreviewScreen(Screen):
@@ -53,7 +66,7 @@ class PlanPreviewScreen(Screen):
 
         with VerticalScroll():
             yield Static(
-                "Building CEO plan...",
+                _t(self, "plan_building"),
                 id="plan-preview",
             )
 
@@ -88,8 +101,23 @@ class PlanPreviewScreen(Screen):
             ).update(
                 Panel(
                     str(exc),
-                    title="Planning error",
+                    title=_t(self, "planning_error"),
                 )
+            )
+
+    def refresh_language(self) -> None:
+        content = self.query_one(
+            "#plan-preview",
+            Static,
+        )
+
+        if self.plan_data is None:
+            content.update(
+                _t(self, "plan_building")
+            )
+        else:
+            content.update(
+                self._render_plan()
             )
 
     def action_back(self) -> None:
@@ -118,33 +146,37 @@ class PlanPreviewScreen(Screen):
         summary.add_column()
 
         summary.add_row(
-            "Project",
+            _t(self, "plan_project"),
             plan.project_name,
         )
 
         summary.add_row(
-            "Intent",
+            _t(self, "plan_intent"),
             plan.intent,
         )
 
         summary.add_row(
-            "Engine type",
+            _t(self, "plan_engine_type"),
             plan.engine_type,
         )
 
         summary.add_row(
-            "Strategy",
+            _t(self, "plan_strategy"),
             plan.strategy,
         )
 
         summary.add_row(
-            "Existing open tasks",
+            _t(self, "plan_existing_tasks"),
             str(plan.existing_open_tasks),
         )
 
         summary.add_row(
-            "Engine ready",
-            "YES" if plan.engine_ready else "NO",
+            _t(self, "plan_engine_ready"),
+            (
+                _t(self, "yes")
+                if plan.engine_ready
+                else _t(self, "no")
+            ),
         )
 
         facts = "\n".join(
@@ -153,15 +185,15 @@ class PlanPreviewScreen(Screen):
         )
 
         task_table = Table(
-            title="Proposed Tasks",
+            title=_t(self, "plan_proposed_tasks"),
             show_lines=True,
         )
 
-        task_table.add_column("Key")
-        task_table.add_column("Wave")
-        task_table.add_column("Owner")
-        task_table.add_column("Task")
-        task_table.add_column("Depends on")
+        task_table.add_column(_t(self, "plan_key"))
+        task_table.add_column(_t(self, "plan_wave"))
+        task_table.add_column(_t(self, "owner"))
+        task_table.add_column(_t(self, "plan_task"))
+        task_table.add_column(_t(self, "plan_depends_on"))
 
         for task in plan.tasks:
             task_table.add_row(
@@ -189,21 +221,21 @@ class PlanPreviewScreen(Screen):
                         f"{task.key}  {task.owner}  {task.title}"
                         for task in wave
                     ),
-                    title=f"Execution Wave {number}",
+                    title=(f"{_t(self, 'plan_execution_wave')} {number}"),
                 )
             )
 
         renderables = [
             Panel(
                 plan.request,
-                title="Your request",
+                title=_t(self, "plan_your_request"),
             ),
             Text(""),
             summary,
             Text(""),
             Panel(
                 facts,
-                title="Repository inspection",
+                title=_t(self, "plan_repo_inspection"),
             ),
             Text(""),
             task_table,
@@ -223,7 +255,7 @@ class PlanPreviewScreen(Screen):
                             f"- {warning}"
                             for warning in plan.warnings
                         ),
-                        title="Warnings",
+                        title=_t(self, "plan_warnings"),
                     ),
                 ]
             )
@@ -232,12 +264,14 @@ class PlanPreviewScreen(Screen):
             [
                 Text(""),
                 Panel(
-                    "No files have been created.\n"
-                    "No task status has changed.\n"
-                    "No agent has been executed.\n\n"
-                    "R = Run Plan (currently disabled)\n"
-                    "Esc = Back",
-                    title="Safe preview",
+                    _t(
+                        self,
+                        "plan_safe_preview_body",
+                    ),
+                    title=_t(
+                        self,
+                        "plan_safe_preview",
+                    ),
                 ),
             ]
         )
@@ -268,19 +302,18 @@ class CommandProposalScreen(Screen):
             Panel(
                 self.proposal_data.request,
                 title=(
-                    "Request / "
+                    f"{_t(self, 'proposal_request')} / "
                     f"{self.proposal_data.intent}"
                 ),
             )
         )
 
         yield Static(
-            "Choose how AI Company OS should approach it\n"
-            "Up/Down = Select   Enter = Build plan   Esc = Back",
+            _t(self, "proposal_heading"),
             id="proposal-heading",
         )
 
-        yield ListView(
+        yield CircularListView(
             *[
                 ListItem(
                     Label(
@@ -324,6 +357,14 @@ class CommandProposalScreen(Screen):
         )
 
         proposal_list.focus()
+
+    def refresh_language(self) -> None:
+        self.query_one(
+            "#proposal-heading",
+            Static,
+        ).update(
+            _t(self, "proposal_heading")
+        )
 
     def action_back(self) -> None:
         self.app.pop_screen()
@@ -369,29 +410,31 @@ class CommandCenterScreen(Screen):
 
         yield Static(
             Panel(
-                f"Current project: {project_name}\n\n"
-                "Tell the CEO what result you want. "
-                "The CEO will propose an approach and "
-                "build a safe execution preview before "
-                "anything is written to the repository.",
-                title="Command Center",
+                (
+                    f"{_t(self, 'command_current_project')}: "
+                    f"{project_name}\n\n"
+                    f"{_t(self, 'command_intro')}"
+                ),
+                title=_t(self, "command_title"),
             )
         )
 
         yield Static(
             Panel(
-                "Examples:\n\n"
-                "- Audit this project for production\n"
-                "- Fix the authentication bug\n"
-                "- Add payments\n"
-                "- Prepare the application for release",
-                title="Examples",
+                _t(
+                    self,
+                    "command_examples",
+                ),
+                title=_t(
+                    self,
+                    "command_examples_title",
+                ),
             )
         )
 
         yield Input(
             placeholder=(
-                "Tell the CEO what you want to achieve..."
+                _t(self, "command_placeholder")
             ),
             id="command-input",
         )
@@ -403,6 +446,19 @@ class CommandCenterScreen(Screen):
             "#command-input",
             Input,
         ).focus()
+
+    def refresh_language(self) -> None:
+        self.query_one(
+            "#command-input",
+            Input,
+        ).placeholder = _t(
+            self,
+            "command_placeholder",
+        )
+
+        self.refresh(
+            recompose=True,
+        )
 
     def action_back(self) -> None:
         self.app.pop_screen()

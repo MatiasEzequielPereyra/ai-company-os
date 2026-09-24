@@ -10,7 +10,6 @@ from textual.widgets import (
     Header,
     Label,
     ListItem,
-    ListView,
     Static,
 )
 
@@ -20,15 +19,36 @@ from company_os.application.delete_plan_service import (
 from company_os.application.work_request_service import (
     WorkRequestService,
 )
+from company_os.cli.i18n import ui_text
 from company_os.cli.screens.plan_control import (
     PlanControlScreen,
 )
+from company_os.cli.widgets import CircularListView
+
+
+def _t(widget, key: str) -> str:
+    return ui_text(
+        getattr(
+            widget.app,
+            "language",
+            "es",
+        ),
+        key,
+    )
 
 
 class DeleteWorkRequestScreen(Screen):
     BINDINGS = [
-        Binding("escape", "back", "Cancel"),
-        Binding("y", "confirm_delete", "Delete"),
+        Binding(
+            "escape",
+            "back",
+            "Cancelar / Cancel",
+        ),
+        Binding(
+            "y",
+            "confirm_delete",
+            "Eliminar / Delete",
+        ),
     ]
 
     def __init__(
@@ -43,6 +63,16 @@ class DeleteWorkRequestScreen(Screen):
         self.service = DeletePlanService()
 
     def compose(self) -> ComposeResult:
+        yield Header()
+
+        yield Static(
+            self._render_content(),
+            id="delete-work-request-content",
+        )
+
+        yield Footer()
+
+    def _render_content(self):
         allowed, reason = (
             self.service.can_delete(
                 self.project_root,
@@ -50,26 +80,30 @@ class DeleteWorkRequestScreen(Screen):
             )
         )
 
-        yield Header()
-
-        yield Static(
-            Panel(
-                f"Work Request: {self.request.id}\n\n"
-                f"{self.request.objective}\n\n"
-                f"{reason}\n\n"
-                + (
-                    "Y = DELETE permanently\n"
-                    "Esc = Cancel"
-                    if allowed
-                    else
-                    "This Work Request cannot be "
-                    "hard-deleted.\nEsc = Back"
-                ),
-                title="Delete Plan",
-            )
+        instructions = (
+            _t(self, "wr_delete_allowed")
+            if allowed
+            else _t(self, "wr_delete_denied")
         )
 
-        yield Footer()
+        return Panel(
+            f"Work Request: {self.request.id}\n\n"
+            f"{self.request.objective}\n\n"
+            f"{reason}\n\n"
+            f"{instructions}",
+            title=_t(
+                self,
+                "wr_delete_title",
+            ),
+        )
+
+    def refresh_language(self) -> None:
+        self.query_one(
+            "#delete-work-request-content",
+            Static,
+        ).update(
+            self._render_content()
+        )
 
     def action_back(self) -> None:
         self.app.pop_screen()
@@ -106,7 +140,8 @@ class DeleteWorkRequestScreen(Screen):
                 current._refresh()
 
             self.notify(
-                f"{result.work_request_id} deleted."
+                f"{result.work_request_id} "
+                f"{_t(self, 'wr_deleted')}."
             )
 
         except Exception as exc:
@@ -118,9 +153,21 @@ class DeleteWorkRequestScreen(Screen):
 
 class WorkRequestsScreen(Screen):
     BINDINGS = [
-        Binding("escape", "back", "Back"),
-        Binding("r", "refresh_requests", "Refresh"),
-        Binding("d", "delete_request", "Delete"),
+        Binding(
+            "escape",
+            "back",
+            "Atras / Back",
+        ),
+        Binding(
+            "r",
+            "refresh_requests",
+            "Actualizar / Refresh",
+        ),
+        Binding(
+            "d",
+            "delete_request",
+            "Eliminar / Delete",
+        ),
     ]
 
     def __init__(self) -> None:
@@ -133,22 +180,27 @@ class WorkRequestsScreen(Screen):
         yield Header()
 
         yield Static(
-            "PLANS / WORK REQUESTS\n"
-            "UP/DOWN = Select   "
-            "Enter = Open   "
-            "D = Delete   "
-            "R = Refresh   "
-            "Esc = Back",
+            _t(self, "wr_heading"),
             id="work-requests-heading",
         )
 
-        yield ListView(
+        yield CircularListView(
             id="work-requests-list",
         )
 
         yield Footer()
 
     def on_mount(self) -> None:
+        self._refresh()
+
+    def refresh_language(self) -> None:
+        self.query_one(
+            "#work-requests-heading",
+            Static,
+        ).update(
+            _t(self, "wr_heading")
+        )
+
         self._refresh()
 
     def action_back(self) -> None:
@@ -162,7 +214,7 @@ class WorkRequestsScreen(Screen):
     def _selected_request(self):
         view = self.query_one(
             "#work-requests-list",
-            ListView,
+            CircularListView,
         )
 
         index = view.index
@@ -201,7 +253,7 @@ class WorkRequestsScreen(Screen):
 
         view = self.query_one(
             "#work-requests-list",
-            ListView,
+            CircularListView,
         )
 
         view.clear()
@@ -210,8 +262,10 @@ class WorkRequestsScreen(Screen):
             view.append(
                 ListItem(
                     Label(
-                        "No Work Requests found "
-                        "for this project."
+                        _t(
+                            self,
+                            "wr_no_requests",
+                        )
                     )
                 )
             )
@@ -226,7 +280,10 @@ class WorkRequestsScreen(Screen):
                 request.task_statuses.values()
             ):
                 counts[status] = (
-                    counts.get(status, 0)
+                    counts.get(
+                        status,
+                        0,
+                    )
                     + 1
                 )
 
@@ -253,7 +310,7 @@ class WorkRequestsScreen(Screen):
                 f"{request.request_type}/"
                 f"{request.priority}\n"
                 f"{objective}\n"
-                f"Tasks: "
+                f"{_t(self, 'wr_tasks')}: "
                 f"{len(request.task_ids)}"
             )
 
@@ -278,7 +335,7 @@ class WorkRequestsScreen(Screen):
 
     def on_list_view_selected(
         self,
-        event: ListView.Selected,
+        event: CircularListView.Selected,
     ) -> None:
         request = self._selected_request()
 
@@ -295,8 +352,10 @@ class WorkRequestsScreen(Screen):
 
             if not reopened.summary.task_ids:
                 self.notify(
-                    "This Work Request has no "
-                    "materialized tasks yet.",
+                    _t(
+                        self,
+                        "wr_no_materialized",
+                    ),
                     severity="warning",
                 )
                 return

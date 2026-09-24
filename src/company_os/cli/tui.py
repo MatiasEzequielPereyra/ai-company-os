@@ -14,11 +14,13 @@ from textual.screen import Screen
 from textual.widgets import Input
 from textual.widgets import Footer, Header, Label, ListItem, ListView, Static
 
+from company_os.cli.widgets import CircularListView
 from company_os.application.config_service import ConfigService
 from company_os.cli.screens.projects import ProjectManagerScreen
 from company_os.cli.screens.work_requests import WorkRequestsScreen
 from company_os.cli.screens.help import HelpScreen
-from company_os.cli.i18n import navigation_label
+from company_os.cli.i18n import navigation_label, ui_text
+from company_os.cli.interface_settings import InterfaceSettingsService
 from company_os.cli.screens.command_center import CommandCenterScreen
 from company_os.application.project_service import ProjectService
 from company_os.application.provider_service import ProviderService
@@ -48,8 +50,39 @@ NAVIGATION = [
     ("Quality Gates", "gates"),
     ("Doctor", "doctor"),
     ("Diagnostics", "diagnostics"),
+    ("Settings", "settings"),
     ("Help / Guide", "help"),
 ]
+
+
+def _language_for(widget) -> str:
+    language = getattr(
+        widget,
+        "language",
+        None,
+    )
+
+    if language:
+        return language
+
+    app = getattr(
+        widget,
+        "app",
+        None,
+    )
+
+    return getattr(
+        app,
+        "language",
+        "es",
+    )
+
+
+def _t(widget, key: str) -> str:
+    return ui_text(
+        _language_for(widget),
+        key,
+    )
 
 
 class TaskDetailScreen(Screen):
@@ -89,10 +122,10 @@ class TaskDetailScreen(Screen):
         metadata.add_column()
 
         metadata.add_row("ID", task.id)
-        metadata.add_row("Title", task.title)
-        metadata.add_row("Status", task.status.value)
-        metadata.add_row("Priority", task.priority.value)
-        metadata.add_row("Owner", task.owner)
+        metadata.add_row(_t(self, "title"), task.title)
+        metadata.add_row(_t(self, "status"), task.status.value)
+        metadata.add_row(_t(self, "priority"), task.priority.value)
+        metadata.add_row(_t(self, "owner"), task.owner)
 
         workflow_phase = (
             task.workflow_phase.value
@@ -117,8 +150,8 @@ class TaskDetailScreen(Screen):
             else "-"
         )
 
-        metadata.add_row("Created", created)
-        metadata.add_row("Updated", updated)
+        metadata.add_row(_t(self, "created"), created)
+        metadata.add_row(_t(self, "updated"), updated)
 
         objective = (
             task.objective.strip()
@@ -147,15 +180,15 @@ class TaskDetailScreen(Screen):
         return Group(
             Panel(metadata, title="Task"),
             Text(""),
-            Panel(objective, title="Objective"),
+            Panel(objective, title=_t(self, "objective")),
             Text(""),
-            Panel(dependencies, title="Dependencies"),
+            Panel(dependencies, title=_t(self, "dependencies")),
             Text(""),
-            Panel(evidence, title="Evidence"),
+            Panel(evidence, title=_t(self, "evidence")),
             Text(""),
             Panel(
                 str(task.source_path),
-                title="Source",
+                title=_t(self, "source"),
             ),
         )
 
@@ -174,11 +207,11 @@ class TasksScreen(Screen):
         yield Header()
 
         yield Static(
-            "TASKS   UP/DOWN Select   Enter Open   Esc Back",
+            _t(self, "tasks_heading"),
             id="tasks-heading",
         )
 
-        yield ListView(
+        yield CircularListView(
             *[
                 ListItem(
                     Label(
@@ -209,6 +242,16 @@ class TasksScreen(Screen):
 
     def action_back(self) -> None:
         self.app.pop_screen()
+
+    def refresh_language(self) -> None:
+        heading = self.query_one(
+            "#tasks-heading",
+            Static,
+        )
+
+        heading.update(
+            _t(self, "tasks_heading")
+        )
 
     def on_list_view_selected(
         self,
@@ -255,16 +298,27 @@ class AgentDetailScreen(Screen):
     def action_back(self) -> None:
         self.app.pop_screen()
 
+    def refresh_language(self) -> None:
+        self.query_one(
+            "#agent-detail",
+            Static,
+        ).update(
+            self._render_agent()
+        )
+
     def _render_agent(self):
         agent = self.agent_data
 
         metadata = Table(
+            title=agent.display_name,
             show_header=False,
             box=None,
             padding=(0, 2),
         )
 
-        metadata.add_column(style="bold")
+        metadata.add_column(
+            style="bold"
+        )
         metadata.add_column()
 
         metadata.add_row(
@@ -273,43 +327,64 @@ class AgentDetailScreen(Screen):
         )
 
         metadata.add_row(
-            "Agent",
-            agent.display_name,
-        )
-
-        metadata.add_row(
-            "Work state",
+            _t(
+                self,
+                "agent_work_label",
+            ),
             agent.work_state.value,
         )
 
         metadata.add_row(
-            "Runtime state",
+            _t(
+                self,
+                "agent_runtime_label",
+            ),
             agent.runtime_state.value,
         )
 
         current_tasks = (
-            ", ".join(agent.current_task_ids)
+            ", ".join(
+                agent.current_task_ids
+            )
             if agent.current_task_ids
-            else "None"
+            else "-"
         )
 
         metadata.add_row(
-            "Current tasks",
+            _t(
+                self,
+                "current_tasks",
+            ),
             current_tasks,
         )
 
         owned_tasks = [
             task
             for task in self.all_tasks
-            if task.owner.casefold() == agent.id.casefold()
+            if (
+                task.owner.casefold()
+                == agent.id.casefold()
+            )
         ]
 
-        tasks_table = Table()
+        tasks_table = Table(
+            title=_t(
+                self,
+                "agent_repository_tasks",
+            ),
+            show_lines=True,
+        )
 
         tasks_table.add_column("ID")
-        tasks_table.add_column("Status")
-        tasks_table.add_column("Priority")
-        tasks_table.add_column("Title")
+        tasks_table.add_column(
+            _t(self, "status")
+        )
+        tasks_table.add_column(
+            _t(self, "priority")
+        )
+        tasks_table.add_column(
+            _t(self, "title")
+        )
 
         for task in owned_tasks:
             tasks_table.add_row(
@@ -319,32 +394,43 @@ class AgentDetailScreen(Screen):
                 task.title,
             )
 
-        if not owned_tasks:
-            assigned_content = Text(
-                "No tasks in the repository are assigned to this agent."
+        if owned_tasks:
+            assigned_content = (
+                tasks_table
             )
         else:
-            assigned_content = tasks_table
+            assigned_content = Text(
+                _t(
+                    self,
+                    "agent_no_repository_tasks",
+                )
+            )
 
-        runtime_note = Text(
-            "Runtime state is UNKNOWN until AI Company OS exposes "
-            "authoritative Codex runtime/process evidence."
-        )
+        if (
+            agent.runtime_state.value
+            == "UNKNOWN"
+        ):
+            runtime_note = _t(
+                self,
+                "agent_runtime_unknown",
+            )
+        else:
+            runtime_note = _t(
+                self,
+                "agent_runtime_known",
+            )
 
         return Group(
-            Panel(
-                metadata,
-                title="Agent",
-            ),
+            metadata,
             Text(""),
-            Panel(
-                assigned_content,
-                title="Repository Tasks",
-            ),
+            assigned_content,
             Text(""),
             Panel(
                 runtime_note,
-                title="Runtime",
+                title=_t(
+                    self,
+                    "agent_runtime_evidence",
+                ),
             ),
         )
 
@@ -364,18 +450,20 @@ class AgentsScreen(Screen):
         yield Header()
 
         yield Static(
-            "AGENTS   UP/DOWN Select   Enter Open   Esc Back",
+            _t(self, "agents_heading"),
             id="agents-heading",
         )
 
-        yield ListView(
+        yield CircularListView(
             *[
                 ListItem(
                     Label(
                         f"{agent.display_name} | "
+                        f"{_t(self, 'agent_work_label')}: "
                         f"{agent.work_state.value} | "
-                        f"runtime: {agent.runtime_state.value} | "
-                        f"tasks: "
+                        f"{_t(self, 'agent_runtime_label')}: "
+                        f"{agent.runtime_state.value} | "
+                        f"{_t(self, 'tasks')}: "
                         f"{', '.join(agent.current_task_ids) if agent.current_task_ids else '-'}"
                     )
                 )
@@ -399,6 +487,42 @@ class AgentsScreen(Screen):
 
     def action_back(self) -> None:
         self.app.pop_screen()
+
+    def refresh_language(self) -> None:
+        self.query_one(
+            "#agents-heading",
+            Static,
+        ).update(
+            _t(self, "agents_heading")
+        )
+
+        labels = list(
+            self.query(
+                "#agent-list Label"
+            )
+        )
+
+        for label, agent in zip(
+            labels,
+            self.agent_items,
+        ):
+            tasks = (
+                ", ".join(
+                    agent.current_task_ids
+                )
+                if agent.current_task_ids
+                else "-"
+            )
+
+            label.update(
+                f"{agent.display_name} | "
+                f"{_t(self, 'agent_work_label')}: "
+                f"{agent.work_state.value} | "
+                f"{_t(self, 'agent_runtime_label')}: "
+                f"{agent.runtime_state.value} | "
+                f"{_t(self, 'tasks')}: "
+                f"{tasks}"
+            )
 
     def on_list_view_selected(
         self,
@@ -532,7 +656,16 @@ class LegacyCommandCenterScreen(Screen):
 
 class ProvidersScreen(Screen):
     BINDINGS = [
-        Binding("escape", "back", "Back"),
+        Binding(
+            "escape",
+            "back",
+            "Atras / Back",
+        ),
+        Binding(
+            "r",
+            "refresh_providers",
+            "Actualizar / Refresh",
+        ),
     ]
 
     def compose(self) -> ComposeResult:
@@ -543,25 +676,51 @@ class ProvidersScreen(Screen):
             id="providers-content",
         )
 
+        yield Static(
+            "",
+            id="providers-readiness",
+        )
+
         yield Input(
-            placeholder=(
-                "OpenRouter API key - Enter to save securely"
+            placeholder=_t(
+                self,
+                "providers_openrouter_placeholder",
             ),
             password=True,
             id="openrouter-key",
         )
 
         yield Input(
-            placeholder=(
-                "Gemini API key - Enter to save securely"
+            placeholder=_t(
+                self,
+                "providers_gemini_placeholder",
             ),
             password=True,
             id="gemini-key",
         )
 
         yield Static(
-            "Keys are stored through the operating system "
-            "credential store, not inside the repository."
+            _t(
+                self,
+                "providers_security_note",
+            ),
+            id="providers-security-note",
+        )
+
+        yield Static(
+            _t(
+                self,
+                "providers_auto_policy",
+            ),
+            id="providers-auto-policy",
+        )
+
+        yield Static(
+            _t(
+                self,
+                "providers_future_note",
+            ),
+            id="providers-future-note",
         )
 
         yield Footer()
@@ -572,6 +731,84 @@ class ProvidersScreen(Screen):
     def action_back(self) -> None:
         self.app.pop_screen()
 
+    def action_refresh_providers(
+        self,
+    ) -> None:
+        self._refresh()
+
+    def refresh_language(self) -> None:
+        self.query_one(
+            "#openrouter-key",
+            Input,
+        ).placeholder = _t(
+            self,
+            "providers_openrouter_placeholder",
+        )
+
+        self.query_one(
+            "#gemini-key",
+            Input,
+        ).placeholder = _t(
+            self,
+            "providers_gemini_placeholder",
+        )
+
+        self.query_one(
+            "#providers-security-note",
+            Static,
+        ).update(
+            _t(
+                self,
+                "providers_security_note",
+            )
+        )
+
+        self.query_one(
+            "#providers-auto-policy",
+            Static,
+        ).update(
+            _t(
+                self,
+                "providers_auto_policy",
+            )
+        )
+
+        self.query_one(
+            "#providers-future-note",
+            Static,
+        ).update(
+            _t(
+                self,
+                "providers_future_note",
+            )
+        )
+
+        self._refresh()
+
+    @staticmethod
+    def _provider_kind(
+        name: str,
+    ) -> str:
+        normalized = name.casefold()
+
+        if "ollama" in normalized:
+            return "local"
+
+        return "cloud"
+
+    @staticmethod
+    def _provider_visible(
+        names: list[str],
+        *terms: str,
+    ) -> bool:
+        return any(
+            any(
+                term in name
+                for term in terms
+            )
+            for name in names
+        )
+
     def _refresh(self) -> None:
         statuses = (
             ProviderService()
@@ -579,30 +816,157 @@ class ProvidersScreen(Screen):
         )
 
         table = Table(
-            title="Providers"
+            title=_t(
+                self,
+                "providers_title",
+            ),
+            show_lines=True,
         )
 
-        table.add_column("Provider")
-        table.add_column("Configured")
-        table.add_column("Source")
-        table.add_column("Notes")
+        table.add_column(
+            _t(
+                self,
+                "providers_provider",
+            )
+        )
+
+        table.add_column(
+            _t(
+                self,
+                "providers_kind",
+            )
+        )
+
+        table.add_column(
+            _t(
+                self,
+                "providers_configured",
+            )
+        )
+
+        table.add_column(
+            _t(
+                self,
+                "providers_source",
+            )
+        )
+
+        table.add_column(
+            _t(
+                self,
+                "providers_notes",
+            )
+        )
+
+        normalized_names = []
 
         for provider in statuses:
+            normalized_names.append(
+                provider.name.casefold()
+            )
+
+            kind = self._provider_kind(
+                provider.name
+            )
+
             table.add_row(
                 provider.name,
                 (
-                    "YES"
+                    _t(
+                        self,
+                        "providers_local",
+                    )
+                    if kind == "local"
+                    else _t(
+                        self,
+                        "providers_cloud",
+                    )
+                ),
+                (
+                    _t(self, "yes")
                     if provider.configured
-                    else "NO"
+                    else _t(self, "no")
                 ),
                 provider.source,
                 provider.description,
             )
 
+        integrations = [
+            (
+                "OpenRouter",
+                self._provider_visible(
+                    normalized_names,
+                    "openrouter",
+                ),
+            ),
+            (
+                "Gemini",
+                self._provider_visible(
+                    normalized_names,
+                    "gemini",
+                ),
+            ),
+            (
+                "DeepSeek",
+                self._provider_visible(
+                    normalized_names,
+                    "deepseek",
+                ),
+            ),
+            (
+                "Grok / xAI",
+                self._provider_visible(
+                    normalized_names,
+                    "grok",
+                    "xai",
+                    "x.ai",
+                ),
+            ),
+            (
+                "Ollama",
+                self._provider_visible(
+                    normalized_names,
+                    "ollama",
+                ),
+            ),
+        ]
+
+        readiness = "\n".join(
+            (
+                f"{name}: "
+                + (
+                    _t(
+                        self,
+                        "providers_visible_core",
+                    )
+                    if visible
+                    else _t(
+                        self,
+                        "providers_waiting_core",
+                    )
+                )
+            )
+            for name, visible
+            in integrations
+        )
+
         self.query_one(
             "#providers-content",
             Static,
         ).update(table)
+
+        self.query_one(
+            "#providers-readiness",
+            Static,
+        ).update(
+            Panel(
+                readiness,
+                title=_t(
+                    self,
+                    "providers_readiness",
+                ),
+            )
+        )
 
     def on_input_submitted(
         self,
@@ -620,16 +984,22 @@ class ProvidersScreen(Screen):
         if not provider:
             return
 
+        value = event.value.strip()
+
+        if not value:
+            return
+
         try:
             ProviderService().set_api_key(
                 provider,
-                event.value,
+                value,
             )
 
             event.input.value = ""
 
             self.notify(
-                f"{provider} configured securely."
+                f"{provider} "
+                f"{_t(self, 'providers_configured_notify')}."
             )
 
             self._refresh()
@@ -848,12 +1218,33 @@ class AICompanyTUI(App):
             "toggle_language",
             "ES / EN",
         ),
+
+        Binding(
+            "left",
+            "go_back",
+            "Atras / Back",
+            priority=True,
+        ),
+        Binding(
+            "right",
+            "activate_focused",
+            "Abrir / Open",
+            priority=True,
+        ),
     ]
 
     def __init__(self, project: Path) -> None:
         super().__init__()
 
-        self.language = "es"
+        self.interface_settings = (
+            InterfaceSettingsService()
+        )
+
+        self.language = (
+            self.interface_settings
+            .load_language()
+        )
+
         self.current_view = "overview"
 
         self.project = project
@@ -869,7 +1260,7 @@ class AICompanyTUI(App):
         yield Header()
 
         with Horizontal(id="main"):
-            yield ListView(
+            yield CircularListView(
                 *[
                     ListItem(
                         Label(self._nav_label(view)),
@@ -1021,6 +1412,7 @@ class AICompanyTUI(App):
             "gates": self._render_gates,
             "doctor": self._render_doctor,
             "diagnostics": self._render_diagnostics,
+            "settings": self._render_settings,
         }
 
         renderer = renderers.get(view)
@@ -1050,35 +1442,35 @@ class AICompanyTUI(App):
         phase = snapshot.project.phase.value
 
         if snapshot.project.phase_derived:
-            phase += " (derived)"
+            phase += f" ({_t(self, 'derived')})"
 
         project.add_row(
-            "Project",
+            _t(self, "overview_project"),
             snapshot.project.name,
         )
 
         project.add_row(
-            "Phase",
+            _t(self, "overview_phase"),
             phase,
         )
 
         project.add_row(
-            "Objective",
+            _t(self, "overview_objective"),
             snapshot.project.objective or "-",
         )
 
         project.add_row(
-            "Repository",
+            _t(self, "overview_repository"),
             snapshot.project.root,
         )
 
         counts = Table(
-            title="Task Summary"
+            title=_t(self, "overview_task_summary")
         )
 
-        counts.add_column("Status")
+        counts.add_column(_t(self, "status"))
         counts.add_column(
-            "Count",
+            _t(self, "overview_count"),
             justify="right",
         )
 
@@ -1108,64 +1500,247 @@ class AICompanyTUI(App):
         )
 
     def _render_agents(self):
-        table = Table()
+        agents = list(
+            self.snapshot.agents
+        )
 
-        table.add_column("Agent")
-        table.add_column("Work state")
-        table.add_column("Runtime")
-        table.add_column("Tasks")
+        table = Table(
+            title=_t(
+                self,
+                "agents_view_title",
+            ),
+            show_lines=True,
+        )
 
-        for agent in self.snapshot.agents:
+        table.add_column(
+            _t(self, "agent")
+        )
+        table.add_column(
+            _t(
+                self,
+                "work_state",
+            )
+        )
+        table.add_column(
+            _t(
+                self,
+                "runtime_state",
+            )
+        )
+        table.add_column(
+            _t(self, "tasks")
+        )
+
+        runtime_counts: dict[str, int] = {}
+        with_tasks = 0
+
+        for agent in agents:
+            runtime_value = (
+                agent.runtime_state.value
+            )
+
+            runtime_counts[
+                runtime_value
+            ] = (
+                runtime_counts.get(
+                    runtime_value,
+                    0,
+                )
+                + 1
+            )
+
+            if agent.current_task_ids:
+                with_tasks += 1
+
             table.add_row(
                 agent.display_name,
                 agent.work_state.value,
-                agent.runtime_state.value,
+                runtime_value,
                 ", ".join(
                     agent.current_task_ids
                 ) or "-",
             )
 
-        return table
+        summary = Table(
+            title=_t(
+                self,
+                "agents_summary",
+            ),
+            show_header=False,
+            box=None,
+        )
+
+        summary.add_column()
+        summary.add_column(
+            justify="right"
+        )
+
+        summary.add_row(
+            _t(
+                self,
+                "agents_total",
+            ),
+            str(len(agents)),
+        )
+
+        summary.add_row(
+            _t(
+                self,
+                "agents_with_tasks",
+            ),
+            str(with_tasks),
+        )
+
+        runtime_distribution = (
+            "\n".join(
+                f"{state}: {count}"
+                for state, count
+                in sorted(
+                    runtime_counts.items()
+                )
+            )
+            or "-"
+        )
+
+        return Group(
+            summary,
+            Text(""),
+            Panel(
+                runtime_distribution,
+                title=_t(
+                    self,
+                    "agents_runtime_distribution",
+                ),
+            ),
+            Text(""),
+            table,
+        )
 
     def _render_workflow(self):
         workflow = self.workflow_data
 
         if workflow is None:
             return Text(
-                "Workflow data unavailable."
+                _t(
+                    self,
+                    "workflow_unavailable",
+                )
             )
 
-        table = Table()
+        nodes = list(workflow.nodes)
 
-        table.add_column("Task")
-        table.add_column("Status")
-        table.add_column("Execution")
-        table.add_column("Owner")
-        table.add_column("Waiting for")
+        table = Table(
+            title=_t(
+                self,
+                "workflow_map_title",
+            ),
+            show_lines=True,
+        )
 
-        for node in workflow.nodes:
+        table.add_column(
+            _t(self, "task")
+        )
+        table.add_column(
+            _t(self, "status")
+        )
+        table.add_column(
+            _t(self, "execution")
+        )
+        table.add_column(
+            _t(self, "owner")
+        )
+        table.add_column(
+            _t(self, "waiting_for")
+        )
+
+        for node in nodes:
             table.add_row(
                 node.task_id,
                 node.status,
                 node.execution_state,
                 node.owner,
-                ", ".join(
-                    node.unmet_dependencies
-                ) or "-",
+                (
+                    ", ".join(
+                        node.unmet_dependencies
+                    )
+                    or "-"
+                ),
             )
 
-        parallel = (
-            ", ".join(
-                workflow.parallel_now
-            )
-            or "None"
+        runnable = list(
+            workflow.parallel_now
         )
 
-        waiting = (
-            ", ".join(
-                workflow.waiting
+        waiting = list(
+            workflow.waiting
+        )
+
+        blocked = [
+            node.task_id
+            for node in nodes
+            if node.status == "BLOCKED"
+        ]
+
+        completed = [
+            node.task_id
+            for node in nodes
+            if node.status == "DONE"
+        ]
+
+        def display(items) -> str:
+            return (
+                ", ".join(items)
+                if items
+                else _t(
+                    self,
+                    "workflow_none",
+                )
             )
-            or "None"
+
+        summary = Table(
+            title=_t(
+                self,
+                "workflow_summary_title",
+            ),
+            show_header=False,
+            box=None,
+        )
+
+        summary.add_column()
+        summary.add_column(
+            justify="right"
+        )
+
+        summary.add_row(
+            _t(
+                self,
+                "workflow_runnable",
+            ),
+            str(len(runnable)),
+        )
+
+        summary.add_row(
+            _t(
+                self,
+                "workflow_waiting_tasks",
+            ),
+            str(len(waiting)),
+        )
+
+        summary.add_row(
+            _t(
+                self,
+                "workflow_blocked_tasks",
+            ),
+            str(len(blocked)),
+        )
+
+        summary.add_row(
+            _t(
+                self,
+                "workflow_done_tasks",
+            ),
+            str(len(completed)),
         )
 
         edges = (
@@ -1173,33 +1748,64 @@ class AICompanyTUI(App):
                 f"{edge.source} -> {edge.target}"
                 for edge in workflow.edges
             )
-            or "No dependency edges."
+            or _t(
+                self,
+                "workflow_no_edges",
+            )
         )
 
         return Group(
             table,
             Text(""),
+            summary,
+            Text(""),
             Panel(
-                parallel,
-                title="Can advance now",
+                display(runnable),
+                title=_t(
+                    self,
+                    "workflow_runnable",
+                ),
             ),
             Text(""),
             Panel(
-                waiting,
-                title="Waiting",
+                display(waiting),
+                title=_t(
+                    self,
+                    "workflow_waiting_tasks",
+                ),
+            ),
+            Text(""),
+            Panel(
+                display(blocked),
+                title=_t(
+                    self,
+                    "workflow_blocked_tasks",
+                ),
+            ),
+            Text(""),
+            Panel(
+                display(completed),
+                title=_t(
+                    self,
+                    "workflow_done_tasks",
+                ),
             ),
             Text(""),
             Panel(
                 edges,
-                title="Dependency DAG",
+                title=_t(
+                    self,
+                    "dependency_dag",
+                ),
             ),
         )
+
     def _render_activity(self):
         events = self.activity_events[:100]
 
         if not events:
             return Text(
-                "No persisted activity found."
+                _t(self, "no_activity")
             )
 
         table = Table()
@@ -1251,17 +1857,17 @@ class AICompanyTUI(App):
 
         if not records:
             return Text(
-                "No persisted handoff evidence found."
+                _t(self, "no_handoffs")
             )
 
         table = Table()
 
         table.add_column("Task")
-        table.add_column("Kind")
-        table.add_column("From")
-        table.add_column("To")
+        table.add_column(_t(self, "kind"))
+        table.add_column(_t(self, "from"))
+        table.add_column(_t(self, "to"))
         table.add_column("State")
-        table.add_column("Message")
+        table.add_column(_t(self, "message"))
 
         for record in records:
             table.add_row(
@@ -1280,61 +1886,113 @@ class AICompanyTUI(App):
 
         if runtime is None:
             return Text(
-                "Runtime information unavailable."
+                _t(
+                    self,
+                    "runtime_unavailable",
+                )
             )
 
         table = Table(
-            show_header=False
+            title=_t(
+                self,
+                "runtime_overview",
+            ),
+            show_header=False,
+            box=None,
+            padding=(0, 2),
         )
 
-        table.add_column("Property")
-        table.add_column("Value")
+        table.add_column()
+        table.add_column()
 
         table.add_row(
-            "Source",
-            runtime.path,
+            _t(
+                self,
+                "runtime_source_path",
+            ),
+            str(runtime.path),
         )
 
         table.add_row(
-            "Available",
+            _t(
+                self,
+                "runtime_available_label",
+            ),
             str(runtime.available),
         )
 
         table.add_row(
-            "Events",
+            _t(
+                self,
+                "runtime_events_label",
+            ),
             str(runtime.event_count),
         )
 
         table.add_row(
-            "Parsed events",
-            str(runtime.parsed_event_count),
+            _t(
+                self,
+                "runtime_parsed_label",
+            ),
+            str(
+                runtime.parsed_event_count
+            ),
         )
 
         table.add_row(
-            "Authoritative live state",
-            str(runtime.authoritative_live_state),
+            _t(
+                self,
+                "runtime_live_label",
+            ),
+            str(
+                runtime.authoritative_live_state
+            ),
+        )
+
+        authority_message = (
+            _t(
+                self,
+                "runtime_authoritative",
+            )
+            if runtime.authoritative_live_state
+            else _t(
+                self,
+                "runtime_not_authoritative",
+            )
         )
 
         return Group(
             table,
             Text(""),
             Panel(
+                authority_message,
+                title=_t(
+                    self,
+                    "runtime_authority",
+                ),
+            ),
+            Text(""),
+            Panel(
                 runtime.message,
-                title="Runtime status",
+                title=_t(
+                    self,
+                    "runtime_adapter_message",
+                ),
             ),
         )
+
     def _render_blockers(self):
         blockers = self.snapshot.blockers
 
         if not blockers:
             return Text(
-                "No active blockers."
+                _t(self, "no_blockers")
             )
 
         table = Table()
 
         table.add_column("Task")
-        table.add_column("Reason")
+        table.add_column(_t(self, "reason"))
 
         for blocker in blockers:
             table.add_row(
@@ -1345,34 +2003,116 @@ class AICompanyTUI(App):
         return table
 
     def _render_gates(self):
-        table = Table()
+        gates = list(
+            self.snapshot.gates
+        )
 
-        table.add_column("Gate")
-        table.add_column("State")
-        table.add_column("Stale")
+        table = Table(
+            title=_t(
+                self,
+                "gates_title",
+            ),
+            show_lines=True,
+        )
 
-        for gate in self.snapshot.gates:
+        table.add_column(
+            _t(self, "gate")
+        )
+
+        table.add_column(
+            _t(
+                self,
+                "gates_result",
+            )
+        )
+
+        table.add_column(
+            _t(
+                self,
+                "gates_evidence",
+            )
+        )
+
+        stale_gates = []
+
+        for gate in gates:
+            evidence = (
+                _t(
+                    self,
+                    "gates_stale",
+                )
+                if gate.stale
+                else _t(
+                    self,
+                    "gates_current",
+                )
+            )
+
+            if gate.stale:
+                stale_gates.append(
+                    gate.name
+                )
+
             table.add_row(
                 gate.name,
                 gate.state.value,
-                "YES" if gate.stale else "NO",
+                evidence,
             )
 
-        return table
+        if stale_gates:
+            attention = (
+                _t(
+                    self,
+                    "gates_stale_intro",
+                )
+                + "\n\n"
+                + "\n".join(
+                    f"- {name}"
+                    for name in stale_gates
+                )
+            )
+        else:
+            attention = _t(
+                self,
+                "gates_no_attention",
+            )
+
+        return Group(
+            table,
+            Text(""),
+            Panel(
+                attention,
+                title=_t(
+                    self,
+                    "gates_attention",
+                ),
+            ),
+            Text(""),
+            Panel(
+                _t(
+                    self,
+                    "gates_interpretation_body",
+                ),
+                title=_t(
+                    self,
+                    "gates_interpretation",
+                ),
+            ),
+        )
 
     def _render_doctor(self):
         findings = self.doctor_findings
 
         if not findings:
             return Text(
-                "No doctor findings."
+                _t(self, "no_doctor_findings")
             )
 
         table = Table()
 
-        table.add_column("Severity")
-        table.add_column("Code")
-        table.add_column("Message")
+        table.add_column(_t(self, "severity"))
+        table.add_column(_t(self, "code"))
+        table.add_column(_t(self, "message"))
 
         for finding in findings:
             table.add_row(
@@ -1387,14 +2127,14 @@ class AICompanyTUI(App):
 
         if not diagnostics:
             return Text(
-                "No diagnostics."
+                _t(self, "no_diagnostics")
             )
 
         table = Table()
 
-        table.add_column("Severity")
-        table.add_column("Code")
-        table.add_column("Message")
+        table.add_column(_t(self, "severity"))
+        table.add_column(_t(self, "code"))
+        table.add_column(_t(self, "message"))
 
         for diagnostic in diagnostics:
             table.add_row(
@@ -1404,6 +2144,66 @@ class AICompanyTUI(App):
             )
 
         return table
+
+    def _render_settings(self):
+        language_name = (
+            "Espanol"
+            if self.language == "es"
+            else "English"
+        )
+
+        table = Table(
+            title=_t(
+                self,
+                "settings_title",
+            ),
+            show_header=False,
+            box=None,
+        )
+
+        table.add_column()
+        table.add_column()
+
+        table.add_row(
+            _t(
+                self,
+                "settings_language",
+            ),
+            language_name,
+        )
+
+        table.add_row(
+            _t(
+                self,
+                "settings_file",
+            ),
+            str(
+                self.interface_settings.path
+            ),
+        )
+
+        return Group(
+            table,
+            Text(""),
+            Panel(
+                _t(
+                    self,
+                    "settings_change_language",
+                ),
+                title="F2",
+            ),
+            Text(""),
+            Panel(
+                _t(
+                    self,
+                    "settings_scope",
+                ),
+                title=_t(
+                    self,
+                    "settings_title",
+                ),
+            ),
+        )
 
     def _nav_label(
         self,
@@ -1416,15 +2216,62 @@ class AICompanyTUI(App):
 
     def action_open_help(self) -> None:
         current = self.screen
-
-        if (
+        current_name = (
             current.__class__.__name__
-            == "HelpScreen"
-        ):
+        )
+
+        if current_name == "HelpScreen":
             return
 
+        screen_sections = {
+            "ProjectManagerScreen": "getting-started",
+            "CommandCenterScreen": "getting-started",
+            "CommandProposalScreen": "getting-started",
+            "PlanPreviewScreen": "getting-started",
+            "PreparePlanScreen": "plans",
+            "WorkRequestsScreen": "plans",
+            "DeleteWorkRequestScreen": "plans",
+            "PlanControlScreen": "plan-control",
+            "TasksScreen": "tasks",
+            "TaskDetailScreen": "tasks",
+            "AgentsScreen": "agents",
+            "AgentDetailScreen": "agents",
+            "ProvidersScreen": "providers",
+        }
+
+        view_sections = {
+            "overview": "getting-started",
+            "command": "getting-started",
+            "projects": "getting-started",
+            "plans": "plans",
+            "providers": "providers",
+            "tasks": "tasks",
+            "agents": "agents",
+            "workflow": "workflow",
+            "gates": "quality-gates",
+            "blockers": "troubleshooting",
+            "activity": "troubleshooting",
+            "handoffs": "troubleshooting",
+            "runtime": "troubleshooting",
+            "doctor": "troubleshooting",
+            "diagnostics": "troubleshooting",
+            "settings": "getting-started",
+        }
+
+        section = screen_sections.get(
+            current_name
+        )
+
+        if section is None:
+            section = view_sections.get(
+                self.current_view,
+                "getting-started",
+            )
+
         self.push_screen(
-            HelpScreen()
+            HelpScreen(
+                initial_section=section,
+            )
         )
 
     def action_toggle_language(self) -> None:
@@ -1433,6 +2280,16 @@ class AICompanyTUI(App):
             if self.language == "es"
             else "es"
         )
+
+        try:
+            self.interface_settings.save_language(
+                self.language
+            )
+        except Exception as exc:
+            self.notify(
+                f"Settings save failed: {exc}",
+                severity="warning",
+            )
 
         self._refresh_navigation_language()
 
@@ -1450,7 +2307,7 @@ class AICompanyTUI(App):
         language_name = (
             "English"
             if self.language == "en"
-            else "Espa?ol"
+            else "Espanol"
         )
 
         self.notify(
@@ -1485,13 +2342,84 @@ class AICompanyTUI(App):
                 )
             )
 
+
+        self._show_view(
+            self.current_view
+        )
+
+    def action_go_back(self) -> None:
+        focused = getattr(
+            self.screen,
+            "focused",
+            None,
+        )
+
+        if isinstance(focused, Input):
+            action = getattr(
+                focused,
+                "action_cursor_left",
+                None,
+            )
+
+            if callable(action):
+                action()
+
+            return
+
+        current = self.screen
+
+        action = getattr(
+            current,
+            "action_back",
+            None,
+        )
+
+        if callable(action):
+            action()
+
+    def action_activate_focused(self) -> None:
+        focused = getattr(
+            self.screen,
+            "focused",
+            None,
+        )
+
+        if focused is None:
+            return
+
+        if isinstance(focused, Input):
+            action = getattr(
+                focused,
+                "action_cursor_right",
+                None,
+            )
+
+            if callable(action):
+                action()
+
+            return
+
+        if isinstance(focused, ListView):
+            action = getattr(
+                focused,
+                "action_select_cursor",
+                None,
+            )
+
+            if callable(action):
+                action()
+
     def action_refresh_data(self) -> None:
         try:
             self._load_data()
             self._show_view("overview")
 
             self.notify(
-                "Project data refreshed."
+                (
+                "Datos del proyecto actualizados."
+                if self.language == "es"
+                else "Project data refreshed."
+            )
             )
 
         except Exception as exc:

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from pathlib import Path
 
@@ -15,6 +15,7 @@ from textual.widgets import (
     Static,
 )
 
+from company_os.cli.widgets import CircularListView
 from company_os.application.activity_service import ActivityService
 from company_os.application.doctor_service import DoctorService
 from company_os.application.handoff_service import HandoffService
@@ -23,6 +24,20 @@ from company_os.application.runtime_service import RuntimeService
 from company_os.application.status_service import StatusService
 from company_os.application.task_service import TaskService
 from company_os.application.workflow_service import WorkflowService
+from company_os.cli.i18n import ui_text
+
+
+def _t(widget, key: str) -> str:
+    language = getattr(
+        widget.app,
+        "language",
+        "es",
+    )
+
+    return ui_text(
+        language,
+        key,
+    )
 
 
 class ProjectManagerScreen(Screen):
@@ -39,18 +54,16 @@ class ProjectManagerScreen(Screen):
         yield Header()
 
         yield Static(
-            "PROJECTS\n"
-            "UP/DOWN = Select   Enter = Open   "
-            "R = Refresh   Esc = Back",
+            _t(self, "projects_heading"),
             id="projects-heading",
         )
 
-        yield ListView(
+        yield CircularListView(
             id="projects-list",
         )
 
         yield Static(
-            "Or enter a local repository path:",
+            _t(self, "projects_enter_path"),
             id="project-path-heading",
         )
 
@@ -66,6 +79,24 @@ class ProjectManagerScreen(Screen):
 
     def action_back(self) -> None:
         self.app.pop_screen()
+
+    def refresh_language(self) -> None:
+        self.query_one(
+            "#projects-heading",
+            Static,
+        ).update(
+            _t(self, "projects_heading")
+        )
+
+        self.query_one(
+            "#project-path-heading",
+            Static,
+        ).update(
+            _t(self, "projects_enter_path")
+        )
+
+        self._refresh_projects()
+
 
     def action_refresh_projects(self) -> None:
         self._refresh_projects()
@@ -102,7 +133,7 @@ class ProjectManagerScreen(Screen):
                 selected_index = index
 
             marker = (
-                "[ACTIVE] "
+                f"[{_t(self, 'projects_active')}] "
                 if active
                 else ""
             )
@@ -126,7 +157,7 @@ class ProjectManagerScreen(Screen):
             project_list.append(
                 ListItem(
                     Label(
-                        "No recent projects."
+                        _t(self, "projects_no_recent")
                     )
                 )
             )
@@ -222,7 +253,8 @@ class ProjectManagerScreen(Screen):
             app = self.app
 
             self.notify(
-                f"Active project: {root.name}"
+                f"{_t(self, 'projects_active_notify')}: "
+                f"{root.name}"
             )
 
             app.pop_screen()
