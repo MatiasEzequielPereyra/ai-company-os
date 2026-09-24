@@ -61,6 +61,8 @@ foreach ($providerName in @("Codex","OpenRouter","Gemini","Ollama","DeepSeek","G
 if ([bool]$config.allow_paid_fallback -ne $false) { throw "Paid provider fallback must default to disabled" }
 if ([string]$config.models.Ollama -ne "llama3.1:8b") { throw "Ollama must default to llama3.1:8b" }
 if ([int]$config.ollama_context_max_chars -gt 25000) { throw "Ollama context pack must remain tightly bounded for local inference" }
+if ([int]$config.ollama_gate_context_max_chars -gt 10000) { throw "Ollama gate base context must remain tightly bounded" }
+if ([int]$config.ollama_gate_artifact_max_chars -gt 5000) { throw "Ollama gate artifact context must remain tightly bounded" }
 if ([string]$config.models.OpenRouter -ne "openrouter/free") { throw "OpenRouter must default to openrouter/free" }
 if ([string]$config.models.Gemini -ne "gemini-3.5-flash-lite") { throw "Gemini must default to gemini-3.5-flash-lite" }
 if ([string]$config.models.DeepSeek -ne "deepseek-flash") { throw "DeepSeek must default to deepseek-flash" }
