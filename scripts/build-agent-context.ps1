@@ -4,6 +4,7 @@ param(
     [string]$Id,
     [Parameter(Mandatory = $true)]
     [string]$Owner,
+    [string[]]$AdditionalRequiredFiles = @(),
     [int]$MaxChars = 320000
 )
 
@@ -80,6 +81,14 @@ function Get-RoleScore {
             if ($p -match '^docs\\audit\\|^docs\\plans\\') { $score += 130 }
             if ($p -match '\.(ts|tsx|js|mjs|sql)$') { $score += 35 }
         }
+        "frontend" {
+            if ($p -match '(^|\\)index\.html$|^src\\|frontend|ui|view|screen|component|page|layout|style|theme') { $score += 240 }
+            if ($p -match '\.(html|css|scss|tsx|jsx|ts|js)$') { $score += 70 }
+        }
+        "backend" {
+            if ($p -match '^src\\|^supabase\\|backend|server|api|route|controller|service|repository|database|migration|schema') { $score += 230 }
+            if ($p -match '\.(ts|js|mjs|cjs|sql)$') { $score += 65 }
+        }
         "qa" {
             if ($p -match '^tests?\\|spec|test|verify|playwright|vitest|quality|regression') { $score += 220 }
             if ($p -match '^docs\\audit\\|^docs\\plans\\') { $score += 120 }
@@ -114,16 +123,44 @@ $builder = New-Object System.Text.StringBuilder
 [void]$builder.AppendLine("")
 [void]$builder.AppendLine("This is a bounded repository snapshot. Do not claim to have inspected omitted files.")
 
+$additionalRequired = @()
+$rootPrefix = $root.TrimEnd([char[]]@("\","/")) + [System.IO.Path]::DirectorySeparatorChar
+
+foreach ($candidate in @($AdditionalRequiredFiles)) {
+    if ([string]::IsNullOrWhiteSpace($candidate)) { continue }
+
+    $normalized = $candidate.Trim().Replace("/","\")
+    if ([System.IO.Path]::IsPathRooted($normalized)) { continue }
+
+    $segments = @($normalized -split "\\" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    if ($segments -contains ".." -or $segments -contains ".") { continue }
+
+    try {
+        $full = [System.IO.Path]::GetFullPath((Join-Path $root $normalized))
+    }
+    catch {
+        continue
+    }
+
+    if (-not $full.StartsWith($rootPrefix,[System.StringComparison]::OrdinalIgnoreCase)) { continue }
+    if (-not (Test-Path $full -PathType Leaf)) { continue }
+
+    if ($additionalRequired -notcontains $normalized) {
+        $additionalRequired += $normalized
+    }
+}
+
 $required = @(
+    "tasks\$Id.md",
+    "docs\engineering\dispatch\$Id.md",
+    ".codex\agents\$Owner.md"
+) + $additionalRequired + @(
     "AGENTS.md",
     "docs\PROJECT-BRIEF.md",
     "docs\product\product-context.md",
     "docs\architecture\architecture-context.md",
     "docs\engineering\engineering-context.md",
     "docs\operations\operations-context.md",
-    ".codex\agents\$Owner.md",
-    "tasks\$Id.md",
-    "docs\engineering\dispatch\$Id.md",
     ".codex\state\company-state.md",
     ".codex\state\current-sprint.md",
     "docs\engineering\project-intake.md",
