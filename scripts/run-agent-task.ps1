@@ -49,6 +49,7 @@ $schemaPath = Join-Path $root "schemas\agent-result.schema.json"
 $routerPath = Join-Path $PSScriptRoot "provider-router.ps1"
 $contextBuilderPath = Join-Path $PSScriptRoot "build-agent-context.ps1"
 $localResolverPath = Join-Path $PSScriptRoot "local-runtime\resolve-local-runtime.ps1"
+$localRuntimeConfigPath = Join-Path $root ".codex\local-runtime-config.json"
 
 if (-not (Test-Path $dispatchPath)) { throw "Dispatch packet not found: $dispatchPath" }
 if (-not (Test-Path $rolePath)) { throw "Role instructions not found: $rolePath" }
@@ -100,7 +101,16 @@ $promptLines = @(
 $prompt = $promptLines -join [Environment]::NewLine
 
 $localRuntime = $null
-if ($Provider -in @("Auto","Ollama") -and (Test-Path $localResolverPath -PathType Leaf)) {
+$localRuntimeConfigured = (
+    (Test-Path $localResolverPath -PathType Leaf) -and
+    (Test-Path $localRuntimeConfigPath -PathType Leaf)
+)
+
+if ($Provider -eq "Ollama" -and -not $localRuntimeConfigured) {
+    throw "Ollama local runtime is not configured for this project. Run initialize-local-runtime.ps1 first."
+}
+
+if ($Provider -in @("Auto","Ollama") -and $localRuntimeConfigured) {
     $localArgs = @{
         ProjectPath = $root
         Role = $owner
