@@ -21,6 +21,14 @@ function Read-Field {
     return ""
 }
 
+function Read-Section {
+    param([string]$Content,[string]$Section)
+    $pattern = "(?ms)^## " + [regex]::Escape($Section) + "\s*\r?\n\s*\r?\n(.+?)(?:\r?\n\r?\n---|\r?\n\r?\n##|\z)"
+    if ($Content -match $pattern) { return $Matches[1].Trim() }
+    return ""
+}
+
+
 function Write-Utf8NoBom {
     param([string]$Path,[string]$Value)
     [System.IO.File]::WriteAllText($Path,$Value,(New-Object System.Text.UTF8Encoding($false)))
@@ -452,9 +460,10 @@ $schemaPath = Join-Path $root "schemas\writable-change-set.schema.json"
 $policyPath = Join-Path $root ".codex\writable-policy.json"
 $routerPath = Join-Path $PSScriptRoot "provider-router.ps1"
 $contextBuilderPath = Join-Path $PSScriptRoot "build-agent-context.ps1"
+$requiredResolverPath = Join-Path $PSScriptRoot "resolve-writable-required-files.ps1"
 $submitPath = Join-Path $PSScriptRoot "submit-task-result.ps1"
 
-foreach ($required in @($dispatchPath,$rolePath,$schemaPath,$policyPath,$routerPath,$contextBuilderPath,$submitPath)) {
+foreach ($required in @($dispatchPath,$rolePath,$schemaPath,$policyPath,$routerPath,$contextBuilderPath,$requiredResolverPath,$submitPath)) {
     if (-not (Test-Path $required)) {
         throw "Required writable runtime component not found: $required"
     }
@@ -480,8 +489,30 @@ elseif ($null -ne $config -and $null -ne $config.context_max_chars) {
     $maxChars = [Math]::Min([int]$config.context_max_chars,120000)
 }
 
+$requiredSourceText = @(
+    (Read-Section -Content $taskText -Section "Objective"),
+    (Read-Section -Content $taskText -Section "Context"),
+    (Read-Section -Content $taskText -Section "Requirements"),
+    (Read-Section -Content $taskText -Section "Acceptance Criteria"),
+    (Read-Section -Content $taskText -Section "Testing Requirements"),
+    (Read-Section -Content $dispatchText -Section "Objective"),
+    (Read-Section -Content $dispatchText -Section "Context"),
+    (Read-Section -Content $dispatchText -Section "Expected Output"),
+    (Read-Section -Content $dispatchText -Section "Acceptance Criteria"),
+    (Read-Section -Content $dispatchText -Section "Testing Requirements")
+) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+
+$requiredFiles = @(& $requiredResolverPath -ProjectPath $workspace -SourceText $requiredSourceText -PolicyPath $policyPath)
+
+if ($requiredFiles.Count -gt 0) {
+    Write-Host ("Writable required files: " + ($requiredFiles -join ", ")) -ForegroundColor DarkGray
+}
+else {
+    Write-Host "Writable required files: none resolved from task/dispatch." -ForegroundColor DarkGray
+}
+
 Write-Host "Building writable repository context from isolated worktree..." -ForegroundColor DarkGray
-$context = & $contextBuilderPath -ProjectPath $workspace -Id $Id -Owner $owner -MaxChars $maxChars
+$context = & $contextBuilderPath -ProjectPath $workspace -Id $Id -Owner $owner -MaxChars $maxChars -RequiredFiles $requiredFiles
 
 $prompt = @(
     "You are executing an AUTHORIZED IMPLEMENTATION task for AI Company OS.",

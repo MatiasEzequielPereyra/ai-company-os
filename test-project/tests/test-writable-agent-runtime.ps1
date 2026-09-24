@@ -68,7 +68,25 @@ function New-FixtureTask {
     ) -join [Environment]::NewLine
 
     Write-NoBom (Join-Path $fixtureRepo ("tasks\" + $Id + ".md")) $task
-    Write-NoBom (Join-Path $fixtureRepo ("docs\engineering\dispatch\" + $Id + ".md")) ("Dispatch for " + $Id)
+
+    $dispatch = @(
+        "# Execution Request - $Id",
+        "",
+        "## Objective",
+        "",
+        "Safely update $FileName.",
+        "",
+        "## Required Context",
+        "",
+        "- tasks/$Id.md",
+        "- .codex/state/company-state.md",
+        "",
+        "## Execution Restrictions",
+        "",
+        "- Do not modify .env."
+    ) -join [Environment]::NewLine
+
+    Write-NoBom (Join-Path $fixtureRepo ("docs\engineering\dispatch\" + $Id + ".md")) $dispatch
     Write-NoBom (Join-Path $fixtureRepo ("src\" + $FileName)) "original"
 }
 
@@ -113,7 +131,8 @@ try {
         "advance-task.ps1",
         "update-task.ps1",
         "submit-task-result.ps1",
-        "build-agent-context.ps1"
+        "build-agent-context.ps1",
+        "resolve-writable-required-files.ps1"
     )) {
         Copy-Item (Join-Path $repoRoot ("scripts\" + $name)) (Join-Path $fixtureRepo ("scripts\" + $name)) -Force
     }

@@ -52,6 +52,8 @@ They receive:
 - role instructions;
 - bounded repository context.
 
+Before the provider call, the runtime resolves file paths explicitly named by the task or dispatch against the isolated worktree. Existing, unambiguous, policy-safe required files are included before generic context and must fit completely inside the writable context budget. Secret-sensitive, protected, ambiguous, oversized or reparse-point targets are rejected explicitly rather than guessed or silently omitted.
+
 They return only a structured writable change set matching `schemas/writable-change-set.schema.json`.
 
 `Provider Auto` is restricted to configured free writable models. Explicit paid model selection, if ever allowed by a caller, must never be introduced as an automatic fallback.

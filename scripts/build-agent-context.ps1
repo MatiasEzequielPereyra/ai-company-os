@@ -4,7 +4,8 @@ param(
     [string]$Id,
     [Parameter(Mandatory = $true)]
     [string]$Owner,
-    [int]$MaxChars = 320000
+    [int]$MaxChars = 320000,
+    [string[]]$RequiredFiles = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -14,7 +15,8 @@ function Add-ContextFile {
         [System.Text.StringBuilder]$Builder,
         [string]$Root,
         [string]$RelativePath,
-        [int]$Remaining
+        [int]$Remaining,
+        [switch]$RequireComplete
     )
 
     $fullPath = Join-Path $Root $RelativePath
@@ -32,13 +34,21 @@ function Add-ContextFile {
     $header = [Environment]::NewLine + [Environment]::NewLine + "===== FILE: " + $RelativePath + " =====" + [Environment]::NewLine
     if ($header.Length -ge $Remaining) { return 0 }
 
-    $allowed = [Math]::Min(($Remaining - $header.Length),60000)
-    if ($allowed -le 0) { return 0 }
+    $available = $Remaining - $header.Length
+    if ($available -le 0) { return 0 }
 
-    if ($content.Length -gt $allowed) {
-        $marker = [Environment]::NewLine + "[TRUNCATED BY AI COMPANY OS CONTEXT BUILDER]"
-        $take = [Math]::Max(0, $allowed - $marker.Length)
-        $content = $content.Substring(0,$take) + $marker
+    if ($RequireComplete) {
+        if ($content.Length -gt $available) {
+            throw "Required context file cannot fit completely within the context budget: $RelativePath"
+        }
+    }
+    else {
+        $allowed = [Math]::Min($available,60000)
+        if ($content.Length -gt $allowed) {
+            $marker = [Environment]::NewLine + "[TRUNCATED BY AI COMPANY OS CONTEXT BUILDER]"
+            $take = [Math]::Max(0, $allowed - $marker.Length)
+            $content = $content.Substring(0,$take) + $marker
+        }
     }
 
     [void]$Builder.Append($header)
@@ -137,6 +147,24 @@ $required = @(
 $included = @{}
 $used = $builder.Length
 
+foreach ($relative in @($RequiredFiles)) {
+    if ([string]::IsNullOrWhiteSpace($relative)) { continue }
+    if ($used -ge $MaxChars) {
+        throw "Required context files exhausted the configured context budget."
+    }
+
+    $key = $relative.ToLowerInvariant().Replace("/","\")
+    if ($included.ContainsKey($key)) { continue }
+
+    $added = Add-ContextFile -Builder $builder -Root $root -RelativePath $relative -Remaining ($MaxChars - $used) -RequireComplete
+    if ($added -le 0) {
+        throw "Required context file was resolved but could not be included: $relative"
+    }
+
+    $included[$key] = $true
+    $used += $added
+}
+
 foreach ($relative in $required) {
     if ($used -ge $MaxChars) { break }
 
@@ -153,49 +181,59 @@ $allowedExtensions = @(
     ".html",".css",".scss",".sql",".ps1",".sh"
 )
 
-$allFiles = Get-ChildItem $root -File -Recurse -ErrorAction SilentlyContinue | Where-Object {
-    $relative = $_.FullName.Substring($root.Length).TrimStart("\")
-    $lower = $relative.ToLowerInvariant()
-    $name = $_.Name.ToLowerInvariant()
-    $ext = $_.Extension.ToLowerInvariant()
+$allFiles = @(
+    foreach ($relativeName in @(Get-ChildItem $root -File -Recurse -Force -Name -ErrorAction SilentlyContinue)) {
+        $relative = ([string]$relativeName).Replace("/","\")
+        $fullPath = Join-Path $root $relative
 
-    if ($lower -match '(^|\\)(node_modules|\.git|dist|dist-refactor-modular|build|coverage|\.next|vendor)(\\|$)') {
-        $false
+        try {
+            $fileInfo = Get-Item $fullPath -Force -ErrorAction Stop
+        }
+        catch {
+            continue
+        }
+
+        $lower = $relative.ToLowerInvariant()
+        $name = $fileInfo.Name.ToLowerInvariant()
+        $ext = $fileInfo.Extension.ToLowerInvariant()
+        $allowed = $false
+
+        if ($lower -match '(^|\\)(node_modules|\.git|dist|dist-refactor-modular|build|coverage|\.next|vendor)(\\|$)') {
+            $allowed = $false
+        }
+        elseif ($lower -match '^\.codex\\runtime\\|^docs\\engineering\\agent-reports\\') {
+            $allowed = $false
+        }
+        elseif ($name -like ".env*") {
+            $allowed = $false
+        }
+        elseif ($name -match 'secret|credential|private[-_]?key|service[-_]?account') {
+            $allowed = $false
+        }
+        elseif ($name -in @("package-lock.json","pnpm-lock.yaml","yarn.lock")) {
+            $allowed = $false
+        }
+        elseif ($ext -in @(".pem",".key",".p12",".pfx",".crt",".cer")) {
+            $allowed = $false
+        }
+        elseif ($fileInfo.Length -gt 500000) {
+            $allowed = $false
+        }
+        elseif ($allowedExtensions -contains $ext) {
+            $allowed = $true
+        }
+        elseif ($fileInfo.Name -in @("Dockerfile",".gitignore",".npmrc")) {
+            $allowed = $true
+        }
+
+        if ($allowed) {
+            [PSCustomObject]@{
+                Relative = $relative
+                Score = Get-RoleScore -RelativePath $relative -Role $Owner
+            }
+        }
     }
-    elseif ($lower -match '^\.codex\\runtime\\|^docs\\engineering\\agent-reports\\') {
-        $false
-    }
-    elseif ($name -like ".env*") {
-        $false
-    }
-    elseif ($name -match 'secret|credential|private[-_]?key|service[-_]?account') {
-        $false
-    }
-    elseif ($name -in @("package-lock.json","pnpm-lock.yaml","yarn.lock")) {
-        $false
-    }
-    elseif ($ext -in @(".pem",".key",".p12",".pfx",".crt",".cer")) {
-        $false
-    }
-    elseif ($_.Length -gt 500000) {
-        $false
-    }
-    elseif ($allowedExtensions -contains $ext) {
-        $true
-    }
-    elseif ($_.Name -in @("Dockerfile",".gitignore",".npmrc")) {
-        $true
-    }
-    else {
-        $false
-    }
-} | ForEach-Object {
-    $relative = $_.FullName.Substring($root.Length).TrimStart("\")
-    [PSCustomObject]@{
-        Relative = $relative
-        Score = Get-RoleScore -RelativePath $relative -Role $Owner
-    }
-}
+)
 
 $inventoryReserve = [Math]::Min(30000,[Math]::Max(2000,[int]($MaxChars * 0.15)))
 $contentBudget = [Math]::Max(0,$MaxChars - $inventoryReserve)
