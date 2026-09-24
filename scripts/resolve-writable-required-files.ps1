@@ -136,10 +136,13 @@ if ($LASTEXITCODE -ne 0 -or $gitRootLines.Count -lt 1) {
     throw "Writable required-file resolution requires a Git worktree."
 }
 
-$gitRoot = [System.IO.Path]::GetFullPath(([string]$gitRootLines[0]).Trim()).TrimEnd([char[]]@("\","/"))
-$expectedRoot = [System.IO.Path]::GetFullPath($root).TrimEnd([char[]]@("\","/"))
+$gitPrefixLines = @(& git -C $root rev-parse --show-prefix 2>$null)
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to verify writable worktree root."
+}
 
-if (-not [string]::Equals($gitRoot,$expectedRoot,[System.StringComparison]::OrdinalIgnoreCase)) {
+$gitPrefix = ($gitPrefixLines -join "").Trim()
+if (-not [string]::IsNullOrWhiteSpace($gitPrefix)) {
     throw "Writable required-file resolution must run at the task worktree root."
 }
 
@@ -147,16 +150,14 @@ $inventory = @(
     & git -C $root ls-files --cached --others --exclude-standard 2>$null |
         ForEach-Object {
             $relative = ([string]$_).Trim().Replace("\","/")
-            if ([string]::IsNullOrWhiteSpace($relative)) { return }
-
-            $lower = $relative.ToLowerInvariant().Replace("/","\")
-            if ($lower -match '(^|\\)(node_modules|\.git|dist|dist-refactor-modular|build|coverage|\.next|vendor)(\\|$)') {
-                return
-            }
-
-            [PSCustomObject]@{
-                Relative = $relative
-                Name = (Split-Path $relative -Leaf)
+            if (-not [string]::IsNullOrWhiteSpace($relative)) {
+                $lower = $relative.ToLowerInvariant().Replace("/","\")
+                if ($lower -notmatch '(^|\\)(node_modules|\.git|dist|dist-refactor-modular|build|coverage|\.next|vendor)(\\|$)') {
+                    [PSCustomObject]@{
+                        Relative = $relative
+                        Name = (Split-Path $relative -Leaf)
+                    }
+                }
             }
         }
 )
