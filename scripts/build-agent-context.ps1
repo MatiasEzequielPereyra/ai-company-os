@@ -124,15 +124,15 @@ $builder = New-Object System.Text.StringBuilder
 [void]$builder.AppendLine("This is a bounded repository snapshot. Do not claim to have inspected omitted files.")
 
 $additionalRequired = @()
-$rootPrefix = $root.TrimEnd([char[]]@("\\","/")) + [System.IO.Path]::DirectorySeparatorChar
+$rootPrefix = $root.TrimEnd([char[]]@("\","/")) + [System.IO.Path]::DirectorySeparatorChar
 
 foreach ($candidate in @($AdditionalRequiredFiles)) {
     if ([string]::IsNullOrWhiteSpace($candidate)) { continue }
 
-    $normalized = $candidate.Trim().Replace("/","\\")
+    $normalized = $candidate.Trim().Replace("/","\")
     if ([System.IO.Path]::IsPathRooted($normalized)) { continue }
 
-    $segments = @($normalized -split "\\\\" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    $segments = @($normalized -split "\\" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
     if ($segments -contains ".." -or $segments -contains ".") { continue }
 
     try {
