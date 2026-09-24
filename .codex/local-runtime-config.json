@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "profiles": {
+    "LOCAL_CPU_LOW": {
+      "max_model_bytes": 6500000000,
+      "num_ctx": 8192,
+      "num_predict": 1024,
+      "context_max_chars": 20000,
+      "gate_context_max_chars": 7000,
+      "gate_artifact_max_chars": 3000,
+      "benchmark_max_models": 1,
+      "minimum_generation_tps": 1.5
+    },
+    "LOCAL_CPU_HIGH": {
+      "max_model_bytes": 10000000000,
+      "num_ctx": 12288,
+      "num_predict": 1536,
+      "context_max_chars": 32000,
+      "gate_context_max_chars": 10000,
+      "gate_artifact_max_chars": 4000,
+      "benchmark_max_models": 2,
+      "minimum_generation_tps": 2.0
+    },
+    "LOCAL_GPU_6GB": {
+      "max_model_bytes": 6500000000,
+      "num_ctx": 8192,
+      "num_predict": 1536,
+      "context_max_chars": 24000,
+      "gate_context_max_chars": 8000,
+      "gate_artifact_max_chars": 3500,
+      "benchmark_max_models": 2,
+      "minimum_generation_tps": 5.0
+    },
+    "LOCAL_GPU_8GB": {
+      "max_model_bytes": 8000000000,
+      "num_ctx": 12288,
+      "num_predict": 2048,
+      "context_max_chars": 36000,
+      "gate_context_max_chars": 12000,
+      "gate_artifact_max_chars": 5000,
+      "benchmark_max_models": 2,
+      "minimum_generation_tps": 8.0
+    },
+    "LOCAL_GPU_12GB": {
+      "max_model_bytes": 10500000000,
+      "num_ctx": 16384,
+      "num_predict": 2048,
+      "context_max_chars": 50000,
+      "gate_context_max_chars": 16000,
+      "gate_artifact_max_chars": 7000,
+      "benchmark_max_models": 3,
+      "minimum_generation_tps": 10.0
+    },
+    "LOCAL_GPU_16GB_PLUS": {
+      "max_model_bytes": 18000000000,
+      "num_ctx": 32768,
+      "num_predict": 4096,
+      "context_max_chars": 100000,
+      "gate_context_max_chars": 28000,
+      "gate_artifact_max_chars": 10000,
+      "benchmark_max_models": 4,
+      "minimum_generation_tps": 12.0
+    }
+  },
+  "role_preferences": {
+    "ceo": ["llama3.1:8b", "qwen2.5-coder:7b", "qwen2.5-coder:14b"],
+    "pm": ["llama3.1:8b", "qwen2.5-coder:7b", "qwen2.5-coder:14b"],
+    "qa": ["llama3.1:8b", "qwen2.5-coder:7b", "qwen2.5-coder:14b"],
+    "security": ["llama3.1:8b", "qwen2.5-coder:7b", "qwen2.5-coder:14b"],
+    "engineering-manager": ["qwen2.5-coder:14b", "qwen2.5-coder:7b", "llama3.1:8b"],
+    "cto": ["qwen2.5-coder:14b", "qwen2.5-coder:7b", "llama3.1:8b"],
+    "backend": ["qwen2.5-coder:14b", "qwen2.5-coder:7b", "llama3.1:8b"],
+    "frontend": ["qwen2.5-coder:14b", "qwen2.5-coder:7b", "llama3.1:8b"],
+    "devops": ["qwen2.5-coder:14b", "qwen2.5-coder:7b", "llama3.1:8b"]
+  },
+  "default_preferences": ["llama3.1:8b", "qwen2.5-coder:7b", "qwen2.5-coder:14b"],
+  "benchmark": {
+    "prompt": "Reply with exactly: LOCAL_RUNTIME_OK",
+    "num_predict": 32,
+    "num_ctx": 2048,
+    "timeout_seconds": 180,
+    "cache_ttl_hours": 168
+  }
+}

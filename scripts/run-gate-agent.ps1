@@ -82,9 +82,31 @@ $schemaName = switch ($Gate) {
 $schemaPath = Join-Path $root ("schemas\" + $schemaName)
 $routerPath = Join-Path $PSScriptRoot "provider-router.ps1"
 $contextBuilderPath = Join-Path $PSScriptRoot "build-agent-context.ps1"
+$localResolverPath = Join-Path $PSScriptRoot "local-runtime\resolve-local-runtime.ps1"
 
 foreach ($required in @($schemaPath,$routerPath,$contextBuilderPath)) {
     if (-not (Test-Path $required)) { throw "Required gate component not found: $required" }
+}
+
+$localRuntime = $null
+if ($Provider -in @("Auto","Ollama") -and (Test-Path $localResolverPath -PathType Leaf)) {
+    $localArgs = @{
+        ProjectPath = $root
+        Role = $reviewerRole
+        Workload = "gate"
+    }
+    if ($Provider -eq "Ollama" -and -not [string]::IsNullOrWhiteSpace($Model)) {
+        $localArgs.ModelOverride = $Model
+    }
+
+    $localRuntime = & $localResolverPath @localArgs
+    if ($Provider -eq "Ollama" -and -not [bool]$localRuntime.Available) {
+        throw ("Ollama local runtime unavailable: " + [string]$localRuntime.Reason)
+    }
+
+    if ([bool]$localRuntime.Available) {
+        Write-Host ("Local runtime: " + $localRuntime.Profile + " -> " + $localRuntime.Model) -ForegroundColor DarkGray
+    }
 }
 
 $maxChars = 180000
@@ -97,7 +119,11 @@ if (Test-Path $configPath) {
             $maxChars = [int]$providerConfig.gate_context_max_chars
         }
 
-        if ($Provider -in @("Auto","Ollama")) {
+        if ($null -ne $localRuntime -and [bool]$localRuntime.Available) {
+            $maxChars = [Math]::Min($maxChars,[int]$localRuntime.GateContextMaxChars)
+            $artifactMaxChars = [Math]::Min($artifactMaxChars,[int]$localRuntime.GateArtifactMaxChars)
+        }
+        elseif ($Provider -eq "Ollama") {
             if ($null -ne $providerConfig.ollama_gate_context_max_chars) {
                 $maxChars = [Math]::Min($maxChars,[int]$providerConfig.ollama_gate_context_max_chars)
             }
@@ -172,7 +198,7 @@ $outputPath = Join-Path $runtimeDir ($Id + "-" + $Gate.ToLowerInvariant() + "-ga
 
 Write-Host ("Gate context budget: base=" + $maxChars + " chars, artifact=" + $artifactMaxChars + " chars") -ForegroundColor DarkGray
 Write-Host "Running $Gate gate: $reviewerRole -> $Id" -ForegroundColor Cyan
-$execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $evidence.ToString() -SchemaPath $schemaPath -OutputPath $outputPath -Model $Model
+$execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $evidence.ToString() -SchemaPath $schemaPath -OutputPath $outputPath -Model $Model -Role $reviewerRole -Workload "gate"
 
 if (-not (Test-Path $outputPath)) {
     throw "Gate provider did not produce structured output: $outputPath"

@@ -48,6 +48,7 @@ The framework includes:
 - durable Markdown tasks under `tasks/`;
 - readiness, dispatch, result intake, review, QA, security, and final approval scripts;
 - provider routing for Codex CLI, OpenRouter, Gemini, local Ollama, DeepSeek, and xAI/Grok;
+- hardware-aware Ollama profiling with dynamic model/context selection and optional throughput benchmarks;
 - structured provider result schemas;
 - engineering backlog generation/materialization;
 - state synchronization;
@@ -75,6 +76,7 @@ Run from the repository root:
 
 ```powershell
 .\scripts\initialize-project.ps1
+.\scripts\local-runtime\initialize-local-runtime.ps1
 .\scripts\new-task.ps1 -Title "Implement feature" -Owner backend -Priority P1
 .\scripts\evaluate-readiness.ps1 -Apply
 .\scripts\dispatch-ready-tasks.ps1 -Apply
@@ -110,6 +112,8 @@ AI Company OS deliberately separates **analysis authority** from **mutation auth
 The built-in Codex adapter uses a read-only sandbox. External API providers and local Ollama receive a bounded repository context pack. A task being READY or ACTIVE does not by itself authorize unrestricted code changes, deployment, secret access, or merge/push operations.
 
 Paid automatic fallbacks are disabled by default. DeepSeek and Grok can be selected explicitly, while `-Provider Auto` will skip them unless `.codex/provider-config.json` sets `allow_paid_fallback` to `true`.
+
+Local Ollama routing is hardware-aware: model size, context, generation budget, role preference, and cached throughput can change by machine. See `docs/operations/local-runtime.md`.
 
 Parallel mutating agents must not share a writable checkout. Use task-specific branches/worktrees and explicit integration review.
 

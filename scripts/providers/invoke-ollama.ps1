@@ -3,7 +3,9 @@ param(
     [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Context,
     [Parameter(Mandatory = $true)][string]$SchemaPath,
     [Parameter(Mandatory = $true)][string]$OutputPath,
-    [string]$Model = "llama3.1:8b"
+    [string]$Model = "llama3.1:8b",
+    [int]$NumCtx = 8192,
+    [int]$NumPredict = 1024
 )
 
 $ErrorActionPreference = "Stop"
@@ -64,6 +66,9 @@ else {
     $env:OLLAMA_BASE_URL.TrimEnd('/')
 }
 
+if ($NumCtx -le 0) { $NumCtx = 8192 }
+if ($NumPredict -le 0) { $NumPredict = 1024 }
+
 $schemaText = Get-Content $SchemaPath -Raw -Encoding UTF8
 $schema = $schemaText | ConvertFrom-Json
 
@@ -90,8 +95,8 @@ $body = @{
     format = $schema
     options = @{
         temperature = 0
-        num_ctx = 8192
-        num_predict = 1024
+        num_ctx = $NumCtx
+        num_predict = $NumPredict
     }
 } | ConvertTo-Json -Depth 100 -Compress
 
@@ -111,7 +116,7 @@ if (-not [string]::IsNullOrWhiteSpace($env:OLLAMA_TIMEOUT_SEC)) {
 }
 
 Write-Host ("Ollama model: " + $Model) -ForegroundColor DarkGray
-Write-Host ("Ollama request: context_chars=" + $Context.Length + ", num_ctx=8192, num_predict=1024, timeout=" + $timeoutSeconds + "s") -ForegroundColor DarkGray
+Write-Host ("Ollama request: context_chars=" + $Context.Length + ", num_ctx=" + $NumCtx + ", num_predict=" + $NumPredict + ", timeout=" + $timeoutSeconds + "s") -ForegroundColor DarkGray
 Write-Host "Ollama inference running..." -ForegroundColor DarkGray
 
 for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
