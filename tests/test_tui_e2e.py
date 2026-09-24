@@ -446,7 +446,7 @@ def test_tui_drives_real_worktree_change_to_done(
                 screen,
             )
 
-            assert task_status(root) == "REVIEW"
+            assert task_status(root) == "REVIEW", screen.last_error_text
 
             workspace = (
                 root.parent
