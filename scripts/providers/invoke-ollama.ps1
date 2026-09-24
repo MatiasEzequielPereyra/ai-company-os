@@ -3,7 +3,7 @@ param(
     [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Context,
     [Parameter(Mandatory = $true)][string]$SchemaPath,
     [Parameter(Mandatory = $true)][string]$OutputPath,
-    [string]$Model = "qwen2.5-coder:14b"
+    [string]$Model = "llama3.1:8b"
 )
 
 $ErrorActionPreference = "Stop"
