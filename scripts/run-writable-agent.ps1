@@ -462,6 +462,7 @@ $routerPath = Join-Path $PSScriptRoot "provider-router.ps1"
 $contextBuilderPath = Join-Path $PSScriptRoot "build-agent-context.ps1"
 $requiredResolverPath = Join-Path $PSScriptRoot "resolve-writable-required-files.ps1"
 $localResolverPath = Join-Path $PSScriptRoot "local-runtime\resolve-local-runtime.ps1"
+$localRuntimeConfigPath = Join-Path $root ".codex\local-runtime-config.json"
 $submitPath = Join-Path $PSScriptRoot "submit-task-result.ps1"
 
 foreach ($required in @($dispatchPath,$rolePath,$schemaPath,$policyPath,$routerPath,$contextBuilderPath,$requiredResolverPath,$submitPath)) {
@@ -484,7 +485,7 @@ $roleText = Get-Content $rolePath -Raw -Encoding UTF8
 
 $localRuntime = $null
 if ($Provider -in @("Auto","Ollama")) {
-    if (Test-Path $localResolverPath -PathType Leaf) {
+    if ((Test-Path $localResolverPath -PathType Leaf) -and (Test-Path $localRuntimeConfigPath -PathType Leaf)) {
         $localArgs = @{
             ProjectPath = $root
             Role = $owner
@@ -505,7 +506,7 @@ if ($Provider -in @("Auto","Ollama")) {
         }
     }
     elseif ($Provider -eq "Ollama") {
-        throw "Ollama local runtime resolver is not installed."
+        throw "Ollama local runtime resolver/configuration is not installed."
     }
 }
 
