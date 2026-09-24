@@ -180,8 +180,10 @@ if ($ollama -notmatch 'localhost:11434') { throw "Ollama adapter must default to
 if ($ollama -notmatch 'OLLAMA_BASE_URL') { throw "Ollama adapter must support a configurable local endpoint" }
 if ($ollama -notmatch 'format = \$schema') { throw "Ollama adapter must pass the requested JSON schema to format" }
 if ($ollama -notmatch 'Test-TransientOllamaError') { throw "Ollama adapter must classify transient failures" }
-if ($ollama -notmatch 'num_ctx = 8192') { throw "Ollama adapter must use a practical local context window" }
-if ($ollama -notmatch 'num_predict = 1024') { throw "Ollama adapter must bound local generation length" }
+if ($ollama -notmatch '\[int\]\$NumCtx = 8192') { throw "Ollama adapter must expose an adaptive context parameter" }
+if ($ollama -notmatch '\[int\]\$NumPredict = 1024') { throw "Ollama adapter must expose an adaptive generation parameter" }
+if ($ollama -notmatch 'num_ctx = \$NumCtx') { throw "Ollama adapter must apply the resolved context budget" }
+if ($ollama -notmatch 'num_predict = \$NumPredict') { throw "Ollama adapter must apply the resolved generation budget" }
 if ($ollama -notmatch 'OLLAMA_TIMEOUT_SEC') { throw "Ollama adapter must support a configurable timeout" }
 
 $deepSeek = Get-Content (Join-Path $repoRoot "scripts\providers\invoke-deepseek.ps1") -Raw
@@ -199,6 +201,22 @@ if ($xai -notmatch 'Test-TransientXaiError') { throw "xAI adapter must classify 
 $router = Get-Content (Join-Path $repoRoot "scripts\provider-router.ps1") -Raw
 if ($router -notmatch 'allow_paid_fallback') { throw "Provider router must guard paid automatic fallbacks" }
 if ($router -notmatch 'DeepSeek.*Grok') { throw "Provider router must know the paid provider set" }
+if ($router -notmatch 'resolve-local-runtime\.ps1') { throw "Provider router must use the hardware-aware local runtime resolver" }
+if ($router -notmatch 'HardwareProfile') { throw "Provider router must surface the selected local hardware profile" }
+if ($router -notmatch 'NumCtx') { throw "Provider router must pass adaptive Ollama inference budgets" }
+
+$localConfig = Get-Content (Join-Path $repoRoot ".codex\local-runtime-config.json") -Raw | ConvertFrom-Json
+foreach ($profileName in @("LOCAL_CPU_LOW","LOCAL_CPU_HIGH","LOCAL_GPU_6GB","LOCAL_GPU_8GB","LOCAL_GPU_12GB","LOCAL_GPU_16GB_PLUS")) {
+    if ($null -eq $localConfig.profiles.PSObject.Properties[$profileName]) {
+        throw "Local runtime config missing profile: $profileName"
+    }
+}
+if ([int]$localConfig.profiles.LOCAL_GPU_12GB.num_ctx -le [int]$localConfig.profiles.LOCAL_CPU_LOW.num_ctx) {
+    throw "12 GB GPU profile must expose more context than low-CPU profile"
+}
+
+$localProfileTest = Join-Path $repoRoot "test-project\tests\test-local-runtime-profile.ps1"
+& $localProfileTest
 
 $contextBuilder = Get-Content (Join-Path $repoRoot "scripts\build-agent-context.ps1") -Raw
 if ($contextBuilder -notmatch '\.env') { throw "Context builder must explicitly exclude environment files" }
