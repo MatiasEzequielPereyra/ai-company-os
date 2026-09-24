@@ -1,0 +1,43 @@
+{
+  "max_changed_files": 30,
+  "max_file_bytes": 750000,
+  "max_total_write_bytes": 3000000,
+  "max_verification_commands": 12,
+  "protected_path_prefixes": [
+    ".git",
+    ".codex",
+    "tasks",
+    "docs/engineering/results",
+    "docs/engineering/reviews",
+    "docs/engineering/qa",
+    "docs/engineering/security",
+    "docs/engineering/final-approvals"
+  ],
+  "secret_name_patterns": [
+    "(^|/)\\.env($|\\.)",
+    "(^|/).*secret.*",
+    "(^|/).*credential.*",
+    "(^|/).*private[-_]?key.*",
+    "(^|/).*service[-_]?account.*",
+    "\\.(pem|key|p12|pfx)$"
+  ],
+  "verification_command_patterns": [
+    "^git diff --check$",
+    "^git status --short$",
+    "^git diff --stat$",
+    "^node(?:\\.exe)? --test(?: .+)?$",
+    "^node(?:\\.exe)? [^;&|<>]+\\.(?:js|mjs|cjs)(?: .*)?$",
+    "^npm(?:\\.cmd)? test(?: -- .*)?$",
+    "^npm(?:\\.cmd)? run (?:test|verify|check|lint|typecheck|build)(?::[A-Za-z0-9._-]+)?(?: -- .*)?$",
+    "^pnpm(?:\\.cmd)? test(?: -- .*)?$",
+    "^pnpm(?:\\.cmd)? run (?:test|verify|check|lint|typecheck|build)(?::[A-Za-z0-9._-]+)?(?: -- .*)?$",
+    "^yarn(?:\\.cmd)? test(?: -- .*)?$",
+    "^yarn(?:\\.cmd)? run (?:test|verify|check|lint|typecheck|build)(?::[A-Za-z0-9._-]+)?(?: -- .*)?$",
+    "^python(?:\\.exe)? -m pytest(?: .*)?$",
+    "^pytest(?:\\.exe)?(?: .*)?$"
+  ],
+  "free_provider_models": {
+    "OpenRouter": ["openrouter/free"],
+    "Gemini": ["gemini-3.5-flash-lite"]
+  }
+}
