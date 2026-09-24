@@ -51,6 +51,7 @@ if ($router -notmatch 'ValidateSet\("Auto","Codex","OpenRouter","Gemini","Ollama
 }
 foreach ($needle in @(
     'local-runtime\\resolve-local-runtime\.ps1',
+    'local-runtime-config\.json',
     'allow_paid_fallback',
     'invoke-ollama\.ps1',
     'invoke-deepseek\.ps1',
@@ -73,6 +74,7 @@ foreach ($needle in @(
     'analysis_context_max_chars_by_role',
     'analysis_context_max_chars',
     'local-runtime\\resolve-local-runtime\.ps1',
+    'local-runtime-config\.json',
     'ContextMaxChars',
     '-Role \$owner',
     '-Workload "analysis"'
@@ -88,6 +90,7 @@ if ($gateRunner -notmatch 'ValidateSet\("Auto","Codex","OpenRouter","Gemini","Ol
 }
 foreach ($needle in @(
     'local-runtime\\resolve-local-runtime\.ps1',
+    'local-runtime-config\.json',
     'GateContextMaxChars',
     'GateArtifactMaxChars',
     '-Role \$reviewerRole',
@@ -96,6 +99,16 @@ foreach ($needle in @(
     if ($gateRunner -notmatch $needle) {
         throw "Gate runner reconciliation contract missing: $needle"
     }
+}
+
+if ($router -notmatch 'localRuntimeConfigPath') {
+    throw "Provider router must guard optional local runtime configuration"
+}
+if ($agentRunner -notmatch 'localRuntimeConfigured') {
+    throw "Auto must tolerate projects without local runtime configuration in analysis"
+}
+if ($gateRunner -notmatch 'localRuntimeConfigured') {
+    throw "Auto must tolerate projects without local runtime configuration in gates"
 }
 
 $writableRunner = Get-Content (Join-Path $repoRoot "scripts\run-writable-agent.ps1") -Raw -Encoding UTF8
