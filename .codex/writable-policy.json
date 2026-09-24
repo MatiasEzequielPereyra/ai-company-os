@@ -43,6 +43,11 @@
     ],
     "Gemini": [
       "gemini-3.5-flash-lite"
+    ],
+    "Ollama": [
+      "llama3.1:8b",
+      "qwen2.5-coder:7b",
+      "qwen2.5-coder:14b"
     ]
   },
   "required_context_max_files": 8,
