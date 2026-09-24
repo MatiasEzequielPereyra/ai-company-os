@@ -131,7 +131,10 @@ param(
     [string]$OutputPath,
     [string]$Model
 )
-$source = Join-Path (Split-Path -Parent $PSScriptRoot) ".codex\fake-writable-result.json"
+$fixtureRoot = Split-Path -Parent $PSScriptRoot
+$source = Join-Path $fixtureRoot ".codex\fake-writable-result.json"
+$capturedContext = Join-Path $fixtureRoot ".codex\captured-writable-context.txt"
+[System.IO.File]::WriteAllText($capturedContext,[string]$Context,(New-Object System.Text.UTF8Encoding($false)))
 Copy-Item $source $OutputPath -Force
 [PSCustomObject]@{ Provider = $Provider; Model = $Model }
 '@
@@ -141,6 +144,7 @@ Copy-Item $source $OutputPath -Force
         auto_order = @("OpenRouter","Gemini")
         writable_auto_order = @("OpenRouter","Gemini")
         context_max_chars = 50000
+        writable_context_max_chars = 1600
         models = @{
             OpenRouter = "openrouter/free"
             Gemini = "gemini-3.5-flash-lite"
@@ -202,6 +206,19 @@ The prior writable implementation needs correction.
     }
 
     Invoke-Runner -Id "AICO-001"
+
+    $capturedContextPath = Join-Path $fixtureRepo ".codex\captured-writable-context.txt"
+    if (-not (Test-Path $capturedContextPath)) {
+        throw "Writable runtime test did not capture the provider context."
+    }
+
+    $capturedContext = Get-Content $capturedContextPath -Raw -Encoding UTF8
+    if ($capturedContext -notmatch [regex]::Escape("===== FILE: src\value1.txt =====")) {
+        throw "Task-referenced writable source file was omitted from the bounded context pack."
+    }
+    if ($capturedContext -notmatch "original") {
+        throw "Pinned writable source file content was not supplied to the provider."
+    }
 
     if ((Get-Content (Join-Path $fixtureRepo "src\value1.txt") -Raw) -ne "original") {
         throw "Writable runtime modified source in the primary checkout."
