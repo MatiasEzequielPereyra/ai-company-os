@@ -17,5 +17,6 @@
   "writable_models": {
     "OpenRouter": "openrouter/free",
     "Gemini": "gemini-3.5-flash-lite"
-  }
+  },
+  "writable_context_max_chars": 120000
 }
