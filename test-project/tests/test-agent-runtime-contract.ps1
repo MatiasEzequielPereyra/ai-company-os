@@ -260,6 +260,14 @@ if ($xai -notmatch 'XAI_API_KEY') { throw "Grok/xAI adapter must use XAI_API_KEY
 $router = Get-Content (Join-Path $repoRoot "scripts\provider-router.ps1") -Raw
 if ($router -notmatch 'resolve-local-runtime\.ps1') { throw "Provider router must use the local runtime resolver" }
 if ($router -notmatch 'allow_paid_fallback') { throw "Provider router must guard paid fallback" }
+if ($router -notmatch 'localRuntimeConfigPath') { throw "Provider router must require local config before Ollama pre-resolution" }
+
+foreach ($runnerName in @("run-agent-task.ps1","run-gate-agent.ps1","run-writable-agent.ps1")) {
+    $runnerText = Get-Content (Join-Path $repoRoot ("scripts\" + $runnerName)) -Raw
+    if ($runnerText -notmatch 'localRuntimeConfigPath') {
+        throw "$runnerName must guard local pre-resolution with the local runtime config"
+    }
+}
 
 $localConfig = Get-Content (Join-Path $repoRoot ".codex\local-runtime-config.json") -Raw | ConvertFrom-Json
 if ($null -eq $localConfig.profiles.PSObject.Properties["LOCAL_CPU_LOW"]) { throw "Local runtime config missing LOCAL_CPU_LOW" }
