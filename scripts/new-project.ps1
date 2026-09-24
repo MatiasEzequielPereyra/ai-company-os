@@ -55,7 +55,8 @@ $Directories = @(
     "tasks",
 
     "scripts",
-    "scripts\providers"
+    "scripts\providers",
+    "scripts\local-runtime"
 )
 
 foreach ($Directory in $Directories) {
@@ -208,9 +209,22 @@ if (Test-Path $ProvidersSource) {
     }
 }
 
+$LocalRuntimeSource = Join-Path $ScriptsRoot "local-runtime"
+$LocalRuntimeTarget = Join-Path $ProjectPath "scripts\local-runtime"
+if (Test-Path $LocalRuntimeSource) {
+    Get-ChildItem $LocalRuntimeSource -File | ForEach-Object {
+        Copy-Item $_.FullName (Join-Path $LocalRuntimeTarget $_.Name) -Force
+    }
+}
+
 $ProviderConfigSource = Join-Path $ScriptRoot ".codex\provider-config.json"
 if (Test-Path $ProviderConfigSource) {
     Copy-Item $ProviderConfigSource (Join-Path $ProjectPath ".codex\provider-config.json") -Force
+}
+
+$LocalRuntimeConfigSource = Join-Path $ScriptRoot ".codex\local-runtime-config.json"
+if (Test-Path $LocalRuntimeConfigSource) {
+    Copy-Item $LocalRuntimeConfigSource (Join-Path $ProjectPath ".codex\local-runtime-config.json") -Force
 }
 
 $WorkflowProfilesSource = Join-Path $ScriptRoot ".codex\workflow-profiles.json"
