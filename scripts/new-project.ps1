@@ -299,11 +299,9 @@ if (Test-Path $SyncScript) {
 $resolvedProjectPath = (Resolve-Path $ProjectPath).Path
 $managedManifestPath = Join-Path $resolvedProjectPath ".codex\managed-files.json"
 $managedFiles = @(
-    Get-ChildItem $resolvedProjectPath -File -Recurse -Force |
-        Where-Object { $_.FullName -ne $managedManifestPath } |
-        ForEach-Object {
-            $_.FullName.Substring($resolvedProjectPath.Length + 1).Replace("\","/")
-        }
+    Get-ChildItem $resolvedProjectPath -File -Recurse -Force -Name |
+        ForEach-Object { ([string]$_).Replace("\","/") } |
+        Where-Object { $_ -ne ".codex/managed-files.json" }
 )
 $managedFiles += ".codex/managed-files.json"
 $managedFiles = @($managedFiles | Sort-Object -Unique)
