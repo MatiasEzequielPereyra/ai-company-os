@@ -10,7 +10,7 @@
   "allow_paid_fallback": false,
   "context_max_chars": 320000,
   "models": {
-    "Ollama": "qwen2.5-coder:14b",
+    "Ollama": "llama3.1:8b",
     "OpenRouter": "openrouter/free",
     "Gemini": "gemini-3.5-flash-lite",
     "DeepSeek": "deepseek-flash",
