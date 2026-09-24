@@ -29,6 +29,12 @@ class WritableExecutionResult:
     summary: str
     blockers: str
     recommended_next: str
+    result_path: str
+    evidence_path: str
+    changed_paths: tuple[str, ...]
+    verification: str
+    diff_stat: str
+    diff_text: str
     stdout: str
 
 
@@ -71,9 +77,12 @@ class WritableExecutionAdapter:
                 f"Task not found: {task_id}"
             )
 
-        if tasks[0].status != "ACTIVE":
+        if tasks[0].status not in {
+            "READY",
+            "ACTIVE",
+        }:
             raise RuntimeError(
-                f"{task_id} must be ACTIVE before "
+                f"{task_id} must be READY or ACTIVE before "
                 "writable execution. "
                 f"Current status: {tasks[0].status}"
             )
@@ -187,6 +196,10 @@ class WritableExecutionAdapter:
             or "not recorded"
         )
 
+        diff_stat, diff_text = self._git_diff(
+            workspace
+        )
+
         return WritableExecutionResult(
             task_id=task_id,
             workspace_path=str(workspace),
@@ -202,8 +215,68 @@ class WritableExecutionAdapter:
             recommended_next=(
                 details.recommended_next
             ),
+            result_path=details.result_path,
+            evidence_path=details.evidence_path,
+            changed_paths=details.changed_paths,
+            verification=details.verification,
+            diff_stat=diff_stat,
+            diff_text=diff_text,
             stdout=output,
         )
+
+    def _git_diff(
+        self,
+        workspace: Path,
+    ) -> tuple[str, str]:
+        commands = [
+            [
+                "git",
+                "-C",
+                str(workspace),
+                "diff",
+                "--stat",
+            ],
+            [
+                "git",
+                "-C",
+                str(workspace),
+                "diff",
+                "--no-ext-diff",
+                "--",
+            ],
+        ]
+
+        values: list[str] = []
+
+        for command in commands:
+            process = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+
+            if process.returncode != 0:
+                values.append(
+                    "Git diff unavailable: "
+                    + (
+                        process.stderr.strip()
+                        or "unknown git error"
+                    )
+                )
+                continue
+
+            value = process.stdout.strip()
+
+            if len(value) > 40000:
+                value = (
+                    value[:40000]
+                    + "\n[DIFF TRUNCATED]"
+                )
+
+            values.append(value)
+
+        return values[0], values[1]
 
     def _output_field(
         self,
