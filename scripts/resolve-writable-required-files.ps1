@@ -211,17 +211,19 @@ foreach ($candidate in $candidates) {
         }
     }
     else {
-        if ($byName.ContainsKey($candidateKey)) {
-            $matches = @($byName[$candidateKey])
-
-            if ($matches.Count -gt 1) {
-                $paths = ($matches | ForEach-Object { $_.Relative }) -join ", "
-                throw "Required writable context filename is ambiguous: $candidate -> $paths"
+        $matches = @(
+            $inventory | Where-Object {
+                [string]::Equals($_.Name,$candidate,[System.StringComparison]::OrdinalIgnoreCase)
             }
+        )
 
-            if ($matches.Count -eq 1) {
-                $entry = $matches[0]
-            }
+        if ($matches.Count -gt 1) {
+            $paths = ($matches | ForEach-Object { $_.Relative }) -join ", "
+            throw "Required writable context filename is ambiguous: $candidate -> $paths"
+        }
+
+        if ($matches.Count -eq 1) {
+            $entry = $matches[0]
         }
     }
 
