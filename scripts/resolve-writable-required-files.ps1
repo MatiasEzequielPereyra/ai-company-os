@@ -182,18 +182,58 @@ foreach ($entry in $inventory) {
 $candidates = New-Object System.Collections.Generic.List[string]
 
 $pathPattern = '(?i)(?<![A-Za-z0-9_.-])((?:[A-Za-z0-9_.-]+[\\/])*[A-Za-z0-9_.-]+\.(?:html?|css|scss|js|jsx|ts|tsx|mjs|cjs|json|md|txt|toml|ya?ml|sql|ps1|sh|py|go|rs|java|cs|xml|pem|key|p12|pfx))(?=$|[\s,;:)\]}>"]|\x60|\.(?=\s|$))'
-foreach ($match in [regex]::Matches($scanText,$pathPattern)) {
-    $value = $match.Groups[1].Value.Trim().Replace("\","/")
-    if (-not [string]::IsNullOrWhiteSpace($value) -and -not $candidates.Contains($value)) {
-        [void]$candidates.Add($value)
+$specialPattern = '(?i)(?<![A-Za-z0-9_.-])((?:[A-Za-z0-9_.-]+[\\/])*(?:\.env(?:\.[A-Za-z0-9_.-]+)?|Dockerfile|\.npmrc))(?=$|[\s,;:)\]}>"]|\x60|\.(?=\s|$))'
+$targetMarkerPattern = '(?i)\b(implementation target|implementation targets|target file|target files|file to modify|files to modify|archivo objetivo|archivos objetivo)\s*:\s*(.+)$'
+$writeActionPattern = '(?i)\b(modify|update|edit|change|replace|rewrite|refactor|migrate|create|delete|remove|patch|fix|implement|write|touch|modificar|actualizar|editar|cambiar|reemplazar|reescribir|refactorizar|migrar|crear|eliminar|borrar|corregir|implementar)\b'
+$contextBoundaryPattern = '(?i)\b(before|after|using|via|from|based on|according to|against|so that|while|without|antes de|después de|usando|mediante|desde|basado en|según|contra|mientras|sin)\b'
+
+function Add-CandidatesFromText {
+    param(
+        [string]$Text,
+        [System.Collections.Generic.List[string]]$TargetList
+    )
+
+    foreach ($pattern in @($pathPattern,$specialPattern)) {
+        foreach ($match in [regex]::Matches($Text,$pattern)) {
+            $value = $match.Groups[1].Value.Trim().Replace("\","/")
+            if (-not [string]::IsNullOrWhiteSpace($value) -and -not $TargetList.Contains($value)) {
+                [void]$TargetList.Add($value)
+            }
+        }
     }
 }
 
-$specialPattern = '(?i)(?<![A-Za-z0-9_.-])((?:[A-Za-z0-9_.-]+[\\/])*(?:\.env(?:\.[A-Za-z0-9_.-]+)?|Dockerfile|\.npmrc))(?=$|[\s,;:)\]}>"]|\x60|\.(?=\s|$))'
-foreach ($match in [regex]::Matches($scanText,$specialPattern)) {
-    $value = $match.Groups[1].Value.Trim().Replace("\","/")
-    if (-not [string]::IsNullOrWhiteSpace($value) -and -not $candidates.Contains($value)) {
-        [void]$candidates.Add($value)
+foreach ($lineValue in $scanLines) {
+    $line = ([string]$lineValue).Trim()
+    if ([string]::IsNullOrWhiteSpace($line)) { continue }
+
+    $markerMatch = [regex]::Match($line,$targetMarkerPattern)
+    if ($markerMatch.Success) {
+        Add-CandidatesFromText -Text $markerMatch.Groups[2].Value -TargetList $candidates
+        continue
+    }
+
+    $actionMatch = [regex]::Match($line,$writeActionPattern)
+    if (-not $actionMatch.Success) {
+        continue
+    }
+
+    $actionTail = $line.Substring($actionMatch.Index + $actionMatch.Length)
+    $boundaryMatch = [regex]::Match($actionTail,$contextBoundaryPattern)
+
+    if ($boundaryMatch.Success) {
+        $actionTail = $actionTail.Substring(0,$boundaryMatch.Index)
+    }
+
+    $lineCandidates = New-Object System.Collections.Generic.List[string]
+    Add-CandidatesFromText -Text $actionTail -TargetList $lineCandidates
+
+    if ($lineCandidates.Count -gt 0) {
+        foreach ($candidate in $lineCandidates) {
+            if (-not $candidates.Contains($candidate)) {
+                [void]$candidates.Add($candidate)
+            }
+        }
     }
 }
 
