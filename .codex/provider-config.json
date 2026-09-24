@@ -17,5 +17,7 @@
     "Grok": "grok-4.7"
   },
   "gate_context_max_chars": 180000,
-  "ollama_context_max_chars": 20000
+  "ollama_context_max_chars": 20000,
+  "ollama_gate_context_max_chars": 7000,
+  "ollama_gate_artifact_max_chars": 3000
 }
