@@ -192,6 +192,22 @@ if ($null -eq $response.choices -or $response.choices.Count -lt 1) {
     throw "OpenRouter returned no completion choices."
 }
 
+$finishReason = if ($null -ne $response.choices[0].finish_reason) {
+    [string]$response.choices[0].finish_reason
+}
+else {
+    "UNKNOWN"
+}
+
+if ($finishReason -eq "length") {
+    $responseModel = if ($null -ne $response.model) { [string]$response.model } else { $Model }
+    throw (
+        "OpenRouter structured completion was truncated before completion. " +
+        "Model: $responseModel; finish_reason: length. " +
+        "The incomplete structured result was rejected and was not persisted."
+    )
+}
+
 $message = $response.choices[0].message
 $content = $message.content
 if ($content -isnot [string]) {
@@ -206,7 +222,6 @@ $content = ([string]$content).Trim()
 
 if ([string]::IsNullOrWhiteSpace($content) -or $content -eq "null") {
     $responseModel = if ($null -ne $response.model) { [string]$response.model } else { $Model }
-    $finishReason = if ($null -ne $response.choices[0].finish_reason) { [string]$response.choices[0].finish_reason } else { "UNKNOWN" }
     $refusal = ""
     if ($null -ne $message.PSObject.Properties["refusal"] -and $null -ne $message.refusal) {
         $refusal = [string]$message.refusal
