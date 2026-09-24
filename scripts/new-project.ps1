@@ -189,7 +189,8 @@ $ScriptFiles = @(
     "write-operational-event.ps1",
     "summarize-metrics.ps1",
     "new-agent-workspace.ps1",
-    "run-writable-agent.ps1"
+    "run-writable-agent.ps1",
+    "resolve-writable-required-files.ps1"
 )
 
 foreach ($ScriptFile in $ScriptFiles) {
