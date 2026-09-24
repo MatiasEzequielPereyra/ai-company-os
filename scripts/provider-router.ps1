@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("Auto","Codex","OpenRouter","Gemini")]
+    [ValidateSet("Auto","Codex","OpenRouter","Gemini","Ollama","DeepSeek","Grok")]
     [string]$Provider = "Auto",
     [Parameter(Mandatory = $true)][string]$ProjectPath,
     [Parameter(Mandatory = $true)][string]$Prompt,
@@ -15,7 +15,13 @@ function Sanitize-ProviderError {
     param([string]$Message)
 
     $result = $Message
-    foreach ($secret in @($env:CODEX_API_KEY,$env:OPENROUTER_API_KEY,$env:GEMINI_API_KEY)) {
+    foreach ($secret in @(
+        $env:CODEX_API_KEY,
+        $env:OPENROUTER_API_KEY,
+        $env:GEMINI_API_KEY,
+        $env:DEEPSEEK_API_KEY,
+        $env:XAI_API_KEY
+    )) {
         if (-not [string]::IsNullOrWhiteSpace($secret)) {
             $result = $result.Replace($secret,"[REDACTED]")
         }
@@ -56,9 +62,14 @@ if (Test-Path $configPath) {
     $config = Get-Content $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
 }
 
-$autoOrder = @("Codex","OpenRouter","Gemini")
+$autoOrder = @("Ollama","OpenRouter","Gemini","DeepSeek","Grok","Codex")
 if ($null -ne $config -and $null -ne $config.auto_order -and @($config.auto_order).Count -gt 0) {
     $autoOrder = @($config.auto_order | ForEach-Object { [string]$_ })
+}
+
+$allowPaidFallback = $false
+if ($null -ne $config -and $null -ne $config.allow_paid_fallback) {
+    $allowPaidFallback = [bool]$config.allow_paid_fallback
 }
 
 if ($Provider -eq "Auto") {
@@ -95,10 +106,50 @@ foreach ($candidate in $attempts) {
         continue
     }
 
+    if ($candidateName -eq "DeepSeek" -and [string]::IsNullOrWhiteSpace($env:DEEPSEEK_API_KEY)) {
+        $errors += "DeepSeek: DEEPSEEK_API_KEY not configured"
+        if ($Provider -ne "Auto") { throw "DEEPSEEK_API_KEY is not configured." }
+        continue
+    }
+
+    if ($candidateName -eq "Grok" -and [string]::IsNullOrWhiteSpace($env:XAI_API_KEY)) {
+        $errors += "Grok: XAI_API_KEY not configured"
+        if ($Provider -ne "Auto") { throw "XAI_API_KEY is not configured." }
+        continue
+    }
+
+    if ($Provider -eq "Auto" -and -not $allowPaidFallback -and $candidateName -in @("DeepSeek","Grok")) {
+        $errors += ($candidateName + ": paid fallback disabled by configuration")
+        continue
+    }
+
+    if ($candidateName -eq "Ollama") {
+        $ollamaBaseUrl = if ([string]::IsNullOrWhiteSpace($env:OLLAMA_BASE_URL)) {
+            "http://localhost:11434"
+        }
+        else {
+            $env:OLLAMA_BASE_URL.TrimEnd('/')
+        }
+
+        try {
+            $null = Invoke-RestMethod -Method Get -Uri ($ollamaBaseUrl + "/api/tags") -TimeoutSec 3
+        }
+        catch {
+            $errors += "Ollama: local server unavailable"
+            if ($Provider -ne "Auto") {
+                throw "Ollama is not reachable. Start Ollama or set OLLAMA_BASE_URL."
+            }
+            continue
+        }
+    }
+
     $scriptName = switch ($candidateName) {
         "Codex" { "invoke-codex.ps1" }
         "OpenRouter" { "invoke-openrouter.ps1" }
         "Gemini" { "invoke-gemini.ps1" }
+        "Ollama" { "invoke-ollama.ps1" }
+        "DeepSeek" { "invoke-deepseek.ps1" }
+        "Grok" { "invoke-xai.ps1" }
         default { throw "Unknown provider: $candidateName" }
     }
 
