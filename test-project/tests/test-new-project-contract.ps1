@@ -23,6 +23,7 @@ try {
         "scripts\validate-artifacts.ps1",
         "scripts\new-agent-workspace.ps1",
         "scripts\run-writable-agent.ps1",
+        "scripts\resolve-writable-required-files.ps1",
         ".codex\writable-policy.json",
         "schemas\writable-change-set.schema.json",
         "schemas\task.schema.json",
