@@ -22,6 +22,7 @@ from company_os.application.agent_control_service import (
     AgentControlService,
 )
 from company_os.application.writable_workspace_service import WritableWorkspaceService
+from company_os.application.writable_execution_adapter import WritableExecutionAdapter
 from company_os.application.corrective_reactivation_service import CorrectiveReactivationService
 from company_os.application.gate_control_service import (
     GateControlService,
@@ -53,6 +54,7 @@ class PlanControlScreen(Screen):
         self.control = AgentControlService()
         self.gates = GateControlService()
         self.writable = WritableWorkspaceService()
+        self.writable_runner = WritableExecutionAdapter()
         self.corrective = CorrectiveReactivationService()
 
         self.busy = False
@@ -280,6 +282,7 @@ class PlanControlScreen(Screen):
             )
 
             lines = []
+            blocked_execution = False
 
             for workspace in result.workspaces:
                 state = (
@@ -298,6 +301,81 @@ class PlanControlScreen(Screen):
                 lines.append(
                     "\nWritable runner: AVAILABLE"
                 )
+
+                for workspace in result.workspaces:
+                    execution = (
+                        self.writable_runner.run(
+                            self.plan_data.project_root,
+                            workspace.task_id,
+                            workspace.path,
+                            provider="Auto",
+                        )
+                    )
+
+                    if execution.status == "REVIEW":
+                        heading = (
+                            "IMPLEMENTATION COMPLETE"
+                        )
+                    elif execution.status == "BLOCKED":
+                        heading = (
+                            "WRITABLE EXECUTION BLOCKED"
+                        )
+                        blocked_execution = True
+                    elif execution.status == "ACTIVE":
+                        heading = (
+                            "EXECUTION FINISHED - "
+                            "STATE UNCHANGED"
+                        )
+                    else:
+                        heading = (
+                            "WRITABLE EXECUTION FINISHED "
+                            f"- {execution.status}"
+                        )
+
+                    details = [
+                        f"\n{heading}",
+                        f"Task: {execution.task_id}",
+                        f"Provider: {execution.provider}",
+                        f"Model: {execution.model}",
+                        f"Status: {execution.status}",
+                        f"Outcome: {execution.outcome}",
+                        (
+                            "Worktree: "
+                            f"{execution.workspace_path}"
+                        ),
+                    ]
+
+                    if execution.summary:
+                        details.extend(
+                            [
+                                "",
+                                "Summary:",
+                                execution.summary,
+                            ]
+                        )
+
+                    if execution.blockers:
+                        details.extend(
+                            [
+                                "",
+                                "Blocker:",
+                                execution.blockers,
+                            ]
+                        )
+
+                    if execution.recommended_next:
+                        details.extend(
+                            [
+                                "",
+                                "Recommended next:",
+                                execution.recommended_next,
+                            ]
+                        )
+
+                    lines.append(
+                        "\n".join(details)
+                    )
+
             else:
                 lines.append(
                     "\nWritable runner: NOT INSTALLED\n"
@@ -309,35 +387,52 @@ class PlanControlScreen(Screen):
             self.app.call_from_thread(
                 self._writable_finished,
                 "\n\n".join(lines),
+                blocked_execution,
             )
 
         except Exception as exc:
             self.app.call_from_thread(
                 self._operation_failed,
-                "Writable workspace failed",
+                "Writable execution failed",
                 str(exc),
             )
 
     def _writable_finished(
         self,
         message: str,
+        blocked: bool = False,
     ) -> None:
         self.busy = False
+
+        if blocked:
+            self.last_error_text = message
+            footer = (
+                "\n\nC = Copy details"
+                "\nF5 = Return to plan"
+            )
+        else:
+            self.last_error_text = ""
+            footer = "\n\nF5 = Return to plan"
 
         self.query_one(
             "#plan-control-content",
             Static,
         ).update(
             Panel(
-                message
-                + "\n\nF5 = Return to plan",
+                message + footer,
                 title="Writable Execution",
             )
         )
 
-        self.notify(
-            "Writable workspace preparation finished."
-        )
+        if blocked:
+            self.notify(
+                "Writable execution is BLOCKED.",
+                severity="warning",
+            )
+        else:
+            self.notify(
+                "Writable execution finished."
+            )
 
     def action_run_gates(self) -> None:
         if self.busy:
@@ -669,7 +764,7 @@ class PlanControlScreen(Screen):
                 "R = Run analysis-only agent"
             )
             controls.append(
-                "W = Prepare writable worktree"
+                "W = Run writable implementation"
             )
 
         pending_gates = False
