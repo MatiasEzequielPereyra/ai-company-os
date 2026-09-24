@@ -559,6 +559,22 @@ class ProvidersScreen(Screen):
             id="gemini-key",
         )
 
+        yield Input(
+            placeholder=(
+                "DeepSeek API key - Enter to save securely"
+            ),
+            password=True,
+            id="deepseek-key",
+        )
+
+        yield Input(
+            placeholder=(
+                "Grok / xAI API key - Enter to save securely"
+            ),
+            password=True,
+            id="grok-key",
+        )
+
         yield Static(
             "Keys are stored through the operating system "
             "credential store, not inside the repository."
@@ -611,6 +627,8 @@ class ProvidersScreen(Screen):
         mapping = {
             "openrouter-key": "openrouter",
             "gemini-key": "gemini",
+            "deepseek-key": "deepseek",
+            "grok-key": "grok",
         }
 
         provider = mapping.get(
