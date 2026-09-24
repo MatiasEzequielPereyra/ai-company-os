@@ -14,6 +14,13 @@ $required = @(
     "scripts\providers\invoke-codex.ps1",
     "scripts\providers\invoke-openrouter.ps1",
     "scripts\providers\invoke-gemini.ps1",
+    "scripts\providers\invoke-ollama.ps1",
+    "scripts\providers\invoke-deepseek.ps1",
+    "scripts\providers\invoke-xai.ps1",
+    "scripts\local-runtime\detect-hardware.ps1",
+    "scripts\local-runtime\resolve-local-runtime.ps1",
+    "scripts\local-runtime\initialize-local-runtime.ps1",
+    "scripts\local-runtime\benchmark-ollama.ps1",
     "scripts\run-gate-agent.ps1",
     "scripts\run-pending-gates.ps1",
     "scripts\generate-engineering-backlog.ps1",
@@ -72,6 +79,10 @@ $config = Get-Content $configPath -Raw | ConvertFrom-Json
 if (@($config.auto_order) -notcontains "Codex") { throw "Provider config must include Codex" }
 if (@($config.auto_order) -notcontains "OpenRouter") { throw "Provider config must include OpenRouter" }
 if (@($config.auto_order) -notcontains "Gemini") { throw "Provider config must include Gemini" }
+if (@($config.auto_order) -notcontains "Ollama") { throw "Provider config must include Ollama" }
+if (@($config.auto_order) -notcontains "DeepSeek") { throw "Provider config must include DeepSeek" }
+if (@($config.auto_order) -notcontains "Grok") { throw "Provider config must include Grok" }
+if ([bool]$config.allow_paid_fallback) { throw "Paid analysis fallback must be disabled by default" }
 if ([string]$config.models.OpenRouter -ne "openrouter/free") { throw "OpenRouter must default to openrouter/free" }
 if ([string]$config.models.Gemini -ne "gemini-3.5-flash-lite") { throw "Gemini must default to gemini-3.5-flash-lite" }
 if (@($config.writable_auto_order) -join "," -ne "OpenRouter,Gemini") { throw "Writable Auto must be limited to OpenRouter then Gemini" }
@@ -102,7 +113,7 @@ if ($pmInstructions -notmatch 'product-intake\.md') {
 $runnerPath = Join-Path $repoRoot "scripts\run-agent-task.ps1"
 $runner = Get-Content $runnerPath -Raw
 
-if ($runner -notmatch 'ValidateSet\("Auto","Codex","OpenRouter","Gemini"\)') {
+if ($runner -notmatch 'ValidateSet\("Auto","Codex","OpenRouter","Gemini","Ollama","DeepSeek","Grok"\)') {
     throw "Agent runner must expose multi-provider selection"
 }
 if ($runner -notmatch 'provider-router\.ps1') {
@@ -281,6 +292,13 @@ $parseTargets = @(
     "scripts\providers\invoke-codex.ps1",
     "scripts\providers\invoke-openrouter.ps1",
     "scripts\providers\invoke-gemini.ps1",
+    "scripts\providers\invoke-ollama.ps1",
+    "scripts\providers\invoke-deepseek.ps1",
+    "scripts\providers\invoke-xai.ps1",
+    "scripts\local-runtime\detect-hardware.ps1",
+    "scripts\local-runtime\resolve-local-runtime.ps1",
+    "scripts\local-runtime\initialize-local-runtime.ps1",
+    "scripts\local-runtime\benchmark-ollama.ps1",
     "scripts\run-gate-agent.ps1",
     "scripts\run-pending-gates.ps1",
     "scripts\generate-engineering-backlog.ps1",
