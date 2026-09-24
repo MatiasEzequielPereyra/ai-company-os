@@ -93,6 +93,9 @@ class PlanControlScreen(Screen):
         self.app.pop_screen()
 
     def action_refresh_tasks(self) -> None:
+        self.local_runtime.invalidate(
+            self.plan_data.project_root
+        )
         self._refresh_view()
 
     def _task_ids(self) -> list[str]:
