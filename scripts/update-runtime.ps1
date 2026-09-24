@@ -158,11 +158,10 @@ if (Test-Path $providerSourcePath -PathType Leaf) {
         $targetConfig = [PSCustomObject]@{}
     }
 
+    Ensure-Property -Object $targetConfig -Name "auto_order" -Value @()
+    $existingAutoOrder = @($targetConfig.auto_order) + @($sourceConfig.auto_order)
     $targetConfig.auto_order = @(
-        Merge-OrderedNames -Preferred @("Ollama") -Existing @(
-            @($targetConfig.auto_order),
-            @($sourceConfig.auto_order)
-        )
+        Merge-OrderedNames -Preferred @("Ollama") -Existing $existingAutoOrder
     )
 
     Ensure-Property -Object $targetConfig -Name "allow_paid_fallback" -Value $false
@@ -182,11 +181,10 @@ if (Test-Path $providerSourcePath -PathType Leaf) {
         }
     }
 
+    Ensure-Property -Object $targetConfig -Name "writable_auto_order" -Value @()
+    $existingWritableOrder = @($targetConfig.writable_auto_order) + @($sourceConfig.writable_auto_order)
     $targetConfig.writable_auto_order = @(
-        Merge-OrderedNames -Preferred @("Ollama") -Existing @(
-            @($targetConfig.writable_auto_order),
-            @($sourceConfig.writable_auto_order)
-        )
+        Merge-OrderedNames -Preferred @("Ollama") -Existing $existingWritableOrder
     )
 
     Ensure-Property -Object $targetConfig -Name "writable_allow_paid_fallback" -Value $false
