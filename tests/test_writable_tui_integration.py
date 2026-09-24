@@ -34,6 +34,8 @@ def test_plan_control_exposes_retry_and_canonical_gates() -> None:
     assert '"SECURITY"' in source
     assert '"BLOCKED"' in source
     assert '"DONE"' in source
+    assert "LocalRuntimeService" in source
+    assert "Local Runtime / Auto" in source
 
 
 def test_task_result_service_surfaces_writable_evidence_and_retry() -> None:
