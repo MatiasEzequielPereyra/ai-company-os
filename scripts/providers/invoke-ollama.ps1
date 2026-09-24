@@ -90,8 +90,8 @@ $body = @{
     format = $schema
     options = @{
         temperature = 0
-        num_ctx = 16384
-        num_predict = 4096
+        num_ctx = 8192
+        num_predict = 2048
     }
 } | ConvertTo-Json -Depth 100 -Compress
 
@@ -101,10 +101,22 @@ catch { throw "Ollama request payload is invalid JSON before transport: $($_.Exc
 $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($body)
 $response = $null
 $maxAttempts = 3
+$timeoutSeconds = 1800
+
+if (-not [string]::IsNullOrWhiteSpace($env:OLLAMA_TIMEOUT_SEC)) {
+    $parsedTimeout = 0
+    if ([int]::TryParse($env:OLLAMA_TIMEOUT_SEC,[ref]$parsedTimeout) -and $parsedTimeout -gt 0) {
+        $timeoutSeconds = $parsedTimeout
+    }
+}
+
+Write-Host ("Ollama model: " + $Model) -ForegroundColor DarkGray
+Write-Host ("Ollama request: context_chars=" + $Context.Length + ", num_ctx=8192, num_predict=2048, timeout=" + $timeoutSeconds + "s") -ForegroundColor DarkGray
+Write-Host "Ollama inference running..." -ForegroundColor DarkGray
 
 for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
     try {
-        $response = Invoke-RestMethod -Method Post -Uri ($baseUrl + "/api/chat") -ContentType "application/json; charset=utf-8" -Body $bodyBytes -TimeoutSec 600
+        $response = Invoke-RestMethod -Method Post -Uri ($baseUrl + "/api/chat") -ContentType "application/json; charset=utf-8" -Body $bodyBytes -TimeoutSec $timeoutSeconds
         break
     }
     catch {
