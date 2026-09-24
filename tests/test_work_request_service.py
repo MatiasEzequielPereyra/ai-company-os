@@ -119,3 +119,53 @@ Work request: WR-002
     assert reopened.plan.project_root == str(
         tmp_path.resolve()
     )
+
+
+def test_feature_without_implementation_is_engineering_pending(tmp_path):
+    write(
+        tmp_path
+        / "docs"
+        / "engineering"
+        / "work-requests"
+        / "WR-003.md",
+        """# WR-003
+
+## Metadata
+
+ID: WR-003
+Type: FEATURE
+Priority: P0
+Created: 2026-09-24T00:00:00Z
+Status: PLANNING
+
+## Objective
+
+Implement sample feature
+""",
+    )
+
+    for task_id, owner in (
+        ("AICO-020", "pm"),
+        ("AICO-021", "cto"),
+        ("AICO-022", "engineering-manager"),
+    ):
+        write(
+            tmp_path
+            / "tasks"
+            / f"{task_id}.md",
+            f"""# {task_id}
+
+ID: {task_id}
+Status: DONE
+Owner: {owner}
+Work request: WR-003
+""",
+        )
+
+    items = WorkRequestService().list_work_requests(
+        tmp_path
+    )
+
+    assert len(items) == 1
+    assert items[0].request_type == "FEATURE"
+    assert items[0].display_status == "ENGINEERING_PENDING"
