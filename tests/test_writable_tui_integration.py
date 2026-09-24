@@ -28,6 +28,17 @@ def test_writable_workspace_accepts_ready_existing_workspace(
     root = tmp_path / "project"
     root.mkdir()
 
+    scripts = root / "scripts"
+    scripts.mkdir()
+
+    (
+        scripts
+        / "new-agent-workspace.ps1"
+    ).write_text(
+        "# fixture",
+        encoding="utf-8",
+    )
+
     workspace = (
         tmp_path
         / "project-worktrees"
