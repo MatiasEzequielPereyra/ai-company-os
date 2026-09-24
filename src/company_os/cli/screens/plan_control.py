@@ -30,6 +30,9 @@ from company_os.application.gate_control_service import (
 from company_os.application.task_result_service import (
     TaskResultService,
 )
+from company_os.application.local_runtime_service import (
+    LocalRuntimeService,
+)
 
 
 class PlanControlScreen(Screen):
@@ -61,6 +64,7 @@ class PlanControlScreen(Screen):
         self.writable_runner = WritableExecutionAdapter()
         self.corrective = CorrectiveReactivationService()
         self.results = TaskResultService()
+        self.local_runtime = LocalRuntimeService()
 
         self.busy = False
         self.last_error_text = ""
@@ -803,6 +807,49 @@ class PlanControlScreen(Screen):
     def _refresh_view(self) -> None:
         tasks = self._tasks()
 
+        active_role = next(
+            (
+                task.owner
+                for task in tasks
+                if task.status == "ACTIVE"
+            ),
+            "pm",
+        )
+
+        local_status = self.local_runtime.inspect(
+            self.plan_data.project_root,
+            role=active_role,
+            workload="analysis",
+        )
+
+        if local_status.available:
+            gpu_text = (
+                local_status.gpu_name
+                or "CPU / shared memory"
+            )
+
+            local_runtime_text = (
+                f"Profile: {local_status.profile}\n"
+                f"Capability: "
+                f"{local_status.capability_score}/100\n"
+                f"Role: {active_role}\n"
+                f"Selected model: "
+                f"{local_status.model}\n"
+                f"RAM: {local_status.ram_gb:.2f} GB\n"
+                f"GPU: {gpu_text}\n"
+                f"VRAM: "
+                f"{local_status.vram_gb:.2f} GB\n"
+                f"Context: "
+                f"{local_status.num_ctx}\n"
+                f"Output budget: "
+                f"{local_status.num_predict}"
+            )
+        else:
+            local_runtime_text = (
+                "Local runtime unavailable\n"
+                f"Reason: {local_status.reason}"
+            )
+
         finalizable = set(
             self.gates.finalizable_task_ids(
                 self.plan_data.project_root,
@@ -978,6 +1025,11 @@ class PlanControlScreen(Screen):
                     f"{self.plan_data.project_name}\n"
                     f"Work Request: {work_request}",
                     title="Plan Control",
+                ),
+                Text(""),
+                Panel(
+                    local_runtime_text,
+                    title="Local Runtime / Auto",
                 ),
                 Text(""),
                 summary,
