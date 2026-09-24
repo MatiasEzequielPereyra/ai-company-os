@@ -209,6 +209,21 @@ else {
 }
 
 $profile = Get-CapabilityProfile -RamBytes $ramBytes -DiscreteGpu $discreteGpu -VramBytes $vramBytes
+
+$ramScore = [Math]::Min(20.0,([double]$ramBytes / 32GB) * 20.0)
+$cpuScore = [Math]::Min(15.0,([double]$logicalProcessors / 16.0) * 15.0)
+$gpuScore = 0.0
+if ($discreteGpu) {
+    $gpuScore = [Math]::Min(40.0,([double]$vramBytes / 16GB) * 40.0)
+}
+elseif ($vramBytes -gt 0) {
+    $gpuScore = [Math]::Min(5.0,([double]$vramBytes / 4GB) * 5.0)
+}
+$ollamaScore = if ($ollamaReachable) { 10.0 } else { 0.0 }
+$fitModelCount = @($models | Where-Object { [long]$_.size -le 10500000000 }).Count
+$modelScore = [Math]::Min(15.0,[double]$fitModelCount * 7.5)
+$capabilityScore = [int][Math]::Round([Math]::Min(100.0,$ramScore + $cpuScore + $gpuScore + $ollamaScore + $modelScore))
+
 $fingerprintSource = @(
     $cpuName,
     [string]$logicalProcessors,
@@ -224,6 +239,7 @@ $fingerprintSource = @(
     generated_at = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
     hardware_fingerprint = Get-Sha256Hex -Value $fingerprintSource
     profile = $profile
+    capability_score = $capabilityScore
     cpu = [PSCustomObject]@{
         name = $cpuName
         logical_processors = $logicalProcessors
