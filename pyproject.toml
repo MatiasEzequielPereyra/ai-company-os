@@ -10,6 +10,8 @@ requires-python = ">=3.11"
 dependencies = [
   "pydantic>=2.7,<3",
   "rich>=14.2,<16",
+  "textual>=0.80",
+  "keyring>=25",
   "typer>=0.12,<1",
 ]
 
