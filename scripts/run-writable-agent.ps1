@@ -71,7 +71,7 @@ function Get-ReferencedTrackedFiles {
 
     $normalized = @()
     foreach ($raw in $tracked) {
-        $path = ([string]$raw).Trim().Replace("\\","/")
+        $path = ([string]$raw).Trim().Replace("\","/")
         if ([string]::IsNullOrWhiteSpace($path)) { continue }
 
         $name = [System.IO.Path]::GetFileName($path).ToLowerInvariant()
@@ -101,7 +101,7 @@ function Get-ReferencedTrackedFiles {
 
     $references = @()
     foreach ($path in $normalized) {
-        $backslashPath = $path.Replace("/","\\")
+        $backslashPath = $path.Replace("/","\")
         $base = [System.IO.Path]::GetFileName($path)
         $baseKey = $base.ToLowerInvariant()
 
