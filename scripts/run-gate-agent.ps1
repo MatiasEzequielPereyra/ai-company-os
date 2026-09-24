@@ -8,7 +8,7 @@ param(
 
     [string]$ProjectPath = ".",
 
-    [ValidateSet("Auto","Codex","OpenRouter","Gemini")]
+    [ValidateSet("Auto","Codex","OpenRouter","Gemini","Ollama","DeepSeek","Grok")]
     [string]$Provider = "Auto",
 
     [string]$Model = ""
