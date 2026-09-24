@@ -4,7 +4,7 @@ param(
     [string]$Id,
     [Parameter(Mandatory = $true)]
     [string]$Owner,
-    [int]$MaxChars = 320000,
+    [int]$MaxChars = 120000,
     [string[]]$RequiredFiles = @()
 )
 
@@ -114,6 +114,28 @@ function Get-RoleScore {
 }
 
 $root = (Resolve-Path $ProjectPath).Path
+
+$managedFiles = @{}
+$managedManifestPath = Join-Path $root ".codex\managed-files.json"
+
+if (Test-Path $managedManifestPath -PathType Leaf) {
+    try {
+        $managedManifest = Get-Content $managedManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+
+        foreach ($managedPath in @($managedManifest.managed_files)) {
+            if ([string]::IsNullOrWhiteSpace([string]$managedPath)) { continue }
+
+            $normalizedManaged = ([string]$managedPath).Trim().Replace("/","\").TrimStart(".","\").ToLowerInvariant()
+            if (-not [string]::IsNullOrWhiteSpace($normalizedManaged)) {
+                $managedFiles[$normalizedManaged] = $true
+            }
+        }
+    }
+    catch {
+        throw "Invalid AI Company OS managed-files manifest: $managedManifestPath"
+    }
+}
+
 $builder = New-Object System.Text.StringBuilder
 
 [void]$builder.AppendLine("# AI Company OS Repository Context Pack")
@@ -199,6 +221,9 @@ $allFiles = @(
         $allowed = $false
 
         if ($lower -match '(^|\\)(node_modules|\.git|dist|dist-refactor-modular|build|coverage|\.next|vendor)(\\|$)') {
+            $allowed = $false
+        }
+        elseif ($managedFiles.ContainsKey($lower)) {
             $allowed = $false
         }
         elseif ($lower -match '^\.codex\\runtime\\|^docs\\engineering\\agent-reports\\') {
