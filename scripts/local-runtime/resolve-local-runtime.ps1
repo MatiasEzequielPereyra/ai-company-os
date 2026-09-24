@@ -106,6 +106,21 @@ if (-not [string]::IsNullOrWhiteSpace($ModelOverride)) {
         }
     }
 
+    if ([long]$selected.size -gt $maxModelBytes -and $env:AICO_OLLAMA_ALLOW_OVERSIZE -ne "1") {
+        return [PSCustomObject]@{
+            Available = $false
+            Profile = $profileName
+            Model = $ModelOverride
+            Reason = "Requested Ollama model exceeds the safe model size for $profileName. Set AICO_OLLAMA_ALLOW_OVERSIZE=1 to force it."
+            NumCtx = [int]$profile.num_ctx
+            NumPredict = [int]$profile.num_predict
+            ContextMaxChars = [int]$profile.context_max_chars
+            GateContextMaxChars = [int]$profile.gate_context_max_chars
+            GateArtifactMaxChars = [int]$profile.gate_artifact_max_chars
+            Hardware = $hardware
+        }
+    }
+
     $reason = "Explicit local model override."
 }
 else {
