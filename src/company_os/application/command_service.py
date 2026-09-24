@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 
 
 @dataclass
@@ -158,15 +159,21 @@ class CommandService:
                 ),
             ]
 
-        elif any(
-            word in lower
-            for word in (
-                "agregar",
-                "crear",
-                "feature",
-                "implementar",
-                "añadir",
-                "nuevo",
+        elif (
+            re.search(
+                r"\b(?:add|adding|create|creating|implement|implementing|build|building)\b",
+                lower,
+            )
+            or any(
+                word in lower
+                for word in (
+                    "agregar",
+                    "crear",
+                    "feature",
+                    "implementar",
+                    "añadir",
+                    "nuevo",
+                )
             )
         ):
             intent = "FEATURE"
