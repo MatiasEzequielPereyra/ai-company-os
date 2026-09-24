@@ -163,6 +163,12 @@ if ($gemini -notmatch 'responseJsonSchema') {
 }
 
 $ollama = Get-Content (Join-Path $repoRoot "scripts\providers\invoke-ollama.ps1") -Raw
+foreach ($adapterName in @("invoke-openrouter.ps1","invoke-gemini.ps1","invoke-ollama.ps1","invoke-deepseek.ps1","invoke-xai.ps1")) {
+    $adapterText = Get-Content (Join-Path $repoRoot ("scripts\providers\" + $adapterName)) -Raw
+    if ($adapterText -notmatch '\[AllowEmptyString\(\)\]\[string\]\$Context') {
+        throw "$adapterName must accept an empty context payload for direct provider smoke tests"
+    }
+}
 if ($ollama -notmatch 'localhost:11434') { throw "Ollama adapter must default to the local Ollama endpoint" }
 if ($ollama -notmatch 'OLLAMA_BASE_URL') { throw "Ollama adapter must support a configurable local endpoint" }
 if ($ollama -notmatch 'format = \$schema') { throw "Ollama adapter must pass the requested JSON schema to format" }
