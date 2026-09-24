@@ -121,21 +121,20 @@ if ([string]::IsNullOrWhiteSpace($combined)) {
 }
 
 $inventory = @(
-    Get-ChildItem $root -File -Recurse -Force -ErrorAction SilentlyContinue |
-        Where-Object {
-            $relative = $_.FullName.Substring($root.Length).TrimStart("\","/")
-            $lower = $relative.ToLowerInvariant().Replace("/","\")
+    foreach ($relativeName in @(Get-ChildItem $root -File -Recurse -Force -Name -ErrorAction SilentlyContinue)) {
+        $relative = ([string]$relativeName).Replace("\","/")
+        $lower = $relative.ToLowerInvariant().Replace("/","\")
 
-            $lower -notmatch '(^|\\)(node_modules|\.git|dist|dist-refactor-modular|build|coverage|\.next|vendor)(\\|$)'
-        } |
-        ForEach-Object {
-            $relative = $_.FullName.Substring($root.Length).TrimStart("\","/").Replace("\","/")
-            [PSCustomObject]@{
-                Relative = $relative
-                Name = $_.Name
-                FullPath = $_.FullName
-            }
+        if ($lower -match '(^|\\)(node_modules|\.git|dist|dist-refactor-modular|build|coverage|\.next|vendor)(\\|$)') {
+            continue
         }
+
+        [PSCustomObject]@{
+            Relative = $relative
+            Name = (Split-Path $relative -Leaf)
+            FullPath = (Join-Path $root ($relative.Replace("/","\")))
+        }
+    }
 )
 
 $byRelative = @{}
