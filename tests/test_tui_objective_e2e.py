@@ -202,7 +202,9 @@ def prepare_engine_project(
     [string]$Context,
     [string]$SchemaPath,
     [string]$OutputPath,
-    [string]$Model
+    [string]$Model,
+    [string]$Role,
+    [string]$Workload
 )
 
 $ErrorActionPreference = "Stop"
