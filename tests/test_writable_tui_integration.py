@@ -98,11 +98,13 @@ def test_writable_adapter_accepts_ready_and_exposes_diff(
             [
                 SimpleNamespace(
                     status="READY",
+                    work_kind="IMPLEMENTATION",
                 )
             ],
             [
                 SimpleNamespace(
                     status="REVIEW",
+                    work_kind="IMPLEMENTATION",
                 )
             ],
         ]
