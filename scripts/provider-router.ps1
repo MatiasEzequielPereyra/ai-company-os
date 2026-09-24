@@ -6,7 +6,9 @@ param(
     [string]$Context = "",
     [Parameter(Mandatory = $true)][string]$SchemaPath,
     [Parameter(Mandatory = $true)][string]$OutputPath,
-    [string]$Model = ""
+    [string]$Model = "",
+    [string]$Role = "",
+    [string]$Workload = "general"
 )
 
 $ErrorActionPreference = "Stop"
@@ -54,6 +56,7 @@ $providersRoot = Join-Path $PSScriptRoot "providers"
 $configPath = Join-Path $root ".codex\provider-config.json"
 $validatorPath = Join-Path $PSScriptRoot "validate-json-contract.ps1"
 $metricsWriterPath = Join-Path $PSScriptRoot "write-operational-event.ps1"
+$localResolverPath = Join-Path $PSScriptRoot "local-runtime\resolve-local-runtime.ps1"
 
 if (-not (Test-Path $validatorPath)) { throw "Provider contract validator not found: $validatorPath" }
 
@@ -87,6 +90,7 @@ $attempted = 0
 
 foreach ($candidate in $attempts) {
     $candidateName = [string]$candidate
+    $localRuntime = $null
 
     if ($candidateName -eq "Codex" -and $null -eq (Get-Command codex -ErrorAction SilentlyContinue)) {
         $errors += "Codex: CLI not available"
@@ -155,6 +159,26 @@ foreach ($candidate in $attempts) {
             }
             continue
         }
+
+        if (-not (Test-Path $localResolverPath -PathType Leaf)) {
+            $errors += "Ollama: local runtime resolver missing"
+            if ($Provider -ne "Auto") { throw "Local runtime resolver not found: $localResolverPath" }
+            continue
+        }
+
+        $localModelOverride = ""
+        if ($Provider -ne "Auto" -and -not [string]::IsNullOrWhiteSpace($Model)) {
+            $localModelOverride = $Model
+        }
+
+        $localRuntime = & $localResolverPath -ProjectPath $root -Role $Role -Workload $Workload -ModelOverride $localModelOverride
+        if (-not [bool]$localRuntime.Available) {
+            $errors += ("Ollama: " + [string]$localRuntime.Reason)
+            if ($Provider -ne "Auto") { throw ([string]$localRuntime.Reason) }
+            continue
+        }
+
+        Write-Host ("Local runtime profile: " + $localRuntime.Profile + "; model=" + $localRuntime.Model + "; num_ctx=" + $localRuntime.NumCtx + "; num_predict=" + $localRuntime.NumPredict) -ForegroundColor DarkGray
     }
 
     $scriptName = switch ($candidateName) {
@@ -179,7 +203,10 @@ foreach ($candidate in $attempts) {
     }
 
     $providerModel = ""
-    if ($Provider -ne "Auto" -and -not [string]::IsNullOrWhiteSpace($Model)) {
+    if ($candidateName -eq "Ollama" -and $null -ne $localRuntime) {
+        $providerModel = [string]$localRuntime.Model
+    }
+    elseif ($Provider -ne "Auto" -and -not [string]::IsNullOrWhiteSpace($Model)) {
         $providerModel = $Model
     }
     else {
@@ -194,6 +221,12 @@ foreach ($candidate in $attempts) {
     try {
         if ($candidateName -eq "Codex") {
             $result = & $providerScript -ProjectPath $root -Prompt $Prompt -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel
+        }
+        elseif ($candidateName -eq "Ollama") {
+            $result = & $providerScript -Prompt $Prompt -Context $Context -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel -NumCtx ([int]$localRuntime.NumCtx) -NumPredict ([int]$localRuntime.NumPredict)
+            $result | Add-Member -NotePropertyName HardwareProfile -NotePropertyValue ([string]$localRuntime.Profile) -Force
+            $result | Add-Member -NotePropertyName NumCtx -NotePropertyValue ([int]$localRuntime.NumCtx) -Force
+            $result | Add-Member -NotePropertyName NumPredict -NotePropertyValue ([int]$localRuntime.NumPredict) -Force
         }
         else {
             $result = & $providerScript -Prompt $Prompt -Context $Context -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel
