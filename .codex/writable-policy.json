@@ -44,5 +44,8 @@
     "Gemini": [
       "gemini-3.5-flash-lite"
     ]
-  }
+  },
+  "required_context_max_files": 8,
+  "required_context_max_file_bytes": 90000,
+  "required_context_max_total_bytes": 100000
 }
