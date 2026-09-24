@@ -452,9 +452,10 @@ $schemaPath = Join-Path $root "schemas\writable-change-set.schema.json"
 $policyPath = Join-Path $root ".codex\writable-policy.json"
 $routerPath = Join-Path $PSScriptRoot "provider-router.ps1"
 $contextBuilderPath = Join-Path $PSScriptRoot "build-agent-context.ps1"
+$requiredResolverPath = Join-Path $PSScriptRoot "resolve-writable-required-files.ps1"
 $submitPath = Join-Path $PSScriptRoot "submit-task-result.ps1"
 
-foreach ($required in @($dispatchPath,$rolePath,$schemaPath,$policyPath,$routerPath,$contextBuilderPath,$submitPath)) {
+foreach ($required in @($dispatchPath,$rolePath,$schemaPath,$policyPath,$routerPath,$contextBuilderPath,$requiredResolverPath,$submitPath)) {
     if (-not (Test-Path $required)) {
         throw "Required writable runtime component not found: $required"
     }
@@ -480,8 +481,17 @@ elseif ($null -ne $config -and $null -ne $config.context_max_chars) {
     $maxChars = [Math]::Min([int]$config.context_max_chars,120000)
 }
 
+$requiredFiles = @(& $requiredResolverPath -ProjectPath $workspace -SourceText @($taskText,$dispatchText) -PolicyPath $policyPath)
+
+if ($requiredFiles.Count -gt 0) {
+    Write-Host ("Writable required files: " + ($requiredFiles -join ", ")) -ForegroundColor DarkGray
+}
+else {
+    Write-Host "Writable required files: none resolved from task/dispatch." -ForegroundColor DarkGray
+}
+
 Write-Host "Building writable repository context from isolated worktree..." -ForegroundColor DarkGray
-$context = & $contextBuilderPath -ProjectPath $workspace -Id $Id -Owner $owner -MaxChars $maxChars
+$context = & $contextBuilderPath -ProjectPath $workspace -Id $Id -Owner $owner -MaxChars $maxChars -RequiredFiles $requiredFiles
 
 $prompt = @(
     "You are executing an AUTHORIZED IMPLEMENTATION task for AI Company OS.",
