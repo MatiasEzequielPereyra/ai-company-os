@@ -59,7 +59,7 @@ if (@($config.auto_order) -notcontains "Gemini") { throw "Provider config must i
 if ([string]$config.models.OpenRouter -ne "openrouter/free") { throw "OpenRouter must default to openrouter/free" }
 if ([string]$config.models.Gemini -ne "gemini-3.5-flash-lite") { throw "Gemini must default to gemini-3.5-flash-lite" }
 if (@($config.writable_auto_order) -join "," -ne "OpenRouter,Gemini") { throw "Writable Auto must be limited to OpenRouter then Gemini" }
-if ([string]$config.writable_models.OpenRouter -ne "openrouter/free") { throw "Writable OpenRouter must default to openrouter/free" }
+if ([string]$config.writable_models.OpenRouter -ne "qwen/qwen3.8-27b:free") { throw "Writable OpenRouter must default to the pinned free structured coding model" }
 if ([string]$config.writable_models.Gemini -ne "gemini-3.5-flash-lite") { throw "Writable Gemini must default to gemini-3.5-flash-lite" }
 if ([int]$config.writable_context_max_chars -gt 160000 -or [int]$config.writable_context_max_chars -lt 60000) { throw "Writable context budget must remain bounded for free-tier execution" }
 if ([int]$config.context_max_chars -lt 300000) { throw "External provider context budget must be at least 300000 characters" }
@@ -128,8 +128,8 @@ foreach ($field in @("outcome","summary","report_markdown","changes","verificati
 }
 
 $writablePolicy = Get-Content (Join-Path $repoRoot ".codex\writable-policy.json") -Raw -Encoding UTF8 | ConvertFrom-Json
-if (@($writablePolicy.free_provider_models.OpenRouter) -notcontains "openrouter/free") {
-    throw "Writable policy must identify openrouter/free as an automatic free provider model"
+if (@($writablePolicy.free_provider_models.OpenRouter) -notcontains "qwen/qwen3.8-27b:free") {
+    throw "Writable policy must allow the pinned free structured coding model"
 }
 if (@($writablePolicy.protected_path_prefixes) -notcontains ".git") {
     throw "Writable policy must protect .git"
@@ -163,6 +163,12 @@ if ($openRouter -notmatch 'OPENROUTER_API_KEY') {
 }
 if ($openRouter -notmatch 'json_schema') {
     throw "OpenRouter adapter must request structured JSON output"
+}
+if ($openRouter -notmatch 'require_parameters') {
+    throw "OpenRouter adapter must require providers that honor requested structured-output parameters"
+}
+if ($openRouter -notmatch 'empty/null structured content') {
+    throw "OpenRouter adapter must reject empty/null structured responses with diagnostics"
 }
 if ($openRouter -notmatch 'Get-HttpErrorBody') {
     throw "OpenRouter adapter must surface HTTP error response bodies"
