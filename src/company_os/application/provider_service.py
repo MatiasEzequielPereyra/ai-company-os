@@ -51,6 +51,11 @@ class ProviderService:
             or shutil.which("codex.exe")
         )
 
+        ollama = bool(
+            shutil.which("ollama")
+            or shutil.which("ollama.exe")
+        )
+
         statuses = [
             ProviderStatus(
                 id="codex",
@@ -65,7 +70,22 @@ class ProviderService:
                     "Uses the existing Codex / "
                     "ChatGPT authentication flow."
                 ),
-            )
+            ),
+            ProviderStatus(
+                id="ollama",
+                name="Ollama",
+                configured=ollama,
+                source=(
+                    "Local Ollama CLI"
+                    if ollama
+                    else "Not detected"
+                ),
+                description=(
+                    "Local hardware-aware runtime. "
+                    "Model readiness is evaluated "
+                    "at execution time."
+                ),
+            ),
         ]
 
         for provider_id, config in (
