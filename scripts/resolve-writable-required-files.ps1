@@ -120,6 +120,13 @@ if ([string]::IsNullOrWhiteSpace($combined)) {
     return
 }
 
+$negativeRequirementPattern = '(?i)\b(do not|don''t|never|must not|should not|without|exclude|excluded|prohibit|prohibited|no modificar|no tocar|no incluir|no leer)\b'
+$scanLines = @(
+    $combined -split '\r?\n' |
+        Where-Object { $_ -notmatch $negativeRequirementPattern }
+)
+$scanText = $scanLines -join [Environment]::NewLine
+
 $inventory = @(
     foreach ($relativeName in @(Get-ChildItem $root -File -Recurse -Force -Name -ErrorAction SilentlyContinue)) {
         $relative = ([string]$relativeName).Replace("\","/")
@@ -153,7 +160,7 @@ foreach ($entry in $inventory) {
 $candidates = New-Object System.Collections.Generic.List[string]
 
 $pathPattern = '(?i)(?<![A-Za-z0-9_.-])((?:[A-Za-z0-9_.-]+[\\/])*[A-Za-z0-9_.-]+\.(?:html?|css|scss|js|jsx|ts|tsx|mjs|cjs|json|md|txt|toml|ya?ml|sql|ps1|sh|py|go|rs|java|cs|xml|pem|key|p12|pfx))(?![A-Za-z0-9_.-])'
-foreach ($match in [regex]::Matches($combined,$pathPattern)) {
+foreach ($match in [regex]::Matches($scanText,$pathPattern)) {
     $value = $match.Groups[1].Value.Trim().Replace("\","/")
     if (-not [string]::IsNullOrWhiteSpace($value) -and -not $candidates.Contains($value)) {
         [void]$candidates.Add($value)
@@ -161,7 +168,7 @@ foreach ($match in [regex]::Matches($combined,$pathPattern)) {
 }
 
 $specialPattern = '(?i)(?<![A-Za-z0-9_.-])((?:[A-Za-z0-9_.-]+[\\/])*(?:\.env(?:\.[A-Za-z0-9_.-]+)?|Dockerfile|\.npmrc))(?![A-Za-z0-9_.-])'
-foreach ($match in [regex]::Matches($combined,$specialPattern)) {
+foreach ($match in [regex]::Matches($scanText,$specialPattern)) {
     $value = $match.Groups[1].Value.Trim().Replace("\","/")
     if (-not [string]::IsNullOrWhiteSpace($value) -and -not $candidates.Contains($value)) {
         [void]$candidates.Add($value)
