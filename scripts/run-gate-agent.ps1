@@ -8,7 +8,7 @@ param(
 
     [string]$ProjectPath = ".",
 
-    [ValidateSet("Auto","Codex","OpenRouter","Gemini")]
+    [ValidateSet("Auto","Codex","OpenRouter","Gemini","Ollama","DeepSeek","Grok")]
     [string]$Provider = "Auto",
 
     [string]$Model = ""
@@ -82,18 +82,56 @@ $schemaName = switch ($Gate) {
 $schemaPath = Join-Path $root ("schemas\" + $schemaName)
 $routerPath = Join-Path $PSScriptRoot "provider-router.ps1"
 $contextBuilderPath = Join-Path $PSScriptRoot "build-agent-context.ps1"
+$localResolverPath = Join-Path $PSScriptRoot "local-runtime\resolve-local-runtime.ps1"
 
 foreach ($required in @($schemaPath,$routerPath,$contextBuilderPath)) {
     if (-not (Test-Path $required)) { throw "Required gate component not found: $required" }
 }
 
+$localRuntime = $null
+if ($Provider -in @("Auto","Ollama") -and (Test-Path $localResolverPath -PathType Leaf)) {
+    $localArgs = @{
+        ProjectPath = $root
+        Role = $reviewerRole
+        Workload = "gate"
+    }
+
+    if ($Provider -eq "Ollama" -and -not [string]::IsNullOrWhiteSpace($Model)) {
+        $localArgs.ModelOverride = $Model
+    }
+
+    $localRuntime = & $localResolverPath @localArgs
+    if ($Provider -eq "Ollama" -and -not [bool]$localRuntime.Available) {
+        throw ("Ollama local runtime unavailable: " + [string]$localRuntime.Reason)
+    }
+
+    if ([bool]$localRuntime.Available) {
+        Write-Host ("Local runtime: " + $localRuntime.Profile + " -> " + $localRuntime.Model) -ForegroundColor DarkGray
+    }
+}
+
 $maxChars = 180000
+$artifactMaxChars = 60000
 $configPath = Join-Path $root ".codex\provider-config.json"
+$providerConfig = $null
 if (Test-Path $configPath) {
     try {
         $providerConfig = Get-Content $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
         if ($null -ne $providerConfig.gate_context_max_chars) {
             $maxChars = [int]$providerConfig.gate_context_max_chars
+        }
+
+        if ($null -ne $localRuntime -and [bool]$localRuntime.Available) {
+            $maxChars = [Math]::Min($maxChars,[int]$localRuntime.GateContextMaxChars)
+            $artifactMaxChars = [Math]::Min($artifactMaxChars,[int]$localRuntime.GateArtifactMaxChars)
+        }
+        elseif ($Provider -eq "Ollama") {
+            if ($null -ne $providerConfig.ollama_gate_context_max_chars) {
+                $maxChars = [Math]::Min($maxChars,[int]$providerConfig.ollama_gate_context_max_chars)
+            }
+            if ($null -ne $providerConfig.ollama_gate_artifact_max_chars) {
+                $artifactMaxChars = [int]$providerConfig.ollama_gate_artifact_max_chars
+            }
         }
     }
     catch {
@@ -108,13 +146,13 @@ $evidence = New-Object System.Text.StringBuilder
 [void]$evidence.Append($baseContext)
 
 $reportPath = Join-Path $root ("docs\engineering\agent-reports\" + $Id + ".md")
-Add-Artifact -Builder $evidence -Path $reportPath -Label "PRIMARY AGENT REPORT"
+Add-Artifact -Builder $evidence -Path $reportPath -Label "PRIMARY AGENT REPORT" -MaxChars $artifactMaxChars
 
 $latestResult = Get-ChildItem (Join-Path $root "docs\engineering\results") -Filter ($Id + "-result-*.md") -File -ErrorAction SilentlyContinue |
     Sort-Object Name -Descending |
     Select-Object -First 1
 if ($null -ne $latestResult) {
-    Add-Artifact -Builder $evidence -Path $latestResult.FullName -Label "LATEST TASK RESULT"
+    Add-Artifact -Builder $evidence -Path $latestResult.FullName -Label "LATEST TASK RESULT" -MaxChars $artifactMaxChars
 }
 
 if ($Gate -in @("QA","Security")) {
@@ -122,13 +160,13 @@ if ($Gate -in @("QA","Security")) {
         Sort-Object Name -Descending |
         Select-Object -First 1
     if ($null -ne $latestReview) {
-        Add-Artifact -Builder $evidence -Path $latestReview.FullName -Label "LATEST INDEPENDENT REVIEW"
+        Add-Artifact -Builder $evidence -Path $latestReview.FullName -Label "LATEST INDEPENDENT REVIEW" -MaxChars $artifactMaxChars
     }
 }
 
 if ($Gate -eq "Security") {
     $qaPath = Join-Path $root ("docs\engineering\qa\" + $Id + "-qa.md")
-    Add-Artifact -Builder $evidence -Path $qaPath -Label "QA GATE"
+    Add-Artifact -Builder $evidence -Path $qaPath -Label "QA GATE" -MaxChars $artifactMaxChars
 }
 
 $promptLines = @(
@@ -160,8 +198,9 @@ $runtimeDir = Join-Path $root ".codex\runtime"
 New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
 $outputPath = Join-Path $runtimeDir ($Id + "-" + $Gate.ToLowerInvariant() + "-gate.json")
 
+Write-Host ("Gate context budget: base=" + $maxChars + " chars, artifact=" + $artifactMaxChars + " chars") -ForegroundColor DarkGray
 Write-Host "Running $Gate gate: $reviewerRole -> $Id" -ForegroundColor Cyan
-$execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $evidence.ToString() -SchemaPath $schemaPath -OutputPath $outputPath -Model $Model
+$execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $evidence.ToString() -SchemaPath $schemaPath -OutputPath $outputPath -Model $Model -Role $reviewerRole -Workload "gate"
 
 if (-not (Test-Path $outputPath)) {
     throw "Gate provider did not produce structured output: $outputPath"
