@@ -129,45 +129,13 @@ foreach ($candidate in $attempts) {
     }
 
     if ($candidateName -eq "Ollama") {
-        $ollamaBaseUrl = if ([string]::IsNullOrWhiteSpace($env:OLLAMA_BASE_URL)) {
-            "http://localhost:11434"
-        }
-        else {
-            $env:OLLAMA_BASE_URL.TrimEnd('/')
-        }
-
-        $ollamaReachable = $false
-        $ollamaHealthError = ""
-
-        for ($healthAttempt = 1; $healthAttempt -le 3; $healthAttempt++) {
-            try {
-                $null = Invoke-RestMethod -Method Get -Uri ($ollamaBaseUrl + "/api/tags") -TimeoutSec 5
-                $ollamaReachable = $true
-                break
-            }
-            catch {
-                $ollamaHealthError = $_.Exception.Message
-                if ($healthAttempt -lt 3) {
-                    Start-Sleep -Seconds 1
-                }
-            }
-        }
-
-        if (-not $ollamaReachable) {
-            $errors += ("Ollama: local server unavailable - " + $ollamaHealthError)
-            if ($Provider -ne "Auto") {
-                throw "Ollama is not reachable after 3 health checks. Start Ollama or set OLLAMA_BASE_URL."
-            }
-            continue
-        }
-
         if (
             -not (Test-Path $localResolverPath -PathType Leaf) -or
             -not (Test-Path $localRuntimeConfigPath -PathType Leaf)
         ) {
             $errors += "Ollama: local runtime resolver/configuration missing"
             if ($Provider -ne "Auto") {
-                throw "Local runtime resolver/configuration is not installed."
+                throw "Local Ollama runtime is not configured for this project. Run initialize-local-runtime.ps1 first."
             }
             continue
         }
@@ -177,7 +145,16 @@ foreach ($candidate in $attempts) {
             $localModelOverride = $Model
         }
 
-        $localRuntime = & $localResolverPath -ProjectPath $root -Role $Role -Workload $Workload -ModelOverride $localModelOverride
+        try {
+            $localRuntime = & $localResolverPath -ProjectPath $root -Role $Role -Workload $Workload -ModelOverride $localModelOverride
+        }
+        catch {
+            $safeLocal = Sanitize-ProviderError -Message $_.Exception.Message
+            $errors += ("Ollama: " + $safeLocal)
+            if ($Provider -ne "Auto") { throw $safeLocal }
+            continue
+        }
+
         if (-not [bool]$localRuntime.Available) {
             $errors += ("Ollama: " + [string]$localRuntime.Reason)
             if ($Provider -ne "Auto") { throw ([string]$localRuntime.Reason) }
