@@ -128,6 +128,9 @@ $body = @{
             schema = $schema
         }
     }
+    provider = @{
+        require_parameters = $true
+    }
 } | ConvertTo-Json -Depth 100 -Compress
 
 # Validate the exact serialized payload before it leaves the machine.
@@ -189,7 +192,8 @@ if ($null -eq $response.choices -or $response.choices.Count -lt 1) {
     throw "OpenRouter returned no completion choices."
 }
 
-$content = $response.choices[0].message.content
+$message = $response.choices[0].message
+$content = $message.content
 if ($content -isnot [string]) {
     $parts = @()
     foreach ($part in $content) {
@@ -199,6 +203,23 @@ if ($content -isnot [string]) {
 }
 
 $content = ([string]$content).Trim()
+
+if ([string]::IsNullOrWhiteSpace($content) -or $content -eq "null") {
+    $responseModel = if ($null -ne $response.model) { [string]$response.model } else { $Model }
+    $finishReason = if ($null -ne $response.choices[0].finish_reason) { [string]$response.choices[0].finish_reason } else { "UNKNOWN" }
+    $refusal = ""
+    if ($null -ne $message.PSObject.Properties["refusal"] -and $null -ne $message.refusal) {
+        $refusal = [string]$message.refusal
+    }
+
+    $detail = "OpenRouter returned empty/null structured content. Model: $responseModel; finish_reason: $finishReason"
+    if (-not [string]::IsNullOrWhiteSpace($refusal)) {
+        $detail += "; refusal: $refusal"
+    }
+
+    throw $detail
+}
+
 $normalizedContent = ConvertTo-StructuredObjectJson -Content $content
 
 [System.IO.File]::WriteAllText($OutputPath,$normalizedContent,(New-Object System.Text.UTF8Encoding($false)))
