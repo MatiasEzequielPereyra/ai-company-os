@@ -35,7 +35,20 @@ class CommandService:
 
         lower = request.casefold()
 
-        if any(
+        explicit_feature_request = bool(
+            re.search(
+                (
+                    r"^(?:(?:please|por favor)\s+)?"
+                    r"(?:add|adding|create|creating|"
+                    r"implement|implementing|build|building)\b"
+                ),
+                lower,
+            )
+        )
+
+        if (
+            not explicit_feature_request
+            and any(
             word in lower
             for word in (
                 "audit",
@@ -45,6 +58,7 @@ class CommandService:
                 "producción",
                 "produccion",
             )
+        )
         ):
             intent = "AUDIT"
 
@@ -97,7 +111,9 @@ class CommandService:
                 ),
             ]
 
-        elif any(
+        elif (
+            not explicit_feature_request
+            and any(
             word in lower
             for word in (
                 "error",
@@ -107,6 +123,7 @@ class CommandService:
                 "rompe",
                 "correg",
             )
+        )
         ):
             intent = "FIX"
 
@@ -160,7 +177,8 @@ class CommandService:
             ]
 
         elif (
-            re.search(
+            explicit_feature_request
+            or re.search(
                 r"\b(?:add|adding|create|creating|implement|implementing|build|building)\b",
                 lower,
             )
