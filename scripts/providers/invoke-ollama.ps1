@@ -91,7 +91,7 @@ $body = @{
     options = @{
         temperature = 0
         num_ctx = 8192
-        num_predict = 2048
+        num_predict = 1024
     }
 } | ConvertTo-Json -Depth 100 -Compress
 
@@ -111,7 +111,7 @@ if (-not [string]::IsNullOrWhiteSpace($env:OLLAMA_TIMEOUT_SEC)) {
 }
 
 Write-Host ("Ollama model: " + $Model) -ForegroundColor DarkGray
-Write-Host ("Ollama request: context_chars=" + $Context.Length + ", num_ctx=8192, num_predict=2048, timeout=" + $timeoutSeconds + "s") -ForegroundColor DarkGray
+Write-Host ("Ollama request: context_chars=" + $Context.Length + ", num_ctx=8192, num_predict=1024, timeout=" + $timeoutSeconds + "s") -ForegroundColor DarkGray
 Write-Host "Ollama inference running..." -ForegroundColor DarkGray
 
 for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
