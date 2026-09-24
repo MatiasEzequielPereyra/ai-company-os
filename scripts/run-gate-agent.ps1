@@ -83,13 +83,23 @@ $schemaPath = Join-Path $root ("schemas\" + $schemaName)
 $routerPath = Join-Path $PSScriptRoot "provider-router.ps1"
 $contextBuilderPath = Join-Path $PSScriptRoot "build-agent-context.ps1"
 $localResolverPath = Join-Path $PSScriptRoot "local-runtime\resolve-local-runtime.ps1"
+$localRuntimeConfigPath = Join-Path $root ".codex\local-runtime-config.json"
 
 foreach ($required in @($schemaPath,$routerPath,$contextBuilderPath)) {
     if (-not (Test-Path $required)) { throw "Required gate component not found: $required" }
 }
 
 $localRuntime = $null
-if ($Provider -in @("Auto","Ollama") -and (Test-Path $localResolverPath -PathType Leaf)) {
+$localRuntimeConfigured = (
+    (Test-Path $localResolverPath -PathType Leaf) -and
+    (Test-Path $localRuntimeConfigPath -PathType Leaf)
+)
+
+if ($Provider -eq "Ollama" -and -not $localRuntimeConfigured) {
+    throw "Ollama local runtime is not configured for this project. Run initialize-local-runtime.ps1 first."
+}
+
+if ($Provider -in @("Auto","Ollama") -and $localRuntimeConfigured) {
     $localArgs = @{
         ProjectPath = $root
         Role = $reviewerRole
