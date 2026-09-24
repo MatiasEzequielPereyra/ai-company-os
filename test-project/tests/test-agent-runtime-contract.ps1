@@ -215,8 +215,6 @@ if ([int]$localConfig.profiles.LOCAL_GPU_12GB.num_ctx -le [int]$localConfig.prof
     throw "12 GB GPU profile must expose more context than low-CPU profile"
 }
 
-$localProfileTest = Join-Path $repoRoot "test-project\tests\test-local-runtime-profile.ps1"
-& $localProfileTest
 
 $contextBuilder = Get-Content (Join-Path $repoRoot "scripts\build-agent-context.ps1") -Raw
 if ($contextBuilder -notmatch '\.env') { throw "Context builder must explicitly exclude environment files" }
