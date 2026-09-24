@@ -12,6 +12,7 @@ def test_english_implementation_requests_are_features():
         "Create a customer portal.",
         "Build a reporting dashboard.",
         "Adding audit history to the UI.",
+        "Please add audit history to the UI.",
     ):
         proposal = service.propose(request)
 
@@ -29,3 +30,21 @@ def test_feature_keyword_does_not_match_inside_another_word():
     )
 
     assert proposal.intent == "GENERAL"
+
+
+def test_explicit_fix_and_audit_requests_keep_their_intent():
+    service = CommandService()
+
+    assert (
+        service.propose(
+            "Fix the add button regression."
+        ).intent
+        == "FIX"
+    )
+
+    assert (
+        service.propose(
+            "Audit the new feature before release."
+        ).intent
+        == "AUDIT"
+    )
