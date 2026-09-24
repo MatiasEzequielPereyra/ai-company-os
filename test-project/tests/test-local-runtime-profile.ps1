@@ -64,6 +64,9 @@ try {
     if ([string]$highHardware.profile -ne "LOCAL_GPU_12GB") {
         throw "32 GB / 12 GB discrete-GPU fixture must resolve to LOCAL_GPU_12GB"
     }
+    if ([int]$highHardware.capability_score -le [int]$lowHardware.capability_score) {
+        throw "High-end hardware fixture must produce a higher capability score"
+    }
 
     $lowBackend = & $resolvePath -ProjectPath $tempRoot -Role "backend" -Workload "analysis" -HardwareFixturePath $lowFixture
     if (-not [bool]$lowBackend.Available) { throw "Low hardware fixture must have a usable local model" }
