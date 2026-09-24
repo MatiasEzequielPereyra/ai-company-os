@@ -125,7 +125,15 @@ if (Test-Path $managedManifestPath -PathType Leaf) {
         foreach ($managedPath in @($managedManifest.managed_files)) {
             if ([string]::IsNullOrWhiteSpace([string]$managedPath)) { continue }
 
-            $normalizedManaged = ([string]$managedPath).Trim().Replace("/","\").TrimStart(".","\").ToLowerInvariant()
+            $normalizedManaged = ([string]$managedPath).Trim().Replace("/","\")
+            while ($normalizedManaged.StartsWith(".\")) {
+                $normalizedManaged = $normalizedManaged.Substring(2)
+            }
+            while ($normalizedManaged.StartsWith("\")) {
+                $normalizedManaged = $normalizedManaged.Substring(1)
+            }
+            $normalizedManaged = $normalizedManaged.ToLowerInvariant()
+
             if (-not [string]::IsNullOrWhiteSpace($normalizedManaged)) {
                 $managedFiles[$normalizedManaged] = $true
             }
