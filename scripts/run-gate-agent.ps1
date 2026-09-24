@@ -83,6 +83,7 @@ $schemaPath = Join-Path $root ("schemas\" + $schemaName)
 $routerPath = Join-Path $PSScriptRoot "provider-router.ps1"
 $contextBuilderPath = Join-Path $PSScriptRoot "build-agent-context.ps1"
 $localResolverPath = Join-Path $PSScriptRoot "local-runtime\resolve-local-runtime.ps1"
+$localRuntimeConfigPath = Join-Path $root ".codex\local-runtime-config.json"
 
 foreach ($required in @($schemaPath,$routerPath,$contextBuilderPath)) {
     if (-not (Test-Path $required)) { throw "Required gate component not found: $required" }
