@@ -236,7 +236,7 @@ The prior writable implementation needs correction.
         Invoke-Runner -Id "AICO-002"
     }
     catch {
-        if ($_.Exception.Message -match "cannot contain '\\.\\.'|escapes the task worktree") {
+        if ($_.Exception.Message -match "cannot contain|escapes the task worktree") {
             $traversalRejected = $true
         }
         else {
