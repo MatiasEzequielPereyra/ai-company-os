@@ -32,6 +32,14 @@ class ProviderService:
             "name": "Gemini",
             "environment": "GEMINI_API_KEY",
         },
+        "deepseek": {
+            "name": "DeepSeek",
+            "environment": "DEEPSEEK_API_KEY",
+        },
+        "grok": {
+            "name": "Grok / xAI",
+            "environment": "XAI_API_KEY",
+        },
     }
 
     def get_statuses(
@@ -208,6 +216,25 @@ class ProviderService:
             environment[
                 config["environment"]
             ] = key
+
+        return environment
+
+    def build_environment_all(
+        self,
+    ) -> dict[str, str]:
+        environment = dict(os.environ)
+
+        for provider_id, config in (
+            self.PROVIDERS.items()
+        ):
+            key = self.get_api_key(
+                provider_id
+            )
+
+            if key:
+                environment[
+                    config["environment"]
+                ] = key
 
         return environment
 
