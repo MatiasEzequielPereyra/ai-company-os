@@ -77,6 +77,15 @@ function Set-FakeResult {
     Write-NoBom (Join-Path $fixtureRepo ".codex\fake-writable-result.json") ($Payload | ConvertTo-Json -Depth 20)
 }
 
+function Get-TaskStatus {
+    param([string]$Id)
+    $content = Get-Content (Join-Path $fixtureRepo ("tasks\" + $Id + ".md")) -Raw -Encoding UTF8
+    $match = [regex]::Match($content,"(?m)^Status:\s*(\S+)")
+    if (-not $match.Success) { throw "Task status missing for $Id" }
+    return $match.Groups[1].Value.Trim()
+}
+
+
 function Invoke-Runner {
     param([string]$Id)
 
@@ -203,8 +212,7 @@ The prior writable implementation needs correction.
         throw "Writable runtime did not apply the validated change inside the worktree."
     }
 
-    $task1 = Get-Content (Join-Path $fixtureRepo "tasks\AICO-001.md") -Raw
-    if ($task1 -notmatch '(?m)^Status:\s*REVIEW$') {
+    if ((Get-TaskStatus -Id "AICO-001") -ne "REVIEW") {
         throw "Successful writable execution did not advance ACTIVE -> REVIEW."
     }
 
@@ -286,9 +294,9 @@ The prior writable implementation needs correction.
         throw "Rejected writable execution did not restore the planned file."
     }
 
-    $task3 = Get-Content (Join-Path $fixtureRepo "tasks\AICO-003.md") -Raw
-    if ($task3 -notmatch '(?m)^Status:\s*ACTIVE$') {
-        throw "Rejected writable execution should leave task ACTIVE."
+    $task3Status = Get-TaskStatus -Id "AICO-003"
+    if ($task3Status -ne "ACTIVE") {
+        throw ("Rejected writable execution should leave task ACTIVE. Actual: " + $task3Status)
     }
 
     Write-NoBom (Join-Path $workspaces "AICO-004\src\value4.txt") "prior-rejected-change"
@@ -314,9 +322,9 @@ The prior writable implementation needs correction.
 
     Invoke-Runner -Id "AICO-004"
 
-    $task4 = Get-Content (Join-Path $fixtureRepo "tasks\AICO-004.md") -Raw
-    if ($task4 -notmatch '(?m)^Status:\s*REVIEW$') {
-        throw "Corrective writable execution did not complete READY -> ACTIVE -> REVIEW."
+    $task4Status = Get-TaskStatus -Id "AICO-004"
+    if ($task4Status -ne "REVIEW") {
+        throw ("Corrective writable execution did not complete READY -> ACTIVE -> REVIEW. Actual: " + $task4Status)
     }
 
     $corrected = Get-Content (Join-Path $workspaces "AICO-004\src\value4.txt") -Raw
