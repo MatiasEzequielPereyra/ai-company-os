@@ -188,7 +188,8 @@ $ScriptFiles = @(
     "validate-artifacts.ps1",
     "write-operational-event.ps1",
     "summarize-metrics.ps1",
-    "new-agent-workspace.ps1"
+    "new-agent-workspace.ps1",
+    "run-writable-agent.ps1"
 )
 
 foreach ($ScriptFile in $ScriptFiles) {
@@ -214,6 +215,11 @@ if (Test-Path $ProviderConfigSource) {
 $WorkflowProfilesSource = Join-Path $ScriptRoot ".codex\workflow-profiles.json"
 if (Test-Path $WorkflowProfilesSource) {
     Copy-Item $WorkflowProfilesSource (Join-Path $ProjectPath ".codex\workflow-profiles.json") -Force
+}
+
+$WritablePolicySource = Join-Path $ScriptRoot ".codex\writable-policy.json"
+if (Test-Path $WritablePolicySource) {
+    Copy-Item $WritablePolicySource (Join-Path $ProjectPath ".codex\writable-policy.json") -Force
 }
 
 # ------------------------------------------------------------
