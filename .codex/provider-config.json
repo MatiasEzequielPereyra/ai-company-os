@@ -1,19 +1,30 @@
 {
   "auto_order": [
-    "Codex",
+    "Ollama",
     "OpenRouter",
-    "Gemini"
+    "Gemini",
+    "DeepSeek",
+    "Grok",
+    "Codex"
   ],
+  "allow_paid_fallback": false,
   "context_max_chars": 120000,
   "models": {
+    "Ollama": "llama3.1:8b",
     "OpenRouter": "openrouter/free",
-    "Gemini": "gemini-3.5-flash-lite"
+    "Gemini": "gemini-3.5-flash-lite",
+    "DeepSeek": "deepseek-flash",
+    "Grok": "grok-4.7"
   },
   "gate_context_max_chars": 180000,
+  "ollama_context_max_chars": 20000,
+  "ollama_gate_context_max_chars": 7000,
+  "ollama_gate_artifact_max_chars": 3000,
   "writable_auto_order": [
     "OpenRouter",
     "Gemini"
   ],
+  "writable_allow_paid_fallback": false,
   "writable_models": {
     "OpenRouter": "qwen/qwen3.8-27b:free",
     "Gemini": "gemini-3.5-flash-lite"
