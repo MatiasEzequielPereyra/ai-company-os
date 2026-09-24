@@ -60,6 +60,72 @@ function Get-ChangedPaths {
     return @($paths | Sort-Object)
 }
 
+function Get-ReferencedTrackedFiles {
+    param(
+        [string]$Workspace,
+        [string[]]$Texts
+    )
+
+    $tracked = @(& git -C $Workspace ls-files 2>$null)
+    if ($LASTEXITCODE -ne 0) { throw "git ls-files failed while building writable context." }
+
+    $normalized = @()
+    foreach ($raw in $tracked) {
+        $path = ([string]$raw).Trim().Replace("\\","/")
+        if ([string]::IsNullOrWhiteSpace($path)) { continue }
+
+        $name = [System.IO.Path]::GetFileName($path).ToLowerInvariant()
+        $ext = [System.IO.Path]::GetExtension($path).ToLowerInvariant()
+
+        if ($name -like ".env*" -or $name -match 'secret|credential|private[-_]?key|service[-_]?account') { continue }
+        if ($ext -in @(".pem",".key",".p12",".pfx",".crt",".cer")) { continue }
+
+        $full = Join-Path $Workspace $path
+        if (-not (Test-Path $full -PathType Leaf)) { continue }
+        if ((Get-Item $full -Force).Length -gt 500000) { continue }
+
+        if ($ext -notin @(".md",".txt",".json",".toml",".yml",".yaml",".ts",".tsx",".js",".jsx",".mjs",".cjs",".html",".css",".scss",".sql",".ps1",".sh") -and
+            $name -notin @("dockerfile",".gitignore",".npmrc")) {
+            continue
+        }
+
+        $normalized += $path
+    }
+
+    $basenameCounts = @{}
+    foreach ($path in $normalized) {
+        $base = [System.IO.Path]::GetFileName($path).ToLowerInvariant()
+        if (-not $basenameCounts.ContainsKey($base)) { $basenameCounts[$base] = 0 }
+        $basenameCounts[$base]++
+    }
+
+    $references = @()
+    foreach ($path in $normalized) {
+        $backslashPath = $path.Replace("/","\\")
+        $base = [System.IO.Path]::GetFileName($path)
+        $baseKey = $base.ToLowerInvariant()
+
+        foreach ($text in @($Texts)) {
+            if ([string]::IsNullOrWhiteSpace($text)) { continue }
+
+            $mentionsPath =
+                $text.IndexOf($path,[System.StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                $text.IndexOf($backslashPath,[System.StringComparison]::OrdinalIgnoreCase) -ge 0
+
+            $mentionsUniqueBasename =
+                $basenameCounts[$baseKey] -eq 1 -and
+                $text.IndexOf($base,[System.StringComparison]::OrdinalIgnoreCase) -ge 0
+
+            if ($mentionsPath -or $mentionsUniqueBasename) {
+                if ($references -notcontains $path) { $references += $path }
+                break
+            }
+        }
+    }
+
+    return @($references | Sort-Object)
+}
+
 function Test-LatestReviewRequiresChanges {
     param([string]$Root,[string]$TaskId)
 
@@ -480,8 +546,25 @@ elseif ($null -ne $config -and $null -ne $config.context_max_chars) {
     $maxChars = [Math]::Min([int]$config.context_max_chars,120000)
 }
 
+$referenceTexts = @($taskText,$dispatchText)
+$reviewsDir = Join-Path $root "docs\engineering\reviews"
+if (Test-Path $reviewsDir) {
+    $latestReview = Get-ChildItem $reviewsDir -Filter ($Id + "-review-*.md") -File -ErrorAction SilentlyContinue |
+        Sort-Object Name -Descending |
+        Select-Object -First 1
+    if ($null -ne $latestReview) {
+        $referenceTexts += (Get-Content $latestReview.FullName -Raw -Encoding UTF8)
+    }
+}
+
+$contextRequiredFiles = @(Get-ReferencedTrackedFiles -Workspace $workspace -Texts $referenceTexts)
+
 Write-Host "Building writable repository context from isolated worktree..." -ForegroundColor DarkGray
-$context = & $contextBuilderPath -ProjectPath $workspace -Id $Id -Owner $owner -MaxChars $maxChars
+if ($contextRequiredFiles.Count -gt 0) {
+    Write-Host ("Pinned writable context files: " + ($contextRequiredFiles -join ", ")) -ForegroundColor DarkGray
+}
+
+$context = & $contextBuilderPath -ProjectPath $workspace -Id $Id -Owner $owner -AdditionalRequiredFiles $contextRequiredFiles -MaxChars $maxChars
 
 $prompt = @(
     "You are executing an AUTHORIZED IMPLEMENTATION task for AI Company OS.",
