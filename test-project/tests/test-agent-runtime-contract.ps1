@@ -60,7 +60,7 @@ foreach ($providerName in @("Codex","OpenRouter","Gemini","Ollama","DeepSeek","G
 }
 if ([bool]$config.allow_paid_fallback -ne $false) { throw "Paid provider fallback must default to disabled" }
 if ([string]$config.models.Ollama -ne "qwen2.5-coder:14b") { throw "Ollama must default to qwen2.5-coder:14b" }
-if ([int]$config.ollama_context_max_chars -gt 50000) { throw "Ollama context pack must remain bounded for local inference" }
+if ([int]$config.ollama_context_max_chars -gt 25000) { throw "Ollama context pack must remain tightly bounded for local inference" }
 if ([string]$config.models.OpenRouter -ne "openrouter/free") { throw "OpenRouter must default to openrouter/free" }
 if ([string]$config.models.Gemini -ne "gemini-3.5-flash-lite") { throw "Gemini must default to gemini-3.5-flash-lite" }
 if ([string]$config.models.DeepSeek -ne "deepseek-flash") { throw "DeepSeek must default to deepseek-flash" }
@@ -173,8 +173,9 @@ if ($ollama -notmatch 'localhost:11434') { throw "Ollama adapter must default to
 if ($ollama -notmatch 'OLLAMA_BASE_URL') { throw "Ollama adapter must support a configurable local endpoint" }
 if ($ollama -notmatch 'format = \$schema') { throw "Ollama adapter must pass the requested JSON schema to format" }
 if ($ollama -notmatch 'Test-TransientOllamaError') { throw "Ollama adapter must classify transient failures" }
-if ($ollama -notmatch 'num_ctx = 16384') { throw "Ollama adapter must explicitly raise the local context window" }
-if ($ollama -notmatch 'num_predict = 4096') { throw "Ollama adapter must bound local generation length" }
+if ($ollama -notmatch 'num_ctx = 8192') { throw "Ollama adapter must use a practical local context window" }
+if ($ollama -notmatch 'num_predict = 2048') { throw "Ollama adapter must bound local generation length" }
+if ($ollama -notmatch 'OLLAMA_TIMEOUT_SEC') { throw "Ollama adapter must support a configurable timeout" }
 
 $deepSeek = Get-Content (Join-Path $repoRoot "scripts\providers\invoke-deepseek.ps1") -Raw
 if ($deepSeek -notmatch 'https://api\.deepseek\.com/chat/completions') { throw "DeepSeek adapter endpoint is missing" }
