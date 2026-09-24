@@ -209,9 +209,16 @@ Auto:
 selecciona ?nicamente proveedores/modelos permitidos por la
 pol?tica configurada para ese tipo de ejecuci?n.
 
-OpenRouter y Gemini:
+Ollama:
+usa el runtime local hardware-aware. Detecta RAM, CPU, GPU/VRAM,
+modelos instalados y benchmark cacheado para elegir modelo y budgets.
+
+OpenRouter, Gemini, DeepSeek y Grok:
 sus credenciales se guardan mediante el almac?n seguro del sistema
 operativo, no dentro del repositorio.
+
+DeepSeek y Grok no participan del fallback pago autom?tico salvo
+opt-in expl?cito en provider-config.
 
 Un provider gratuito puede tener l?mites de requests o rate limits.
 FREE no significa ilimitado.""",
@@ -507,9 +514,16 @@ Auto:
 selects only providers/models permitted by the policy configured
 for that execution type.
 
-OpenRouter and Gemini:
+Ollama:
+uses the hardware-aware local runtime. RAM, CPU, GPU/VRAM,
+installed models, and cached benchmarks drive model and budget selection.
+
+OpenRouter, Gemini, DeepSeek, and Grok:
 credentials are stored through the operating system credential
 store, not inside the repository.
+
+DeepSeek and Grok are excluded from automatic paid fallback unless
+provider-config explicitly opts in.
 
 A free provider may still have request and rate limits.
 FREE does not mean unlimited.""",
