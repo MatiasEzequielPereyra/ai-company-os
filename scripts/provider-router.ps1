@@ -57,6 +57,7 @@ $configPath = Join-Path $root ".codex\provider-config.json"
 $validatorPath = Join-Path $PSScriptRoot "validate-json-contract.ps1"
 $metricsWriterPath = Join-Path $PSScriptRoot "write-operational-event.ps1"
 $localResolverPath = Join-Path $PSScriptRoot "local-runtime\resolve-local-runtime.ps1"
+$localRuntimeConfigPath = Join-Path $root ".codex\local-runtime-config.json"
 
 if (-not (Test-Path $validatorPath)) { throw "Provider contract validator not found: $validatorPath" }
 
@@ -160,9 +161,14 @@ foreach ($candidate in $attempts) {
             continue
         }
 
-        if (-not (Test-Path $localResolverPath -PathType Leaf)) {
-            $errors += "Ollama: local runtime resolver missing"
-            if ($Provider -ne "Auto") { throw "Local runtime resolver not found: $localResolverPath" }
+        if (
+            -not (Test-Path $localResolverPath -PathType Leaf) -or
+            -not (Test-Path $localRuntimeConfigPath -PathType Leaf)
+        ) {
+            $errors += "Ollama: local runtime resolver/configuration missing"
+            if ($Provider -ne "Auto") {
+                throw "Local runtime resolver/configuration is not installed."
+            }
             continue
         }
 
