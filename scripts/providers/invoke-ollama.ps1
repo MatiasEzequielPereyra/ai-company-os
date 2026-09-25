@@ -5,7 +5,8 @@ param(
     [Parameter(Mandatory = $true)][string]$OutputPath,
     [string]$Model = "llama3.1:8b",
     [int]$NumCtx = 8192,
-    [int]$NumPredict = 1024
+    [int]$NumPredict = 1024,
+    [ValidateRange(1,3600)][int]$TimeoutSeconds = 1800
 )
 
 $ErrorActionPreference = "Stop"
@@ -106,9 +107,12 @@ catch { throw "Ollama request payload is invalid JSON before transport: $($_.Exc
 $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($body)
 $response = $null
 $maxAttempts = 3
-$timeoutSeconds = 1800
+$timeoutSeconds = $TimeoutSeconds
 
-if (-not [string]::IsNullOrWhiteSpace($env:OLLAMA_TIMEOUT_SEC)) {
+if (
+    -not $PSBoundParameters.ContainsKey("TimeoutSeconds") -and
+    -not [string]::IsNullOrWhiteSpace($env:OLLAMA_TIMEOUT_SEC)
+) {
     $parsedTimeout = 0
     if ([int]::TryParse($env:OLLAMA_TIMEOUT_SEC,[ref]$parsedTimeout) -and $parsedTimeout -gt 0) {
         $timeoutSeconds = $parsedTimeout
