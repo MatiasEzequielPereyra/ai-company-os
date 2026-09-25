@@ -118,13 +118,23 @@ class PlanControlScreen(Screen):
         self._refresh_view()
 
     def _work_request_ids(self) -> list[str]:
-        return [
+        explicit = [
             value
             for value in (
                 self.preparation_result.work_request_ids
             )
             if value
         ]
+
+        if explicit:
+            return explicit
+
+        return self.work_requests.request_ids_for_task_ids(
+            self.plan_data.project_root,
+            list(
+                self.preparation_result.created_task_ids
+            ),
+        )
 
     def _task_ids(self) -> list[str]:
         work_request_ids = self._work_request_ids()
