@@ -41,6 +41,8 @@ def test_plan_control_exposes_retry_and_canonical_gates() -> None:
     assert "Live Progress" in source
     assert "_progress_from_worker" in source
     assert "_handle_progress_line" in source
+    assert "__AICO_GATE__|" in source
+    assert "gate_states" in source
 
 
 def test_task_result_service_surfaces_writable_evidence_and_retry() -> None:
