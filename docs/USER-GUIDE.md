@@ -115,6 +115,17 @@ AI Company OS define los siguientes roles:
 
 Los agentes no deberían tomar decisiones fuera de su autoridad ni inventar requisitos faltantes.
 
+### Identificador especial del Engineering Manager
+
+Actualmente existen dos formas del identificador:
+
+```text
+engineering-manager   → Owner de task / archivos de rol / scripts
+engineering_manager   → clave del agente en .codex/config.toml
+```
+
+Son dos namespaces del mismo rol conceptual. Para metadata de tasks y dispatch se utiliza la forma con guion.
+
 ## 5. Estados de una tarea
 
 Los estados canónicos son:
