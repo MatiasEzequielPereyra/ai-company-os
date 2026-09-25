@@ -7,12 +7,28 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Read-Field {
+    param([string]$Content,[string]$Key)
+
+    $pattern = "(?m)^" + [regex]::Escape($Key) + ":\s*(.+)$"
+    if ($Content -match $pattern) { return $Matches[1].Trim() }
+    return ""
+}
+
 $root = (Resolve-Path $ProjectPath).Path
 if (-not (Test-Path (Join-Path $root ".git"))) { throw "Project must be a Git repository for isolated writable execution." }
 if ($null -eq (Get-Command git -ErrorAction SilentlyContinue)) { throw "git is required for isolated writable execution." }
 
 $taskPath = Join-Path $root ("tasks\" + $Id + ".md")
 if (-not (Test-Path $taskPath)) { throw "Task not found: $taskPath" }
+
+$task = Get-Content $taskPath -Raw -Encoding UTF8
+$workKind = (Read-Field -Content $task -Key "Work kind").ToUpperInvariant()
+
+if ($workKind -ne "IMPLEMENTATION") {
+    $displayWorkKind = if ([string]::IsNullOrWhiteSpace($workKind)) { "<missing>" } else { $workKind }
+    throw "Writable workspace creation requires Work kind IMPLEMENTATION. Current Work kind: $displayWorkKind"
+}
 
 if ([string]::IsNullOrWhiteSpace($WorkspaceRoot)) {
     $WorkspaceRoot = Join-Path (Split-Path -Parent $root) ((Split-Path $root -Leaf) + "-worktrees")
