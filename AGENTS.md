@@ -80,7 +80,7 @@ Available specialized roles include:
 
 - pm
 - cto
-- engineering_manager
+- engineering-manager
 - backend
 - frontend
 - devops
