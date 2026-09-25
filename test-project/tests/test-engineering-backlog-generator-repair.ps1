@@ -63,7 +63,11 @@ try {
                 objective = "Explicitly authorize implementation of the approved engineering backlog."
                 context = "The approved source plan requires implementation authorization before code changes."
                 acceptance_criteria = @("Implementation authorization is explicitly recorded.")
-                dependencies = @()
+                dependencies = @(
+                    "AICO-006-IMPL-AUTH",
+                    "AICO-006-IMPL-AUTH",
+                    ""
+                )
                 affected_areas = @("planning")
                 testing_requirements = @("Record authorization evidence.")
                 risks = @("Implementation starts without authorization.")
@@ -130,8 +134,8 @@ try {
         throw "Authorization item disappeared during repair."
     }
 
-    if (@($authorizationItem.dependencies | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }).Count -ne 0) {
-        throw "Empty authorization dependencies were not preserved as an empty dependency set."
+    if (@($authorizationItem.dependencies).Count -ne 0) {
+        throw "Self/duplicate/empty authorization dependencies were not repaired to an empty dependency set."
     }
 }
 finally {
