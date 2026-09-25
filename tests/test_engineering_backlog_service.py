@@ -170,3 +170,13 @@ def test_engineering_backlog_service_streams_runtime_progress() -> None:
     assert "ProgressCallback" in source
     assert "__AICO_BACKLOG__|" in source
     assert "build_environment_all" in source
+
+
+def test_engineering_backlog_service_reuses_previous_provider_output() -> None:
+    source = Path(
+        "src/company_os/application/engineering_backlog_service.py"
+    ).read_text(encoding="utf-8")
+
+    assert "runtime_output_path.exists()" in source
+    assert '"-ReuseExistingOutput"' in source
+    assert "Reusing existing structured backlog" in source
