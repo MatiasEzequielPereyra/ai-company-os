@@ -1,33 +1,56 @@
 # AI Company OS — First Run Checklist
 
-> Checklist para validar una instalación desde la perspectiva de un usuario nuevo.
+> Prueba controlada para aprender el lifecycle sin tocar primero un proyecto importante.
 
-El objetivo no es completar un proyecto real. Es comprobar que el framework está instalado, que los contratos básicos funcionan y que el usuario entiende qué pasos son automáticos y cuáles requieren aprobación explícita.
+Esta prueba usa un **proyecto descartable** y un Work Request `RESEARCH` con dos planning tasks dependientes:
 
-## 1. Confirmar ubicación y Git
+```text
+PM → CTO
+```
+
+Eso permite comprobar:
+
+- creación de Work Request;
+- materialización de tasks;
+- readiness;
+- dependencia;
+- dispatch;
+- ejecución con provider;
+- Review;
+- QA;
+- Security;
+- final approval;
+- desbloqueo de una dependencia.
+
+Además evita usar una task de `engineering-manager` como primer ejemplo, porque el Review gate actual también usa ese rol y no garantiza independencia de rol en ese caso.
+
+## 1. Partir desde AI Company OS
+
+Desde el checkout del framework:
 
 ```powershell
-Get-Location
 git status --short --branch
 ```
 
-Resultado esperado:
+Confirmá que estás en el repositorio correcto.
 
-- estás en la raíz del proyecto correcto;
-- conocés la branch actual;
-- cualquier cambio local existente es intencional.
-
-## 2. Confirmar componentes
+## 2. Crear un proyecto descartable
 
 ```powershell
-Test-Path .\AGENTS.md
-Test-Path .\.codex
-Test-Path .\tasks
-Test-Path .\scripts
-Test-Path .\schemas
+$DemoRoot = Join-Path $env:TEMP "aico-first-run"
+
+if (Test-Path $DemoRoot) {
+  throw "El demo ya existe: $DemoRoot. Elegí otra ruta o revisá el anterior antes de borrarlo."
+}
+
+.\scripts\new-project.ps1 `
+  -ProjectName "aico-first-run" `
+  -Destination $env:TEMP
+
+Set-Location $DemoRoot
 ```
 
-Todos deberían devolver `True`.
+Este demo no necesita contener una aplicación real. Su objetivo es aprender el workflow.
 
 ## 3. Ejecutar intake
 
@@ -35,199 +58,346 @@ Todos deberían devolver `True`.
 .\scripts\initialize-project.ps1
 ```
 
-Revisar:
+Revisar los artifacts generados bajo:
 
 ```text
-docs/engineering/project-intake.md
-docs/product/product-intake.md
-docs/architecture/architecture-intake.md
-docs/operations/operations-intake.md
+docs/product/
+docs/architecture/
+docs/engineering/
+docs/operations/
 ```
 
-No asumir que detección automática = decisión aprobada.
-
-## 4. Validar artefactos
+## 4. Validar la instalación
 
 ```powershell
 .\scripts\validate-artifacts.ps1
 ```
 
-Si falla, resolver el error antes de crear trabajo nuevo.
+Si falla, no continuar. Consultar `docs/TROUBLESHOOTING.md` en el repositorio de AI Company OS.
 
 ## 5. Comprobar providers
 
-### Codex
+Codex:
 
 ```powershell
 Get-Command codex -ErrorAction SilentlyContinue
 ```
 
-### OpenRouter
+OpenRouter:
 
 ```powershell
 Test-Path Env:OPENROUTER_API_KEY
 ```
 
-### Gemini
+Gemini:
 
 ```powershell
 Test-Path Env:GEMINI_API_KEY
 ```
 
-No hace falta configurar los tres. Para `Auto`, al menos uno debe estar disponible.
+Para continuar con ejecución de agentes, al menos un provider debe estar disponible.
 
-## 6. Crear un Work Request de prueba
+## 6. Crear un Work Request de RESEARCH
 
 ```powershell
 .\scripts\orchestrate.ps1 `
-  -Objective "Review project documentation quality" `
-  -Type DOCUMENTATION `
+  -Objective "Assess the project structure and identify the next technical decision." `
+  -Type RESEARCH `
   -Priority P3
 ```
 
-Esto debe preparar el trabajo sin activar tasks.
+El plan de RESEARCH utiliza:
 
-## 7. Verificar que PREPARE no activó trabajo
+```text
+PM
+ ↓
+CTO
+```
+
+## 7. Capturar el Work Request real
+
+```powershell
+$WorkRequestId = (
+  Get-ChildItem .\docs\engineering\work-requests -Filter "WR-*.md" |
+  Sort-Object Name |
+  Select-Object -Last 1
+).BaseName
+
+$WorkRequestId
+```
+
+No asumir `WR-001`.
+
+## 8. Inspeccionar tasks antes de aplicar
 
 ```powershell
 .\scripts\list-tasks.ps1
 ```
 
-La task generada debería estar en `BACKLOG`.
+Deberías ver dos tasks en `BACKLOG`:
 
-## 8. Aplicar readiness y dispatch
+- PM;
+- CTO.
+
+La task de CTO debe depender de la de PM.
+
+## 9. Aplicar readiness y dispatch
 
 ```powershell
 .\scripts\orchestrate.ps1 `
-  -WorkRequestId WR-001 `
+  -WorkRequestId $WorkRequestId `
   -Apply
 ```
 
-Después:
+Ahora:
 
 ```powershell
-.\scripts\list-tasks.ps1 -Status ACTIVE
+.\scripts\list-tasks.ps1
 ```
 
-Debería existir trabajo ACTIVE si la task cumple readiness.
+Resultado conceptual esperado:
 
-## 9. Inspeccionar el dispatch
+```text
+PM   → ACTIVE
+CTO  → BACKLOG
+```
 
-Usar el ID real:
+CTO no debe activarse porque depende de PM.
+
+## 10. Capturar el ID de la task PM
 
 ```powershell
-Get-Content .\docs\engineering\dispatch\AICO-001.md
+$PmTask = Get-ChildItem .\tasks -Filter "AICO-*.md" |
+  Where-Object {
+    $content = Get-Content $_.FullName -Raw
+    $content -match "(?m)^Work request:\s*$([regex]::Escape($WorkRequestId))\s*$" -and
+    $content -match "(?m)^Owner:\s*pm\s*$"
+  } |
+  Select-Object -First 1
+
+$PmTaskId = $PmTask.BaseName
+$PmTaskId
 ```
 
-Confirmar que describe:
+## 11. Inspeccionar dispatch PM
 
-- task;
-- owner;
+```powershell
+Get-Content ".\docs\engineering\dispatch\$PmTaskId.md"
+```
+
+Confirmar:
+
+- owner `pm`;
 - objetivo;
-- restricciones;
-- contract de resultado.
+- acceptance criteria;
+- contexto;
+- restricciones.
 
-## 10. Ejecutar el agente
+## 12. Ejecutar PM
 
 ```powershell
-.\scripts\run-active-agents.ps1 -Provider Auto
+.\scripts\run-agent-task.ps1 `
+  -Id $PmTaskId `
+  -Provider Auto
 ```
 
-Resultado esperado para una task completada:
+Si completa correctamente:
 
 ```text
 ACTIVE → REVIEW
 ```
 
-y artifacts bajo:
-
-```text
-.codex/runtime/
-docs/engineering/agent-reports/
-docs/engineering/results/
-```
-
-Si el provider no está disponible, consultar `TROUBLESHOOTING.md`.
-
-## 11. Ejecutar gates
+## 13. Ejecutar sus gates
 
 ```powershell
 .\scripts\run-pending-gates.ps1 -Provider Auto
 ```
 
-Si todos los gates progresan satisfactoriamente, la task debería terminar en `SECURITY` con artifacts de Review, QA y Security.
+Después:
 
-### Importante
+```powershell
+.\scripts\list-tasks.ps1
+```
 
-`run-pending-gates.ps1` **no realiza la aprobación final**.
+PM debería quedar en `SECURITY` si todos los gates fueron satisfactorios.
 
-## 12. Aprobar o rechazar explícitamente
+## 14. Revisar evidencia PM
 
-Después de revisar la evidencia:
+```powershell
+Get-Content ".\tasks\$PmTaskId.md"
+Get-Content ".\docs\engineering\qa\$PmTaskId-qa.md"
+Get-Content ".\docs\engineering\security\$PmTaskId-security.md"
+```
+
+Revisá el contenido. No apruebes por costumbre.
+
+## 15. Finalizar PM
+
+Si la evidencia corresponde:
 
 ```powershell
 .\scripts\finalize-task.ps1 `
-  -Id AICO-001 `
+  -Id $PmTaskId `
   -Decision APPROVE `
-  -Verification "Reviewed objective and all applicable gate evidence."
+  -Verification "Reviewed PM deliverable and applicable gate evidence."
 ```
 
-Resultado esperado:
+Esperado:
 
 ```text
-SECURITY → DONE
+PM: DONE
 ```
 
-No automatizar esta decisión durante la primera prueba: el objetivo es que el operador vea qué está aprobando.
+El finalizer también refresca dependencies cuando el script está disponible.
 
-## 13. Sincronizar y validar
+## 16. Comprobar que CTO se desbloqueó
+
+```powershell
+.\scripts\list-tasks.ps1
+```
+
+Esperado conceptualmente:
+
+```text
+PM   → DONE
+CTO  → READY
+```
+
+Esto demuestra que una dependencia necesita `DONE`, no simplemente REVIEW o QA.
+
+## 17. Capturar CTO y despacharlo
+
+```powershell
+$CtoTask = Get-ChildItem .\tasks -Filter "AICO-*.md" |
+  Where-Object {
+    $content = Get-Content $_.FullName -Raw
+    $content -match "(?m)^Work request:\s*$([regex]::Escape($WorkRequestId))\s*$" -and
+    $content -match "(?m)^Owner:\s*cto\s*$"
+  } |
+  Select-Object -First 1
+
+$CtoTaskId = $CtoTask.BaseName
+
+.\scripts\dispatch-ready-tasks.ps1 -Apply
+```
+
+Comprobar:
+
+```powershell
+.\scripts\list-tasks.ps1
+```
+
+CTO debería estar `ACTIVE`.
+
+## 18. Ejecutar CTO y gates
+
+```powershell
+.\scripts\run-agent-task.ps1 `
+  -Id $CtoTaskId `
+  -Provider Auto
+
+.\scripts\run-pending-gates.ps1 -Provider Auto
+```
+
+## 19. Revisar y finalizar CTO
+
+```powershell
+Get-Content ".\tasks\$CtoTaskId.md"
+Get-Content ".\docs\engineering\qa\$CtoTaskId-qa.md"
+Get-Content ".\docs\engineering\security\$CtoTaskId-security.md"
+```
+
+Si corresponde:
+
+```powershell
+.\scripts\finalize-task.ps1 `
+  -Id $CtoTaskId `
+  -Decision APPROVE `
+  -Verification "Reviewed CTO deliverable and applicable gate evidence."
+```
+
+## 20. Validar estado final
 
 ```powershell
 .\scripts\sync-company-state.ps1
 .\scripts\validate-artifacts.ps1
 .\scripts\summarize-metrics.ps1
+.\scripts\list-tasks.ps1
 ```
 
-## 14. Comprobar fuentes de verdad
-
-Abrir:
+Esperado:
 
 ```text
-tasks/AICO-001.md
-.codex/state/company-state.md
-docs/engineering/results/AICO-001-result-001.md
-docs/engineering/reviews/AICO-001-review-001.md
-docs/engineering/qa/AICO-001-qa.md
-docs/engineering/security/AICO-001-security.md
-docs/engineering/final-approvals/AICO-001-final.md
+PM   → DONE
+CTO  → DONE
 ```
 
-La task es autoritativa para su lifecycle. Company state es derivado.
+## 21. Qué acabás de probar
 
-## 15. Ejecutar smoke suite del framework
-
-En el repositorio de AI Company OS:
-
-```powershell
-.\test-project\tests\run-all-smoke-tests.ps1
+```text
+User objective
+  ↓
+Work Request
+  ↓
+Plan
+  ↓
+PM BACKLOG
+  ↓
+PM READY / ACTIVE
+  ↓
+Result
+  ↓
+Review
+  ↓
+QA
+  ↓
+Security
+  ↓
+Final approval
+  ↓
+PM DONE
+  ↓
+dependency refresh
+  ↓
+CTO READY / ACTIVE
+  ↓
+same gated lifecycle
+  ↓
+CTO DONE
 ```
+
+## 22. Qué NO probaste
+
+Este demo no prueba:
+
+- modificación autónoma de código;
+- worktree de escritura;
+- merge;
+- push;
+- deployment;
+- TUI.
+
+Esas capacidades tienen contratos y madurez diferentes.
 
 ## Criterio de éxito
 
-La primera ejecución se considera comprendida cuando el usuario puede explicar:
+La primera ejecución se considera comprendida cuando podés explicar:
 
 ```text
-qué creó el Work Request
-qué hizo el orchestrator
-por qué la task pasó a ACTIVE
-qué produjo el agent
-por qué REVIEW es independiente
-qué verificó QA
-qué hizo Security
-por qué Security no significa DONE
+por qué PM se activó antes que CTO
+por qué CTO necesitó PM = DONE
+qué produjo el provider
+por qué Review/QA/Security son gates separados
+por qué Security no significó DONE
 qué aprobó finalize-task
-qué archivos son fuente de verdad
-qué acciones siguen requiriendo autorización humana
+por qué hubo que despachar CTO después
+qué artifacts conservaron la evidencia
 ```
 
-Si alguno de esos puntos no está claro, volver al User Guide o al End-to-End Walkthrough antes de usar AI Company OS sobre trabajo sensible.
+Si alguno de esos puntos no está claro, consultar:
+
+- `docs/USER-GUIDE.md`;
+- `docs/END-TO-END-WALKTHROUGH.md`;
+- `docs/TROUBLESHOOTING.md`.
+
+Nota: esos documentos viven en el repositorio fuente de AI Company OS; el instalador runtime no copia necesariamente toda la documentación de usuario al proyecto target.
