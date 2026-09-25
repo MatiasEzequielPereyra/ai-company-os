@@ -230,7 +230,7 @@ No borrar las tasks para volver a ejecutar el comando.
 Primero inspeccionar:
 
 ```powershell
-Get-Content .\docs\engineering\plans\WR-001-tasks.md
+Get-Content .\docs\engineering\plans\WR-XXX-tasks.md
 .\scripts\list-tasks.ps1
 ```
 
