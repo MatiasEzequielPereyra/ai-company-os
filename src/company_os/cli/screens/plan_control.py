@@ -610,13 +610,20 @@ class PlanControlScreen(Screen):
             return
 
         self.busy = True
+        self._operation_owners = {
+            task.id: task.owner
+            for task in self._tasks()
+            if task.id in gate_tasks
+        }
 
-        self._working(
-            "Running independent gates:\n\n"
-            + "\n".join(gate_tasks)
-            + "\n\nReview -> QA -> Security",
-            "QUALITY GATES",
+        self.progress.start(
+            kind="gates",
+            title="QUALITY GATES",
+            task_ids=gate_tasks,
+            initial_event="Starting quality gates...",
+            provider="Auto",
         )
+        self._render_operation_progress()
 
         self.gates_worker()
 
@@ -634,6 +641,7 @@ class PlanControlScreen(Screen):
                     self.plan_data.project_root,
                     self._task_ids(),
                     provider="Auto",
+                    progress=self._progress_from_worker,
                 )
             )
 
@@ -741,6 +749,35 @@ class PlanControlScreen(Screen):
         if not line:
             return
 
+        if line.startswith(
+            "__AICO_GATE__|"
+        ):
+            parts = line.split("|")
+
+            if len(parts) == 4:
+                _marker, task_id, gate, state = parts
+
+                if state == "START":
+                    self.progress.begin_gate(
+                        task_id,
+                        gate,
+                    )
+                    self.progress.add_event(
+                        f"Running {gate} gate..."
+                    )
+
+                elif state == "DONE":
+                    self.progress.complete_gate(
+                        task_id,
+                        gate,
+                    )
+                    self.progress.add_event(
+                        f"{gate} gate finished."
+                    )
+
+            self._render_operation_progress()
+            return
+
         task_match = re.match(
             r"(?i)^Running agent:\s*([^\s]+)\s*->\s*(AICO-\d+)",
             line,
@@ -794,6 +831,10 @@ class PlanControlScreen(Screen):
             "completed",
             "failed",
             "runtime",
+            "review",
+            "security",
+            "gate",
+            "qa",
         )
 
         if any(
@@ -837,9 +878,39 @@ class PlanControlScreen(Screen):
         lines = [
             f"Task: {task}",
             f"Agent: {owner}",
-            f"Provider: {self.progress.provider or '-'}",
-            f"Model: {self.progress.model or '-'}",
         ]
+
+        if self.progress.kind == "gates":
+            markers = {
+                "DONE": "[OK]",
+                "CURRENT": "[>>]",
+                "PENDING": "[  ]",
+            }
+            lines.extend(
+                [
+                    "",
+                    (
+                        f"{markers.get(self.progress.gate_states['REVIEW'], '[  ]')} "
+                        "Review"
+                    ),
+                    (
+                        f"{markers.get(self.progress.gate_states['QA'], '[  ]')} "
+                        "QA"
+                    ),
+                    (
+                        f"{markers.get(self.progress.gate_states['SECURITY'], '[  ]')} "
+                        "Security"
+                    ),
+                    "",
+                ]
+            )
+
+        lines.extend(
+            [
+                f"Provider: {self.progress.provider or '-'}",
+                f"Model: {self.progress.model or '-'}",
+            ]
+        )
 
         if self.progress.context_chars:
             lines.append(
