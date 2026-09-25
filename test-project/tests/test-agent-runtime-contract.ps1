@@ -11,6 +11,7 @@ $required = @(
     "scripts\provider-router.ps1",
     "scripts\build-agent-context.ps1",
     "scripts\resolve-writable-required-files.ps1",
+    "scripts\task-execution-lock.ps1",
     "scripts\providers\invoke-codex.ps1",
     "scripts\providers\invoke-openrouter.ps1",
     "scripts\providers\invoke-gemini.ps1",
@@ -22,6 +23,7 @@ $required = @(
     "scripts\local-runtime\initialize-local-runtime.ps1",
     "scripts\local-runtime\benchmark-ollama.ps1",
     "scripts\run-gate-agent.ps1",
+    "scripts\finalize-task.ps1",
     "scripts\run-pending-gates.ps1",
     "scripts\generate-engineering-backlog.ps1",
     "scripts\materialize-engineering-backlog.ps1",
@@ -305,6 +307,14 @@ if ($gemini -notmatch 'responseJsonSchema') {
     throw "Gemini adapter must request structured JSON output"
 }
 
+foreach ($runnerName in @("run-agent-task.ps1","run-gate-agent.ps1","run-writable-agent.ps1","finalize-task.ps1")) {
+    $runnerText = Get-Content (Join-Path $repoRoot ("scripts\" + $runnerName)) -Raw
+
+    if ($runnerText -notmatch 'Enter-TaskExecutionLock') {
+        throw "$runnerName must serialize execution through the per-task lock"
+    }
+}
+
 $contextBuilder = Get-Content (Join-Path $repoRoot "scripts\build-agent-context.ps1") -Raw
 if ($contextBuilder -notmatch '\.env') { throw "Context builder must explicitly exclude environment files" }
 if (-not $contextBuilder.Contains("private[-_]?key")) { throw "Context builder must exclude private-key files" }
@@ -335,6 +345,7 @@ $parseTargets = @(
     "scripts\local-runtime\initialize-local-runtime.ps1",
     "scripts\local-runtime\benchmark-ollama.ps1",
     "scripts\run-gate-agent.ps1",
+    "scripts\finalize-task.ps1",
     "scripts\run-pending-gates.ps1",
     "scripts\generate-engineering-backlog.ps1",
     "scripts\materialize-engineering-backlog.ps1"
