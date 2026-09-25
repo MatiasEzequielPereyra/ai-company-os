@@ -18,7 +18,40 @@ def write(path: Path, value: str) -> None:
     )
 
 
+
+def write_work_request(
+    root: Path,
+    request_id: str,
+    request_type: str,
+) -> None:
+    write(
+        root
+        / "docs"
+        / "engineering"
+        / "work-requests"
+        / f"{request_id}.md",
+        f"""# {request_id} - Work Request
+
+ID: {request_id}
+Type: {request_type}
+Priority: P1
+Created: 2026-09-24T00:00:00Z
+Status: PLANNING
+
+## Objective
+
+Fixture objective
+""",
+    )
+
+
 def test_detects_done_engineering_manager_with_report(tmp_path):
+    write_work_request(
+        tmp_path,
+        "WR-100",
+        "FEATURE",
+    )
+
     write(
         tmp_path / "tasks" / "AICO-100.md",
         """# AICO-100 - Plan feature
@@ -57,6 +90,12 @@ def test_generate_and_materialize_uses_canonical_scripts_idempotently(
     tmp_path,
     monkeypatch,
 ):
+    write_work_request(
+        tmp_path,
+        "WR-101",
+        "FEATURE",
+    )
+
     write(
         tmp_path / "tasks" / "AICO-101.md",
         """# AICO-101 - Plan feature
@@ -157,3 +196,44 @@ Work request: WR-101
         "AICO-101"
     ]
     assert calls == []
+
+
+def test_documentation_request_does_not_offer_engineering_backlog(
+    tmp_path,
+):
+    write_work_request(
+        tmp_path,
+        "WR-200",
+        "DOCUMENTATION",
+    )
+
+    write(
+        tmp_path / "tasks" / "AICO-200.md",
+        """# AICO-200 - Prepare documentation
+
+ID: AICO-200
+Status: DONE
+Owner: engineering-manager
+Work request: WR-200
+""",
+    )
+
+    write(
+        tmp_path
+        / "docs"
+        / "engineering"
+        / "agent-reports"
+        / "AICO-200.md",
+        "# Documentation report\n",
+    )
+
+    service = EngineeringBacklogService()
+
+    assert service.ready_sources(
+        tmp_path,
+        ["WR-200"],
+    ) == []
+    assert service.pending_sources(
+        tmp_path,
+        ["WR-200"],
+    ) == []
