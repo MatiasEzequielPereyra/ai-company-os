@@ -52,6 +52,12 @@ Respuestas cortas sobre autonomía, Work Requests, tasks, providers, gates, work
 
 Matriz de qué está documentado como estable, parcial, pendiente o no soportado implícitamente.
 
+### 9. Revisión de usabilidad
+
+[DOCUMENTATION-USABILITY-REVIEW.md](./DOCUMENTATION-USABILITY-REVIEW.md)
+
+Resultado de la prueba de onboarding v0.1, hallazgos corregidos, CI y limitaciones pendientes.
+
 ## Documentación del sistema
 
 - [PROJECT-BRIEF.md](./PROJECT-BRIEF.md) — alcance, visión, usuarios objetivo, restricciones y criterios de éxito.
