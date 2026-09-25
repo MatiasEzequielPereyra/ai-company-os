@@ -1332,3 +1332,64 @@ identidad
 ```
 
 La corrección correcta es reparar la condición que falta y conservar la trazabilidad.
+
+
+# Actualización del framework
+
+## 58. Actualicé AI Company OS y perdí cambios locales
+
+### Riesgo
+
+`install-existing-project.ps1 -Force` reemplaza componentes del framework existentes. Si esos archivos tenían personalizaciones locales, pueden aparecer como cambios sobrescritos.
+
+### Prevención
+
+Antes de actualizar:
+
+```powershell
+git status --short --branch
+git diff
+```
+
+Hacer la actualización en una branch dedicada y con el trabajo previo guardado/commitado de acuerdo con el workflow del proyecto.
+
+### Después de actualizar
+
+```powershell
+git diff
+.\scripts\validate-artifacts.ps1
+```
+
+Revisar especialmente:
+
+```text
+AGENTS.md
+.codex/
+scripts/
+schemas/
+```
+
+El instalador actual no hace merge semántico de personalizaciones.
+
+---
+
+## 59. Ejecuté el instalador sin -Force y no se actualizaron scripts
+
+### Comportamiento esperado
+
+Sin `-Force`, el instalador muestra `SKIP existing:` para varios componentes y conserva los archivos existentes.
+
+Eso protege personalizaciones, pero también significa que **no es un mecanismo automático de upgrade**.
+
+### Resolución
+
+Si realmente se desea actualizar la copia instalada:
+
+1. trabajar sobre una branch limpia;
+2. revisar personalizaciones;
+3. actualizar el checkout fuente de AI Company OS;
+4. ejecutar el instalador con `-Force`;
+5. revisar el diff;
+6. validar artifacts/tests correspondientes.
+
+No usar `-Force` como rutina ciega.
