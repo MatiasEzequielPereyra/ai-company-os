@@ -9,6 +9,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from company_os.application.provider_service import ProviderService
+from company_os.application.process_stream import (
+    ProgressCallback,
+    run_streamed_process,
+)
 
 from company_os.repository.task_repository import TaskRepository
 
@@ -19,6 +23,7 @@ class ControlledTask:
     title: str
     owner: str
     status: str
+    work_kind: str
 
 
 @dataclass
@@ -68,12 +73,20 @@ class AgentControlService:
                 str(task.status),
             )
 
+            content = task.source_path.read_text(
+                encoding="utf-8-sig",
+            )
+
             result.append(
                 ControlledTask(
                     id=task_id,
                     title=str(task.title),
                     owner=str(task.owner),
                     status=str(status),
+                    work_kind=self._read_field(
+                        content,
+                        "Work kind",
+                    ).upper(),
                 )
             )
 
@@ -234,14 +247,37 @@ class AgentControlService:
         allowed_task_ids: list[str],
         provider: str = "Auto",
         model: str = "",
+        progress: ProgressCallback | None = None,
     ) -> AgentRunResult:
         root = Path(project_root).resolve()
         allowed = set(allowed_task_ids)
 
-        active = self._ids_with_status(
-            root,
-            "ACTIVE",
-        )
+        active_tasks = [
+            task
+            for task in self.get_tasks(root)
+            if task.status == "ACTIVE"
+        ]
+
+        implementation_active = [
+            task.id
+            for task in active_tasks
+            if task.work_kind == "IMPLEMENTATION"
+        ]
+
+        if implementation_active:
+            raise RuntimeError(
+                "Analysis execution refused because ACTIVE "
+                "IMPLEMENTATION tasks must use the writable "
+                "runner: "
+                + ", ".join(
+                    sorted(implementation_active)
+                )
+            )
+
+        active = {
+            task.id
+            for task in active_tasks
+        }
 
         unexpected = active - allowed
 
@@ -289,10 +325,20 @@ class AgentControlService:
                 "-Parallel"
             )
 
+        if progress is not None:
+            progress(
+                "Running analysis for "
+                + ", ".join(selected)
+            )
+            progress(
+                f"Provider requested: {provider}"
+            )
+
         output = self._run_script(
             script,
             args,
             timeout=1800,
+            progress=progress,
         )
 
         self._sync_state(root)
@@ -532,6 +578,7 @@ class AgentControlService:
         script: Path,
         arguments: list[str],
         timeout: int,
+        progress: ProgressCallback | None = None,
     ) -> str:
         if not script.exists():
             raise FileNotFoundError(
@@ -549,38 +596,19 @@ class AgentControlService:
             *arguments,
         ]
 
-        environment = os.environ.copy()
-
         providers = ProviderService()
-
-        environment.update(
-            providers.build_environment(
-                "OpenRouter"
-            )
+        environment = (
+            providers.build_environment_all()
         )
 
-        environment.update(
-            providers.build_environment(
-                "Gemini"
-            )
-        )
-
-        process = subprocess.run(
+        process = run_streamed_process(
             command,
-            capture_output=True,
-            text=True,
             timeout=timeout,
             env=environment,
+            on_line=progress,
         )
 
-        output = (
-            (process.stdout or "")
-            + (
-                "\n" + process.stderr
-                if process.stderr
-                else ""
-            )
-        ).strip()
+        output = process.output
 
         if process.returncode != 0:
             raise RuntimeError(

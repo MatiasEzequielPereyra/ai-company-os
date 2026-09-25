@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import traceback
 
 from rich.console import Group
 from rich.panel import Panel
@@ -559,6 +560,22 @@ class ProvidersScreen(Screen):
             id="gemini-key",
         )
 
+        yield Input(
+            placeholder=(
+                "DeepSeek API key - Enter to save securely"
+            ),
+            password=True,
+            id="deepseek-key",
+        )
+
+        yield Input(
+            placeholder=(
+                "Grok / xAI API key - Enter to save securely"
+            ),
+            password=True,
+            id="grok-key",
+        )
+
         yield Static(
             "Keys are stored through the operating system "
             "credential store, not inside the repository."
@@ -611,6 +628,8 @@ class ProvidersScreen(Screen):
         mapping = {
             "openrouter-key": "openrouter",
             "gemini-key": "gemini",
+            "deepseek-key": "deepseek",
+            "grok-key": "grok",
         }
 
         provider = mapping.get(
@@ -893,7 +912,11 @@ class AICompanyTUI(App):
         yield Footer()
 
     def on_mount(self) -> None:
-        self._load_data()
+        try:
+            self._load_data()
+        except Exception as exc:
+            self._show_startup_error(exc)
+            return
 
         nav = self.query_one(
             "#nav",
@@ -904,6 +927,57 @@ class AICompanyTUI(App):
         nav.focus()
 
         self._show_view("overview")
+
+    def _show_startup_error(
+        self,
+        exc: Exception,
+    ) -> None:
+        detail = traceback.format_exc()
+
+        try:
+            log_dir = (
+                Path.home()
+                / ".ai-company-os"
+            )
+            log_dir.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
+            (
+                log_dir
+                / "tui-startup-error.log"
+            ).write_text(
+                detail,
+                encoding="utf-8",
+            )
+        except OSError:
+            pass
+
+        self.query_one(
+            "#content-title",
+            Static,
+        ).update(
+            "TUI Startup Error"
+        )
+
+        self.query_one(
+            "#content",
+            Static,
+        ).update(
+            Panel(
+                (
+                    f"{type(exc).__name__}: {exc}\n\n"
+                    "Log: ~/.ai-company-os/"
+                    "tui-startup-error.log"
+                ),
+                title="AI Company OS",
+            )
+        )
+
+        self.notify(
+            f"TUI startup failed: {exc}",
+            severity="error",
+        )
 
     def _load_data(self) -> None:
         self.snapshot = StatusService().get_status(

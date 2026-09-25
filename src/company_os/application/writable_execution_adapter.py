@@ -77,6 +77,12 @@ class WritableExecutionAdapter:
                 f"Task not found: {task_id}"
             )
 
+        if tasks[0].work_kind != "IMPLEMENTATION":
+            raise RuntimeError(
+                f"{task_id} is not an IMPLEMENTATION task "
+                "and cannot use writable execution."
+            )
+
         if tasks[0].status not in {
             "READY",
             "ACTIVE",
@@ -93,18 +99,9 @@ class WritableExecutionAdapter:
                 f"{workspace}"
             )
 
-        environment = os.environ.copy()
-
-        environment.update(
-            self.providers.build_environment(
-                "OpenRouter"
-            )
-        )
-
-        environment.update(
-            self.providers.build_environment(
-                "Gemini"
-            )
+        environment = (
+            self.providers
+            .build_environment_all()
         )
 
         command = [

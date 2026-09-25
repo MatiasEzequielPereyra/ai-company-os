@@ -43,16 +43,19 @@ class WritableWorkspaceService:
         writable_tasks = [
             task
             for task in tasks
-            if task.status in {
-                "READY",
-                "ACTIVE",
-            }
+            if (
+                task.work_kind == "IMPLEMENTATION"
+                and task.status in {
+                    "READY",
+                    "ACTIVE",
+                }
+            )
         ]
 
         if not writable_tasks:
             raise RuntimeError(
-                "No READY/ACTIVE tasks are available "
-                "for writable workspace preparation."
+                "No READY/ACTIVE IMPLEMENTATION tasks are "
+                "available for writable workspace preparation."
             )
 
         script = (

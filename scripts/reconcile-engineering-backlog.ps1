@@ -138,14 +138,39 @@ function Read-Field {
 }
 
 function Get-NextTaskNumber {
-    param([string]$TasksPath)
+    param([string]$ProjectRoot)
 
-    $existing = @(Get-ChildItem $TasksPath -Filter "AICO-*.md" -File -ErrorAction SilentlyContinue | ForEach-Object {
-        if ($_.BaseName -match '^AICO-(\d+)$') { [int]$Matches[1] }
-    })
+    $searchRoots = @(
+        (Join-Path $ProjectRoot "tasks"),
+        (Join-Path $ProjectRoot "docs\engineering"),
+        (Join-Path $ProjectRoot ".codex\runtime")
+    )
 
-    if ($existing.Count -eq 0) { return 1 }
-    return [int](($existing | Measure-Object -Maximum).Maximum) + 1
+    $reserved = @()
+
+    foreach ($searchRoot in $searchRoots) {
+        if (-not (Test-Path $searchRoot)) { continue }
+
+        $reserved += @(
+            Get-ChildItem $searchRoot -File -Recurse -ErrorAction SilentlyContinue |
+                ForEach-Object {
+                    $matches = [regex]::Matches(
+                        $_.Name,
+                        '(?i)AICO-(\d+)'
+                    )
+
+                    foreach ($match in $matches) {
+                        [int]$match.Groups[1].Value
+                    }
+                }
+        )
+    }
+
+    if ($reserved.Count -eq 0) { return 1 }
+
+    return [int](
+        ($reserved | Measure-Object -Maximum).Maximum
+    ) + 1
 }
 
 function Format-Bullets {
@@ -468,7 +493,7 @@ foreach ($file in @(Get-ChildItem $tasksPath -Filter "AICO-*.md" -File -ErrorAct
     $existingContentByKey[$key] = $content
 }
 
-$nextNumber = Get-NextTaskNumber -TasksPath $tasksPath
+$nextNumber = Get-NextTaskNumber -ProjectRoot $root
 foreach ($item in $items) {
     $key = [string]$item.key
     if ($idByKey.ContainsKey($key)) { continue }

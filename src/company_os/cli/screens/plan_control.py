@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import subprocess
 
 from rich.console import Group
@@ -21,6 +22,9 @@ from textual.widgets import (
 from company_os.application.agent_control_service import (
     AgentControlService,
 )
+from company_os.application.engineering_backlog_service import (
+    EngineeringBacklogService,
+)
 from company_os.application.writable_workspace_service import WritableWorkspaceService
 from company_os.application.writable_execution_adapter import WritableExecutionAdapter
 from company_os.application.corrective_reactivation_service import CorrectiveReactivationService
@@ -30,6 +34,15 @@ from company_os.application.gate_control_service import (
 from company_os.application.task_result_service import (
     TaskResultService,
 )
+from company_os.application.work_request_service import (
+    WorkRequestService,
+)
+from company_os.application.local_runtime_service import (
+    LocalRuntimeService,
+)
+from company_os.cli.operation_progress import (
+    OperationProgressState,
+)
 
 
 class PlanControlScreen(Screen):
@@ -37,6 +50,7 @@ class PlanControlScreen(Screen):
         Binding("escape", "back", "Back"),
         Binding("a", "activate", "Activate"),
         Binding("r", "run_agents", "Analysis agent"),
+        Binding("b", "engineering_backlog", "Engineering backlog"),
         Binding("w", "prepare_writable", "Writable implementation"),
         Binding("u", "unblock", "Retry blocked"),
         Binding("g", "run_gates", "Run gates"),
@@ -56,14 +70,19 @@ class PlanControlScreen(Screen):
         self.preparation_result = preparation_result
 
         self.control = AgentControlService()
+        self.work_requests = WorkRequestService()
+        self.engineering_backlog = EngineeringBacklogService()
         self.gates = GateControlService()
         self.writable = WritableWorkspaceService()
         self.writable_runner = WritableExecutionAdapter()
         self.corrective = CorrectiveReactivationService()
         self.results = TaskResultService()
+        self.local_runtime = LocalRuntimeService()
 
         self.busy = False
         self.last_error_text = ""
+        self.progress = OperationProgressState()
+        self._operation_owners: dict[str, str] = {}
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -76,6 +95,10 @@ class PlanControlScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
+        self.set_interval(
+            0.25,
+            self._tick_operation_progress,
+        )
         self._refresh_view()
 
     def action_back(self) -> None:
@@ -89,9 +112,39 @@ class PlanControlScreen(Screen):
         self.app.pop_screen()
 
     def action_refresh_tasks(self) -> None:
+        self.local_runtime.invalidate(
+            self.plan_data.project_root
+        )
         self._refresh_view()
 
+    def _work_request_ids(self) -> list[str]:
+        explicit = [
+            value
+            for value in (
+                self.preparation_result.work_request_ids
+            )
+            if value
+        ]
+
+        if explicit:
+            return explicit
+
+        return self.work_requests.request_ids_for_task_ids(
+            self.plan_data.project_root,
+            list(
+                self.preparation_result.created_task_ids
+            ),
+        )
+
     def _task_ids(self) -> list[str]:
+        work_request_ids = self._work_request_ids()
+
+        if work_request_ids:
+            return self.work_requests.resolve_task_ids(
+                self.plan_data.project_root,
+                work_request_ids,
+            )
+
         return list(
             self.preparation_result.created_task_ids
         )
@@ -101,6 +154,26 @@ class PlanControlScreen(Screen):
             self.plan_data.project_root,
             self._task_ids(),
         )
+
+    def _analysis_task_ids(self) -> list[str]:
+        return [
+            task.id
+            for task in self._tasks()
+            if task.work_kind != "IMPLEMENTATION"
+        ]
+
+    def _writable_task_ids(self) -> list[str]:
+        return [
+            task.id
+            for task in self._tasks()
+            if (
+                task.work_kind == "IMPLEMENTATION"
+                and task.status in {
+                    "READY",
+                    "ACTIVE",
+                }
+            )
+        ]
 
     def action_activate(self) -> None:
         if self.busy:
@@ -192,7 +265,10 @@ class PlanControlScreen(Screen):
         active = [
             task.id
             for task in self._tasks()
-            if task.status == "ACTIVE"
+            if (
+                task.status == "ACTIVE"
+                and task.work_kind != "IMPLEMENTATION"
+            )
         ]
 
         if not active:
@@ -203,13 +279,20 @@ class PlanControlScreen(Screen):
             return
 
         self.busy = True
+        self._operation_owners = {
+            task.id: task.owner
+            for task in self._tasks()
+            if task.id in active
+        }
 
-        self._working(
-            "Running ACTIVE agents:\n\n"
-            + "\n".join(active)
-            + "\n\nProvider: Auto",
-            "RUN AGENTS",
+        self.progress.start(
+            kind="analysis",
+            title="RUN AGENTS",
+            task_ids=active,
+            initial_event="Starting analysis runtime...",
+            provider="Auto",
         )
+        self._render_operation_progress()
 
         self.run_agents_worker()
 
@@ -225,8 +308,9 @@ class PlanControlScreen(Screen):
                 self.control
                 .run_active_agents(
                     self.plan_data.project_root,
-                    self._task_ids(),
+                    self._analysis_task_ids(),
                     provider="Auto",
+                    progress=self._progress_from_worker,
                 )
             )
 
@@ -245,23 +329,120 @@ class PlanControlScreen(Screen):
                 str(exc),
             )
 
+    def action_engineering_backlog(self) -> None:
+        if self.busy:
+            return
+
+        pending = self.engineering_backlog.pending_sources(
+            self.plan_data.project_root,
+            self._work_request_ids(),
+        )
+
+        if not pending:
+            ready = self.engineering_backlog.ready_sources(
+                self.plan_data.project_root,
+                self._work_request_ids(),
+            )
+
+            materialized = [
+                source.task_id
+                for source in ready
+                if source.materialized
+            ]
+
+            if materialized:
+                self.notify(
+                    "Engineering backlog already materialized for: "
+                    + ", ".join(materialized),
+                )
+            else:
+                self.notify(
+                    "No DONE Engineering Manager plan is ready "
+                    "for backlog materialization.",
+                    severity="warning",
+                )
+            return
+
+        self.busy = True
+        backlog_ids = [
+            source.task_id
+            for source in pending
+        ]
+        self._operation_owners = {
+            task.id: task.owner
+            for task in self._tasks()
+            if task.id in backlog_ids
+        }
+
+        self.progress.start(
+            kind="backlog",
+            title="ENGINEERING BACKLOG",
+            task_ids=backlog_ids,
+            initial_event="Starting engineering backlog generation...",
+            provider="Auto",
+        )
+        self._render_operation_progress()
+
+        self.engineering_backlog_worker()
+
+    @work(
+        thread=True,
+        exclusive=True,
+        group="engineering-backlog",
+        exit_on_error=False,
+    )
+    def engineering_backlog_worker(self) -> None:
+        try:
+            result = (
+                self.engineering_backlog
+                .generate_and_materialize(
+                    self.plan_data.project_root,
+                    self._work_request_ids(),
+                    provider="Auto",
+                    progress=self._progress_from_worker,
+                )
+            )
+
+            message = (
+                "Materialized from: "
+                + (
+                    ", ".join(
+                        result.materialized_source_ids
+                    )
+                    or "none"
+                )
+            )
+
+            if result.skipped_source_ids:
+                message += (
+                    "\nAlready materialized: "
+                    + ", ".join(
+                        result.skipped_source_ids
+                    )
+                )
+
+            self.app.call_from_thread(
+                self._operation_finished,
+                message,
+            )
+
+        except Exception as exc:
+            self.app.call_from_thread(
+                self._operation_failed,
+                "Engineering backlog failed",
+                str(exc),
+            )
+
     def action_prepare_writable(self) -> None:
         if self.busy:
             return
 
-        writable_ids = [
-            task.id
-            for task in self._tasks()
-            if task.status in {
-                "READY",
-                "ACTIVE",
-            }
-        ]
+        writable_ids = self._writable_task_ids()
 
         if not writable_ids:
             self.notify(
-                "No READY/ACTIVE tasks are available "
-                "for writable execution.",
+                "No READY/ACTIVE IMPLEMENTATION tasks are "
+                "available for writable execution.",
                 severity="warning",
             )
             return
@@ -286,7 +467,7 @@ class PlanControlScreen(Screen):
         try:
             result = self.writable.prepare(
                 self.plan_data.project_root,
-                self._task_ids(),
+                self._writable_task_ids(),
             )
 
             lines = []
@@ -585,13 +766,20 @@ class PlanControlScreen(Screen):
             return
 
         self.busy = True
+        self._operation_owners = {
+            task.id: task.owner
+            for task in self._tasks()
+            if task.id in gate_tasks
+        }
 
-        self._working(
-            "Running independent gates:\n\n"
-            + "\n".join(gate_tasks)
-            + "\n\nReview -> QA -> Security",
-            "QUALITY GATES",
+        self.progress.start(
+            kind="gates",
+            title="QUALITY GATES",
+            task_ids=gate_tasks,
+            initial_event="Starting quality gates...",
+            provider="Auto",
         )
+        self._render_operation_progress()
 
         self.gates_worker()
 
@@ -609,6 +797,7 @@ class PlanControlScreen(Screen):
                     self.plan_data.project_root,
                     self._task_ids(),
                     provider="Auto",
+                    progress=self._progress_from_worker,
                 )
             )
 
@@ -691,6 +880,285 @@ class PlanControlScreen(Screen):
                 str(exc),
             )
 
+    def _progress_from_worker(
+        self,
+        line: str,
+    ) -> None:
+        self.app.call_from_thread(
+            self._handle_progress_line,
+            line,
+        )
+
+    def _handle_progress_line(
+        self,
+        line: str,
+    ) -> None:
+        if not self.progress.busy:
+            return
+
+        line = re.sub(
+            r"\x1b\[[0-?]*[ -/]*[@-~]",
+            "",
+            str(line),
+        ).strip()
+
+        if not line:
+            return
+
+        if line.startswith(
+            "__AICO_BACKLOG__|"
+        ):
+            parts = line.split("|")
+
+            if len(parts) == 4:
+                _marker, task_id, stage, state = parts
+                self.progress.current_task = task_id
+                self.progress.stage = stage
+
+                labels = {
+                    "GENERATE": "Generating structured backlog",
+                    "MATERIALIZE": "Materializing tasks",
+                }
+                label = labels.get(stage, stage.title())
+
+                if state == "START":
+                    self.progress.add_event(
+                        f"{label}..."
+                    )
+                elif state == "DONE":
+                    self.progress.add_event(
+                        f"{label} finished."
+                    )
+
+            self._render_operation_progress()
+            return
+
+        if line.startswith(
+            "__AICO_GATE__|"
+        ):
+            parts = line.split("|")
+
+            if len(parts) == 4:
+                _marker, task_id, gate, state = parts
+
+                if state == "START":
+                    self.progress.begin_gate(
+                        task_id,
+                        gate,
+                    )
+                    self.progress.add_event(
+                        f"Running {gate} gate..."
+                    )
+
+                elif state == "DONE":
+                    self.progress.complete_gate(
+                        task_id,
+                        gate,
+                    )
+                    self.progress.add_event(
+                        f"{gate} gate finished."
+                    )
+
+            self._render_operation_progress()
+            return
+
+        task_match = re.match(
+            r"(?i)^Running agent:\s*([^\s]+)\s*->\s*(AICO-\d+)",
+            line,
+        )
+        if task_match:
+            self.progress.current_task = (
+                task_match.group(2)
+            )
+
+        provider_match = re.match(
+            r"(?i)^Provider (?:attempt|succeeded|mode|requested):\s*(.+)$",
+            line,
+        )
+        if provider_match:
+            value = provider_match.group(1).strip()
+            if (
+                "attempt" in line.casefold()
+                or "succeeded" in line.casefold()
+            ):
+                self.progress.provider = value
+
+        model_match = re.match(
+            r"(?i)^Ollama model:\s*(.+)$",
+            line,
+        )
+        if model_match:
+            self.progress.model = (
+                model_match.group(1).strip()
+            )
+
+        context_match = re.search(
+            r"(?i)^Context pack:\s*([0-9,]+)\s*characters",
+            line,
+        )
+        if context_match:
+            self.progress.context_chars = (
+                context_match.group(1).replace(",", "")
+            )
+
+        lower = line.casefold()
+        relevant_terms = (
+            "building",
+            "context",
+            "provider",
+            "ollama",
+            "inference",
+            "running agent",
+            "task advanced",
+            "task result",
+            "outcome",
+            "completed",
+            "failed",
+            "runtime",
+            "review",
+            "security",
+            "gate",
+            "qa",
+            "backlog",
+            "materializ",
+            "structured",
+        )
+
+        if any(
+            term in lower
+            for term in relevant_terms
+        ):
+            self.progress.add_event(
+                " ".join(line.split())[:180]
+            )
+
+        self._render_operation_progress()
+
+    def _tick_operation_progress(
+        self,
+    ) -> None:
+        if not (
+            self.busy
+            and self.progress.busy
+        ):
+            return
+
+        self.progress.tick()
+        self._render_operation_progress()
+
+    def _render_operation_progress(
+        self,
+    ) -> None:
+        if not self.progress.busy:
+            return
+
+        task = (
+            self.progress.current_task
+            or ", ".join(self.progress.task_ids)
+            or "-"
+        )
+        owner = self._operation_owners.get(
+            self.progress.current_task,
+            "-"
+        )
+
+        lines = [
+            f"Task: {task}",
+            f"Agent: {owner}",
+        ]
+
+        if self.progress.kind == "backlog":
+            stage_labels = {
+                "GENERATE": "Generating structured backlog",
+                "MATERIALIZE": "Materializing tasks",
+            }
+            if self.progress.stage:
+                lines.extend(
+                    [
+                        "",
+                        "Stage: "
+                        + stage_labels.get(
+                            self.progress.stage,
+                            self.progress.stage.title(),
+                        ),
+                        "",
+                    ]
+                )
+
+        if self.progress.kind == "gates":
+            markers = {
+                "DONE": "[OK]",
+                "CURRENT": "[>>]",
+                "PENDING": "[  ]",
+            }
+            lines.extend(
+                [
+                    "",
+                    (
+                        f"{markers.get(self.progress.gate_states['REVIEW'], '[  ]')} "
+                        "Review"
+                    ),
+                    (
+                        f"{markers.get(self.progress.gate_states['QA'], '[  ]')} "
+                        "QA"
+                    ),
+                    (
+                        f"{markers.get(self.progress.gate_states['SECURITY'], '[  ]')} "
+                        "Security"
+                    ),
+                    "",
+                ]
+            )
+
+        lines.extend(
+            [
+                f"Provider: {self.progress.provider or '-'}",
+                f"Model: {self.progress.model or '-'}",
+            ]
+        )
+
+        if self.progress.context_chars:
+            lines.append(
+                "Context: "
+                + f"{int(self.progress.context_chars):,}"
+                + " chars"
+            )
+
+        lines.extend(
+            [
+                f"Elapsed: {self.progress.elapsed_text()}",
+                "",
+                f"Activity: {self.progress.activity_bar()}",
+                (
+                    f"{self.progress.spinner()} "
+                    f"{self.progress.last_event or 'Working...'}"
+                ),
+            ]
+        )
+
+        if self.progress.recent_events:
+            lines.extend(
+                [
+                    "",
+                    "Recent events:",
+                    *[
+                        f"- {item}"
+                        for item
+                        in self.progress.recent_events
+                    ],
+                ]
+            )
+
+        self.query_one(
+            "#plan-control-content",
+            Static,
+        ).update(
+            Panel(
+                Text("\n".join(lines)),
+                title="Live Progress",
+            )
+        )
+
     def _working(
         self,
         message: str,
@@ -710,6 +1178,11 @@ class PlanControlScreen(Screen):
         self,
         message: str,
     ) -> None:
+        if self.progress.busy:
+            self.progress.finish(
+                status="COMPLETED",
+                summary=message,
+            )
         self.busy = False
         self._refresh_view()
         self.notify(message)
@@ -719,6 +1192,11 @@ class PlanControlScreen(Screen):
         title: str,
         message: str,
     ) -> None:
+        if self.progress.busy:
+            self.progress.finish(
+                status="FAILED",
+                summary=message,
+            )
         self.busy = False
 
         self.last_error_text = (
@@ -803,6 +1281,62 @@ class PlanControlScreen(Screen):
     def _refresh_view(self) -> None:
         tasks = self._tasks()
 
+        active_task = next(
+            (
+                task
+                for task in tasks
+                if task.status == "ACTIVE"
+            ),
+            None,
+        )
+        active_role = (
+            active_task.owner
+            if active_task is not None
+            else "pm"
+        )
+        local_workload = (
+            "writable"
+            if (
+                active_task is not None
+                and active_task.work_kind == "IMPLEMENTATION"
+            )
+            else "analysis"
+        )
+
+        local_status = self.local_runtime.inspect(
+            self.plan_data.project_root,
+            role=active_role,
+            workload=local_workload,
+        )
+
+        if local_status.available:
+            gpu_text = (
+                local_status.gpu_name
+                or "CPU / shared memory"
+            )
+
+            local_runtime_text = (
+                f"Profile: {local_status.profile}\n"
+                f"Capability: "
+                f"{local_status.capability_score}/100\n"
+                f"Role: {active_role}\n"
+                f"Selected model: "
+                f"{local_status.model}\n"
+                f"RAM: {local_status.ram_gb:.2f} GB\n"
+                f"GPU: {gpu_text}\n"
+                f"VRAM: "
+                f"{local_status.vram_gb:.2f} GB\n"
+                f"Context: "
+                f"{local_status.num_ctx}\n"
+                f"Output budget: "
+                f"{local_status.num_predict}"
+            )
+        else:
+            local_runtime_text = (
+                "Local runtime unavailable\n"
+                f"Reason: {local_status.reason}"
+            )
+
         finalizable = set(
             self.gates.finalizable_task_ids(
                 self.plan_data.project_root,
@@ -818,6 +1352,7 @@ class PlanControlScreen(Screen):
         table.add_column("ID")
         table.add_column("Status")
         table.add_column("Owner")
+        table.add_column("Kind")
         table.add_column("Task")
         table.add_column("Retry / Evidence")
 
@@ -845,6 +1380,7 @@ class PlanControlScreen(Screen):
                 task.id,
                 status,
                 task.owner,
+                task.work_kind or "PLANNING",
                 task.title,
                 indicator or "-",
             )
@@ -902,18 +1438,37 @@ class PlanControlScreen(Screen):
             )
 
         if any(
-            task.status == "ACTIVE"
+            (
+                task.status == "ACTIVE"
+                and task.work_kind != "IMPLEMENTATION"
+            )
             for task in tasks
         ):
             controls.append(
                 "R = Run analysis-only agent"
             )
 
+        pending_backlog = (
+            self.engineering_backlog
+            .pending_sources(
+                self.plan_data.project_root,
+                self._work_request_ids(),
+            )
+        )
+
+        if pending_backlog:
+            controls.append(
+                "B = Generate/materialize engineering backlog"
+            )
+
         if any(
-            task.status in {
-                "READY",
-                "ACTIVE",
-            }
+            (
+                task.status in {
+                    "READY",
+                    "ACTIVE",
+                }
+                and task.work_kind == "IMPLEMENTATION"
+            )
             for task in tasks
         ):
             controls.append(
@@ -962,8 +1517,7 @@ class PlanControlScreen(Screen):
 
         work_request = (
             ", ".join(
-                self.preparation_result
-                .work_request_ids
+                self._work_request_ids()
             )
             or "unknown"
         )
@@ -978,6 +1532,11 @@ class PlanControlScreen(Screen):
                     f"{self.plan_data.project_name}\n"
                     f"Work Request: {work_request}",
                     title="Plan Control",
+                ),
+                Text(""),
+                Panel(
+                    local_runtime_text,
+                    title="Local Runtime / Auto",
                 ),
                 Text(""),
                 summary,
@@ -1000,6 +1559,9 @@ class PlanControlScreen(Screen):
                     "CHANGES_REQUIRED / QA FAIL / SECURITY FAIL "
                     "-> READY -> W\n"
                     "BLOCKED -> U -> READY -> W\n\n"
+                    "Planning/non-IMPLEMENTATION ACTIVE -> R\n"
+                    "Engineering Manager DONE -> B\n"
+                    "IMPLEMENTATION READY/ACTIVE -> W\n\n"
                     "When a wave reaches DONE, press A "
                     "again to activate newly eligible "
                     "dependent tasks.",

@@ -55,7 +55,8 @@ $Directories = @(
     "tasks",
 
     "scripts",
-    "scripts\providers"
+    "scripts\providers",
+    "scripts\local-runtime"
 )
 
 foreach ($Directory in $Directories) {
@@ -190,7 +191,9 @@ $ScriptFiles = @(
     "summarize-metrics.ps1",
     "new-agent-workspace.ps1",
     "run-writable-agent.ps1",
-    "resolve-writable-required-files.ps1"
+    "resolve-writable-required-files.ps1",
+    "task-execution-lock.ps1",
+    "update-runtime.ps1"
 )
 
 foreach ($ScriptFile in $ScriptFiles) {
@@ -208,9 +211,22 @@ if (Test-Path $ProvidersSource) {
     }
 }
 
+$LocalRuntimeSource = Join-Path $ScriptsRoot "local-runtime"
+$LocalRuntimeTarget = Join-Path $ProjectPath "scripts\local-runtime"
+if (Test-Path $LocalRuntimeSource) {
+    Get-ChildItem $LocalRuntimeSource -File | ForEach-Object {
+        Copy-Item $_.FullName (Join-Path $LocalRuntimeTarget $_.Name) -Force
+    }
+}
+
 $ProviderConfigSource = Join-Path $ScriptRoot ".codex\provider-config.json"
 if (Test-Path $ProviderConfigSource) {
     Copy-Item $ProviderConfigSource (Join-Path $ProjectPath ".codex\provider-config.json") -Force
+}
+
+$LocalRuntimeConfigSource = Join-Path $ScriptRoot ".codex\local-runtime-config.json"
+if (Test-Path $LocalRuntimeConfigSource) {
+    Copy-Item $LocalRuntimeConfigSource (Join-Path $ProjectPath ".codex\local-runtime-config.json") -Force
 }
 
 $WorkflowProfilesSource = Join-Path $ScriptRoot ".codex\workflow-profiles.json"
@@ -295,6 +311,27 @@ $SyncScript = Join-Path $ProjectPath "scripts\sync-company-state.ps1"
 if (Test-Path $SyncScript) {
     & $SyncScript -TasksPath (Join-Path $ProjectPath "tasks") -SprintPath $CurrentSprintPath | Out-Null
 }
+
+$resolvedProjectPath = (Resolve-Path $ProjectPath).Path
+$managedManifestPath = Join-Path $resolvedProjectPath ".codex\managed-files.json"
+$managedFiles = @(
+    Get-ChildItem $resolvedProjectPath -File -Recurse -Force -Name |
+        ForEach-Object { ([string]$_).Replace("\","/") } |
+        Where-Object { $_ -ne ".codex/managed-files.json" }
+)
+$managedFiles += ".codex/managed-files.json"
+$managedFiles = @($managedFiles | Sort-Object -Unique)
+
+$managedPayload = [ordered]@{
+    version = 1
+    managed_files = $managedFiles
+} | ConvertTo-Json -Depth 10
+
+[System.IO.File]::WriteAllText(
+    $managedManifestPath,
+    $managedPayload,
+    (New-Object System.Text.UTF8Encoding($false))
+)
 
 Write-Host "Company OS instalado." -ForegroundColor Green
 

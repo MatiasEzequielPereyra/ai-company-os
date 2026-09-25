@@ -32,6 +32,14 @@ class ProviderService:
             "name": "Gemini",
             "environment": "GEMINI_API_KEY",
         },
+        "deepseek": {
+            "name": "DeepSeek",
+            "environment": "DEEPSEEK_API_KEY",
+        },
+        "grok": {
+            "name": "Grok / xAI",
+            "environment": "XAI_API_KEY",
+        },
     }
 
     def get_statuses(
@@ -41,6 +49,11 @@ class ProviderService:
             shutil.which("codex")
             or shutil.which("codex.cmd")
             or shutil.which("codex.exe")
+        )
+
+        ollama = bool(
+            shutil.which("ollama")
+            or shutil.which("ollama.exe")
         )
 
         statuses = [
@@ -57,7 +70,22 @@ class ProviderService:
                     "Uses the existing Codex / "
                     "ChatGPT authentication flow."
                 ),
-            )
+            ),
+            ProviderStatus(
+                id="ollama",
+                name="Ollama",
+                configured=ollama,
+                source=(
+                    "Local Ollama CLI"
+                    if ollama
+                    else "Not detected"
+                ),
+                description=(
+                    "Local hardware-aware runtime. "
+                    "Model readiness is evaluated "
+                    "at execution time."
+                ),
+            ),
         ]
 
         for provider_id, config in (
@@ -208,6 +236,25 @@ class ProviderService:
             environment[
                 config["environment"]
             ] = key
+
+        return environment
+
+    def build_environment_all(
+        self,
+    ) -> dict[str, str]:
+        environment = dict(os.environ)
+
+        for provider_id, config in (
+            self.PROVIDERS.items()
+        ):
+            key = self.get_api_key(
+                provider_id
+            )
+
+            if key:
+                environment[
+                    config["environment"]
+                ] = key
 
         return environment
 

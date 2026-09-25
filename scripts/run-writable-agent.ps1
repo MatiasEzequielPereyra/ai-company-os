@@ -6,7 +6,7 @@ param(
 
     [string]$WorkspacePath = "",
 
-    [ValidateSet("Auto","OpenRouter","Gemini")]
+    [ValidateSet("Auto","OpenRouter","Gemini","Ollama","DeepSeek","Grok")]
     [string]$Provider = "Auto",
 
     [string]$Model = ""
@@ -387,6 +387,15 @@ if ([string]::IsNullOrWhiteSpace($owner)) {
     throw "Task $Id has no owner."
 }
 
+$lockHelperPath = Join-Path $PSScriptRoot "task-execution-lock.ps1"
+if (-not (Test-Path $lockHelperPath -PathType Leaf)) {
+    throw "Task execution lock helper not found: $lockHelperPath"
+}
+. $lockHelperPath
+$taskExecutionLock = Enter-TaskExecutionLock -ProjectPath $root -Id $Id -Operation "WRITABLE"
+
+try {
+
 if ([string]::IsNullOrWhiteSpace($WorkspacePath)) {
     $workspaceRoot = Join-Path (Split-Path -Parent $root) ((Split-Path $root -Leaf) + "-worktrees")
     $WorkspacePath = Join-Path $workspaceRoot $Id
@@ -461,6 +470,8 @@ $policyPath = Join-Path $root ".codex\writable-policy.json"
 $routerPath = Join-Path $PSScriptRoot "provider-router.ps1"
 $contextBuilderPath = Join-Path $PSScriptRoot "build-agent-context.ps1"
 $requiredResolverPath = Join-Path $PSScriptRoot "resolve-writable-required-files.ps1"
+$localResolverPath = Join-Path $PSScriptRoot "local-runtime\resolve-local-runtime.ps1"
+$localRuntimeConfigPath = Join-Path $root ".codex\local-runtime-config.json"
 $submitPath = Join-Path $PSScriptRoot "submit-task-result.ps1"
 
 foreach ($required in @($dispatchPath,$rolePath,$schemaPath,$policyPath,$routerPath,$contextBuilderPath,$requiredResolverPath,$submitPath)) {
@@ -481,12 +492,43 @@ $taskText = Get-Content $taskPath -Raw -Encoding UTF8
 $dispatchText = Get-Content $dispatchPath -Raw -Encoding UTF8
 $roleText = Get-Content $rolePath -Raw -Encoding UTF8
 
+$localRuntime = $null
+if ($Provider -in @("Auto","Ollama")) {
+    if ((Test-Path $localResolverPath -PathType Leaf) -and (Test-Path $localRuntimeConfigPath -PathType Leaf)) {
+        $localArgs = @{
+            ProjectPath = $root
+            Role = $owner
+            Workload = "writable"
+        }
+
+        if ($Provider -eq "Ollama" -and -not [string]::IsNullOrWhiteSpace($Model)) {
+            $localArgs.ModelOverride = $Model
+        }
+
+        $localRuntime = & $localResolverPath @localArgs
+        if ($Provider -eq "Ollama" -and -not [bool]$localRuntime.Available) {
+            throw ("Ollama local runtime unavailable: " + [string]$localRuntime.Reason)
+        }
+
+        if ([bool]$localRuntime.Available) {
+            Write-Host ("Writable local runtime: " + $localRuntime.Profile + " -> " + $localRuntime.Model) -ForegroundColor DarkGray
+        }
+    }
+    elseif ($Provider -eq "Ollama") {
+        throw "Ollama local runtime resolver/configuration is not installed."
+    }
+}
+
 $maxChars = 120000
 if ($null -ne $config -and $null -ne $config.writable_context_max_chars) {
     $maxChars = [int]$config.writable_context_max_chars
 }
 elseif ($null -ne $config -and $null -ne $config.context_max_chars) {
     $maxChars = [Math]::Min([int]$config.context_max_chars,120000)
+}
+
+if ($null -ne $localRuntime -and [bool]$localRuntime.Available) {
+    $maxChars = [Math]::Min($maxChars,[int]$localRuntime.ContextMaxChars)
 }
 
 $requiredSourceText = @(
@@ -562,16 +604,31 @@ $result = $null
 
 try {
     if ($Provider -eq "Auto") {
-        $order = @("OpenRouter","Gemini")
+        $order = @("Ollama","OpenRouter","Gemini","DeepSeek","Grok")
 
         if ($null -ne $config -and $null -ne $config.writable_auto_order -and @($config.writable_auto_order).Count -gt 0) {
             $order = @($config.writable_auto_order | ForEach-Object { [string]$_ })
         }
 
+        $allowPaidWritableFallback = $false
+        if ($null -ne $config -and $null -ne $config.writable_allow_paid_fallback) {
+            $allowPaidWritableFallback = [bool]$config.writable_allow_paid_fallback
+        }
+
         $providerErrors = @()
 
         foreach ($candidate in $order) {
-            if ($candidate -notin @("OpenRouter","Gemini")) { continue }
+            if ($candidate -notin @("Ollama","OpenRouter","Gemini","DeepSeek","Grok")) { continue }
+
+            if ($candidate -in @("DeepSeek","Grok") -and -not $allowPaidWritableFallback) {
+                $providerErrors += ($candidate + ": paid writable fallback disabled by configuration")
+                continue
+            }
+
+            if ($candidate -eq "Ollama" -and ($null -eq $localRuntime -or -not [bool]$localRuntime.Available)) {
+                $providerErrors += "Ollama: no suitable local runtime is available"
+                continue
+            }
 
             if ($candidate -eq "OpenRouter" -and [string]::IsNullOrWhiteSpace($env:OPENROUTER_API_KEY)) {
                 $providerErrors += "OpenRouter: OPENROUTER_API_KEY not configured"
@@ -583,24 +640,41 @@ try {
                 continue
             }
 
-            $candidateModel = Get-ConfiguredModel -Config $config -ProviderName $candidate -CollectionName "writable_models"
-            if ([string]::IsNullOrWhiteSpace($candidateModel)) {
-                $candidateModel = Get-ConfiguredModel -Config $config -ProviderName $candidate -CollectionName "models"
-            }
-
-            $freeModelsProperty = $policy.free_provider_models.PSObject.Properties[$candidate]
-            $freeModels = @()
-            if ($null -ne $freeModelsProperty) {
-                $freeModels = @($freeModelsProperty.Value | ForEach-Object { [string]$_ })
-            }
-
-            if ([string]::IsNullOrWhiteSpace($candidateModel) -or $freeModels -notcontains $candidateModel) {
-                $providerErrors += ($candidate + ": no free writable model is configured")
+            if ($candidate -eq "DeepSeek" -and [string]::IsNullOrWhiteSpace($env:DEEPSEEK_API_KEY)) {
+                $providerErrors += "DeepSeek: DEEPSEEK_API_KEY not configured"
                 continue
             }
 
+            if ($candidate -eq "Grok" -and [string]::IsNullOrWhiteSpace($env:XAI_API_KEY)) {
+                $providerErrors += "Grok: XAI_API_KEY not configured"
+                continue
+            }
+
+            if ($candidate -eq "Ollama") {
+                $candidateModel = [string]$localRuntime.Model
+            }
+            else {
+                $candidateModel = Get-ConfiguredModel -Config $config -ProviderName $candidate -CollectionName "writable_models"
+                if ([string]::IsNullOrWhiteSpace($candidateModel)) {
+                    $candidateModel = Get-ConfiguredModel -Config $config -ProviderName $candidate -CollectionName "models"
+                }
+            }
+
+            if ($candidate -in @("Ollama","OpenRouter","Gemini")) {
+                $freeModelsProperty = $policy.free_provider_models.PSObject.Properties[$candidate]
+                $freeModels = @()
+                if ($null -ne $freeModelsProperty) {
+                    $freeModels = @($freeModelsProperty.Value | ForEach-Object { [string]$_ })
+                }
+
+                if ([string]::IsNullOrWhiteSpace($candidateModel) -or $freeModels -notcontains $candidateModel) {
+                    $providerErrors += ($candidate + ": no allowed free writable model is configured")
+                    continue
+                }
+            }
+
             try {
-                $execution = & $routerPath -Provider $candidate -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $outputPath -Model $candidateModel
+                $execution = & $routerPath -Provider $candidate -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $outputPath -Model $candidateModel -Role $owner -Workload "writable"
                 break
             }
             catch {
@@ -609,19 +683,19 @@ try {
         }
 
         if ($null -eq $execution) {
-            throw ("No free writable provider succeeded. " + ($providerErrors -join " | "))
+            throw ("No writable provider succeeded. " + ($providerErrors -join " | "))
         }
     }
     else {
         $selectedModel = $Model
-        if ([string]::IsNullOrWhiteSpace($selectedModel)) {
+        if ($Provider -ne "Ollama" -and [string]::IsNullOrWhiteSpace($selectedModel)) {
             $selectedModel = Get-ConfiguredModel -Config $config -ProviderName $Provider -CollectionName "writable_models"
         }
-        if ([string]::IsNullOrWhiteSpace($selectedModel)) {
+        if ($Provider -ne "Ollama" -and [string]::IsNullOrWhiteSpace($selectedModel)) {
             $selectedModel = Get-ConfiguredModel -Config $config -ProviderName $Provider -CollectionName "models"
         }
 
-        $execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $outputPath -Model $selectedModel
+        $execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $outputPath -Model $selectedModel -Role $owner -Workload "writable"
     }
 
     if (-not (Test-Path $outputPath)) {
@@ -901,4 +975,8 @@ try {
 catch {
     Restore-PlannedFiles -Backups $backups
     throw
+}
+}
+finally {
+    Exit-TaskExecutionLock -Lock $taskExecutionLock
 }

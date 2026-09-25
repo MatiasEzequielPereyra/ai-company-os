@@ -130,6 +130,7 @@ Owner: frontend
 Workflow phase: PLANNING
 Workflow profile: standard
 Work request: WR-E2E
+Work kind: IMPLEMENTATION
 Updated: 2026-09-24T00:00:00Z
 
 ---
@@ -223,7 +224,9 @@ Use the isolated task worktree only.
     [string]$Context,
     [string]$SchemaPath,
     [string]$OutputPath,
-    [string]$Model
+    [string]$Model,
+    [string]$Role = "",
+    [string]$Workload = "general"
 )
 
 $ErrorActionPreference = "Stop"
@@ -444,7 +447,7 @@ def test_tui_drives_real_worktree_change_to_done(
                 screen,
             )
 
-            assert task_status(root) == "REVIEW"
+            assert task_status(root) == "REVIEW", screen.last_error_text
 
             workspace = (
                 root.parent

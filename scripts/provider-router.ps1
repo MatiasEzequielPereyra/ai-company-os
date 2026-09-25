@@ -1,12 +1,14 @@
 param(
-    [ValidateSet("Auto","Codex","OpenRouter","Gemini")]
+    [ValidateSet("Auto","Codex","OpenRouter","Gemini","Ollama","DeepSeek","Grok")]
     [string]$Provider = "Auto",
     [Parameter(Mandatory = $true)][string]$ProjectPath,
     [Parameter(Mandatory = $true)][string]$Prompt,
     [string]$Context = "",
     [Parameter(Mandatory = $true)][string]$SchemaPath,
     [Parameter(Mandatory = $true)][string]$OutputPath,
-    [string]$Model = ""
+    [string]$Model = "",
+    [string]$Role = "",
+    [string]$Workload = "general"
 )
 
 $ErrorActionPreference = "Stop"
@@ -15,7 +17,13 @@ function Sanitize-ProviderError {
     param([string]$Message)
 
     $result = $Message
-    foreach ($secret in @($env:CODEX_API_KEY,$env:OPENROUTER_API_KEY,$env:GEMINI_API_KEY)) {
+    foreach ($secret in @(
+        $env:CODEX_API_KEY,
+        $env:OPENROUTER_API_KEY,
+        $env:GEMINI_API_KEY,
+        $env:DEEPSEEK_API_KEY,
+        $env:XAI_API_KEY
+    )) {
         if (-not [string]::IsNullOrWhiteSpace($secret)) {
             $result = $result.Replace($secret,"[REDACTED]")
         }
@@ -33,6 +41,37 @@ function Get-ConfiguredModel {
     return [string]$property.Value
 }
 
+function Get-ConfiguredTimeoutSeconds {
+    param([object]$Config,[string]$Name)
+
+    $defaults = @{
+        Codex = 180
+        OpenRouter = 240
+        Gemini = 240
+        Ollama = 1800
+        DeepSeek = 240
+        Grok = 240
+    }
+
+    $fallback = if ($defaults.ContainsKey($Name)) { [int]$defaults[$Name] } else { 240 }
+
+    if ($null -eq $Config -or $null -eq $Config.provider_timeout_seconds) {
+        return $fallback
+    }
+
+    $property = $Config.provider_timeout_seconds.PSObject.Properties[$Name]
+    if ($null -eq $property) {
+        return $fallback
+    }
+
+    $value = [int]$property.Value
+    if ($value -lt 1 -or $value -gt 3600) {
+        throw "Invalid provider timeout for $Name. Expected 1-3600 seconds, found $value."
+    }
+
+    return $value
+}
+
 function Get-ProviderErrorCategory {
     param([string]$Message)
     if ($Message -match "(?i)429|rate.?limit|quota|credits") { return "rate_limit" }
@@ -43,11 +82,29 @@ function Get-ProviderErrorCategory {
     return "unknown"
 }
 
+function Write-ProviderEvent {
+    param(
+        [hashtable]$Event,
+        [string]$WarningPrefix = "Provider metrics recording failed"
+    )
+
+    if (-not (Test-Path $metricsWriterPath)) { return }
+
+    try {
+        & $metricsWriterPath -ProjectPath $root -Event $Event | Out-Null
+    }
+    catch {
+        Write-Warning ($WarningPrefix + ": " + $_.Exception.Message)
+    }
+}
+
 $root = (Resolve-Path $ProjectPath).Path
 $providersRoot = Join-Path $PSScriptRoot "providers"
 $configPath = Join-Path $root ".codex\provider-config.json"
 $validatorPath = Join-Path $PSScriptRoot "validate-json-contract.ps1"
 $metricsWriterPath = Join-Path $PSScriptRoot "write-operational-event.ps1"
+$localResolverPath = Join-Path $PSScriptRoot "local-runtime\resolve-local-runtime.ps1"
+$localRuntimeConfigPath = Join-Path $root ".codex\local-runtime-config.json"
 
 if (-not (Test-Path $validatorPath)) { throw "Provider contract validator not found: $validatorPath" }
 
@@ -56,9 +113,14 @@ if (Test-Path $configPath) {
     $config = Get-Content $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
 }
 
-$autoOrder = @("Codex","OpenRouter","Gemini")
+$autoOrder = @("Ollama","OpenRouter","Gemini","DeepSeek","Grok","Codex")
 if ($null -ne $config -and $null -ne $config.auto_order -and @($config.auto_order).Count -gt 0) {
     $autoOrder = @($config.auto_order | ForEach-Object { [string]$_ })
+}
+
+$allowPaidFallback = $false
+if ($null -ne $config -and $null -ne $config.allow_paid_fallback) {
+    $allowPaidFallback = [bool]$config.allow_paid_fallback
 }
 
 if ($Provider -eq "Auto") {
@@ -76,6 +138,7 @@ $attempted = 0
 
 foreach ($candidate in $attempts) {
     $candidateName = [string]$candidate
+    $localRuntime = $null
 
     if ($candidateName -eq "Codex" -and $null -eq (Get-Command codex -ErrorAction SilentlyContinue)) {
         $errors += "Codex: CLI not available"
@@ -95,10 +158,89 @@ foreach ($candidate in $attempts) {
         continue
     }
 
+    if ($candidateName -eq "DeepSeek" -and [string]::IsNullOrWhiteSpace($env:DEEPSEEK_API_KEY)) {
+        $errors += "DeepSeek: DEEPSEEK_API_KEY not configured"
+        if ($Provider -ne "Auto") { throw "DEEPSEEK_API_KEY is not configured." }
+        continue
+    }
+
+    if ($candidateName -eq "Grok" -and [string]::IsNullOrWhiteSpace($env:XAI_API_KEY)) {
+        $errors += "Grok: XAI_API_KEY not configured"
+        if ($Provider -ne "Auto") { throw "XAI_API_KEY is not configured." }
+        continue
+    }
+
+    if ($Provider -eq "Auto" -and -not $allowPaidFallback -and $candidateName -in @("DeepSeek","Grok")) {
+        $errors += ($candidateName + ": paid fallback disabled by configuration")
+        continue
+    }
+
+    if ($candidateName -eq "Ollama") {
+        $ollamaBaseUrl = if ([string]::IsNullOrWhiteSpace($env:OLLAMA_BASE_URL)) {
+            "http://localhost:11434"
+        }
+        else {
+            $env:OLLAMA_BASE_URL.TrimEnd('/')
+        }
+
+        $ollamaReachable = $false
+        $ollamaHealthError = ""
+
+        for ($healthAttempt = 1; $healthAttempt -le 3; $healthAttempt++) {
+            try {
+                $null = Invoke-RestMethod -Method Get -Uri ($ollamaBaseUrl + "/api/tags") -TimeoutSec 5
+                $ollamaReachable = $true
+                break
+            }
+            catch {
+                $ollamaHealthError = $_.Exception.Message
+                if ($healthAttempt -lt 3) {
+                    Start-Sleep -Seconds 1
+                }
+            }
+        }
+
+        if (-not $ollamaReachable) {
+            $errors += ("Ollama: local server unavailable - " + $ollamaHealthError)
+            if ($Provider -ne "Auto") {
+                throw "Ollama is not reachable after 3 health checks. Start Ollama or set OLLAMA_BASE_URL."
+            }
+            continue
+        }
+
+        if (
+            -not (Test-Path $localResolverPath -PathType Leaf) -or
+            -not (Test-Path $localRuntimeConfigPath -PathType Leaf)
+        ) {
+            $errors += "Ollama: local runtime resolver/configuration missing"
+            if ($Provider -ne "Auto") {
+                throw "Local runtime resolver/configuration is not installed."
+            }
+            continue
+        }
+
+        $localModelOverride = ""
+        if ($Provider -ne "Auto" -and -not [string]::IsNullOrWhiteSpace($Model)) {
+            $localModelOverride = $Model
+        }
+
+        $localRuntime = & $localResolverPath -ProjectPath $root -Role $Role -Workload $Workload -ModelOverride $localModelOverride
+        if (-not [bool]$localRuntime.Available) {
+            $errors += ("Ollama: " + [string]$localRuntime.Reason)
+            if ($Provider -ne "Auto") { throw ([string]$localRuntime.Reason) }
+            continue
+        }
+
+        Write-Host ("Local runtime profile: " + $localRuntime.Profile + "; model=" + $localRuntime.Model + "; num_ctx=" + $localRuntime.NumCtx + "; num_predict=" + $localRuntime.NumPredict) -ForegroundColor DarkGray
+    }
+
     $scriptName = switch ($candidateName) {
         "Codex" { "invoke-codex.ps1" }
         "OpenRouter" { "invoke-openrouter.ps1" }
         "Gemini" { "invoke-gemini.ps1" }
+        "Ollama" { "invoke-ollama.ps1" }
+        "DeepSeek" { "invoke-deepseek.ps1" }
+        "Grok" { "invoke-xai.ps1" }
         default { throw "Unknown provider: $candidateName" }
     }
 
@@ -114,24 +256,69 @@ foreach ($candidate in $attempts) {
     }
 
     $providerModel = ""
-    if ($Provider -ne "Auto" -and -not [string]::IsNullOrWhiteSpace($Model)) {
+    if ($candidateName -eq "Ollama" -and $null -ne $localRuntime) {
+        $providerModel = [string]$localRuntime.Model
+    }
+    elseif ($Provider -ne "Auto" -and -not [string]::IsNullOrWhiteSpace($Model)) {
         $providerModel = $Model
     }
     else {
         $providerModel = Get-ConfiguredModel -Config $config -Name $candidateName
     }
 
+    $providerTimeoutSeconds = Get-ConfiguredTimeoutSeconds -Config $config -Name $candidateName
+    $providerCommand = Get-Command $providerScript -ErrorAction Stop
+    $supportsTimeout = $null -ne $providerCommand.Parameters["TimeoutSeconds"]
+
     $attempted++
     $attemptStarted = Get-Date
     Write-Host ""
-    Write-Host "Provider attempt: $candidateName" -ForegroundColor Cyan
+    Write-Host "Provider attempt: $candidateName (timeout: $providerTimeoutSeconds s)" -ForegroundColor Cyan
+
+    Write-ProviderEvent -Event @{
+        event_type = "provider_attempt_started"
+        provider = $candidateName
+        model = $providerModel
+        duration_ms = 0
+        timeout_seconds = $providerTimeoutSeconds
+        success = $false
+        error_category = ""
+    } -WarningPrefix "Provider start metrics could not be recorded"
 
     try {
         if ($candidateName -eq "Codex") {
-            $result = & $providerScript -ProjectPath $root -Prompt $Prompt -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel
+            if ($supportsTimeout) {
+                $result = & $providerScript -ProjectPath $root -Prompt $Prompt -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel -TimeoutSeconds $providerTimeoutSeconds
+            }
+            else {
+                $result = & $providerScript -ProjectPath $root -Prompt $Prompt -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel
+            }
+        }
+        elseif ($candidateName -eq "Ollama") {
+            $ollamaArgs = @{
+                Prompt = $Prompt
+                Context = $Context
+                SchemaPath = $SchemaPath
+                OutputPath = $OutputPath
+                Model = $providerModel
+                NumCtx = [int]$localRuntime.NumCtx
+                NumPredict = [int]$localRuntime.NumPredict
+            }
+            if ($supportsTimeout) {
+                $ollamaArgs.TimeoutSeconds = $providerTimeoutSeconds
+            }
+            $result = & $providerScript @ollamaArgs
+            $result | Add-Member -NotePropertyName HardwareProfile -NotePropertyValue ([string]$localRuntime.Profile) -Force
+            $result | Add-Member -NotePropertyName NumCtx -NotePropertyValue ([int]$localRuntime.NumCtx) -Force
+            $result | Add-Member -NotePropertyName NumPredict -NotePropertyValue ([int]$localRuntime.NumPredict) -Force
         }
         else {
-            $result = & $providerScript -Prompt $Prompt -Context $Context -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel
+            if ($supportsTimeout) {
+                $result = & $providerScript -Prompt $Prompt -Context $Context -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel -TimeoutSeconds $providerTimeoutSeconds
+            }
+            else {
+                $result = & $providerScript -Prompt $Prompt -Context $Context -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel
+            }
         }
 
         if (-not (Test-Path $OutputPath)) {
@@ -141,18 +328,26 @@ foreach ($candidate in $attempts) {
         & $validatorPath -JsonPath $OutputPath -SchemaPath $SchemaPath | Out-Null
 
         $durationMs = [int][math]::Round(((Get-Date) - $attemptStarted).TotalMilliseconds)
-        if (Test-Path $metricsWriterPath) {
-            try {
-                & $metricsWriterPath -ProjectPath $root -Event @{
-                    event_type = "provider_attempt"
-                    provider = $candidateName
-                    model = [string]$result.Model
-                    duration_ms = $durationMs
-                    success = $true
-                    error_category = ""
-                } | Out-Null
-            } catch { Write-Warning ("Provider succeeded, but metrics recording failed: " + $_.Exception.Message) }
-        }
+
+        Write-ProviderEvent -Event @{
+            event_type = "provider_attempt"
+            provider = $candidateName
+            model = [string]$result.Model
+            duration_ms = $durationMs
+            timeout_seconds = $providerTimeoutSeconds
+            success = $true
+            error_category = ""
+        } -WarningPrefix "Provider succeeded, but metrics recording failed"
+
+        Write-ProviderEvent -Event @{
+            event_type = "provider_attempt_finished"
+            provider = $candidateName
+            model = [string]$result.Model
+            duration_ms = $durationMs
+            timeout_seconds = $providerTimeoutSeconds
+            success = $true
+            error_category = ""
+        } -WarningPrefix "Provider finish metrics could not be recorded"
 
         Write-Host "Provider succeeded: $candidateName" -ForegroundColor Green
         return $result
@@ -161,18 +356,40 @@ foreach ($candidate in $attempts) {
         $safe = Sanitize-ProviderError -Message $_.Exception.Message
         $errors += ($candidateName + ": " + $safe)
         $durationMs = [int][math]::Round(((Get-Date) - $attemptStarted).TotalMilliseconds)
-        if (Test-Path $metricsWriterPath) {
-            try {
-                & $metricsWriterPath -ProjectPath $root -Event @{
-                    event_type = "provider_attempt"
-                    provider = $candidateName
-                    model = $providerModel
-                    duration_ms = $durationMs
-                    success = $false
-                    error_category = (Get-ProviderErrorCategory -Message $safe)
-                } | Out-Null
-            } catch { Write-Warning ("Provider failure metrics could not be recorded: " + $_.Exception.Message) }
+        $errorCategory = Get-ProviderErrorCategory -Message $safe
+
+        if ($errorCategory -eq "timeout") {
+            Write-ProviderEvent -Event @{
+                event_type = "provider_timeout"
+                provider = $candidateName
+                model = $providerModel
+                duration_ms = $durationMs
+                timeout_seconds = $providerTimeoutSeconds
+                success = $false
+                error_category = "timeout"
+            } -WarningPrefix "Provider timeout metrics could not be recorded"
         }
+
+        Write-ProviderEvent -Event @{
+            event_type = "provider_attempt"
+            provider = $candidateName
+            model = $providerModel
+            duration_ms = $durationMs
+            timeout_seconds = $providerTimeoutSeconds
+            success = $false
+            error_category = $errorCategory
+        } -WarningPrefix "Provider failure metrics could not be recorded"
+
+        Write-ProviderEvent -Event @{
+            event_type = "provider_attempt_finished"
+            provider = $candidateName
+            model = $providerModel
+            duration_ms = $durationMs
+            timeout_seconds = $providerTimeoutSeconds
+            success = $false
+            error_category = $errorCategory
+        } -WarningPrefix "Provider finish metrics could not be recorded"
+
         Write-Host "Provider failed: $candidateName" -ForegroundColor Yellow
         Write-Host $safe -ForegroundColor DarkYellow
 

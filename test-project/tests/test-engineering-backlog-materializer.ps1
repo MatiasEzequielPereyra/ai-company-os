@@ -44,6 +44,13 @@ $tempRoot = Join-Path $env:TEMP ("aico-backlog-materializer-" + [Guid]::NewGuid(
 try {
     New-Item -ItemType Directory -Force -Path (Join-Path $tempRoot "tasks") | Out-Null
     New-Item -ItemType Directory -Force -Path (Join-Path $tempRoot "docs\engineering\plans") | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Path $tempRoot "docs\engineering\security") | Out-Null
+
+    [System.IO.File]::WriteAllText(
+        (Join-Path $tempRoot "docs\engineering\security\AICO-009-security.md"),
+        "Outcome: FAIL",
+        (New-Object System.Text.UTF8Encoding($false))
+    )
 
     $sourceTask = @(
         "# AICO-006 - Engineering Plan",
@@ -139,11 +146,11 @@ try {
         throw "Expected 3 materialized tasks, got $($created.Count)"
     }
 
-    $expectedIds = @("AICO-007","AICO-008","AICO-009")
+    $expectedIds = @("AICO-010","AICO-011","AICO-012")
     $actualIds = @($created | ForEach-Object { $_.BaseName })
 
     if (($actualIds -join ",") -ne ($expectedIds -join ",")) {
-        throw "Materialized IDs are not sequential from AICO-007. Got: $($actualIds -join ', ')"
+        throw "Materialized IDs reused historical task identity. Expected AICO-010..012, got: $($actualIds -join ', ')"
     }
 
     $taskByKey = @{}

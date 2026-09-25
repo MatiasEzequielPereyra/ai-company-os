@@ -11,14 +11,25 @@ $required = @(
     "scripts\provider-router.ps1",
     "scripts\build-agent-context.ps1",
     "scripts\resolve-writable-required-files.ps1",
+    "scripts\task-execution-lock.ps1",
     "scripts\providers\invoke-codex.ps1",
     "scripts\providers\invoke-openrouter.ps1",
     "scripts\providers\invoke-gemini.ps1",
+    "scripts\providers\invoke-ollama.ps1",
+    "scripts\providers\invoke-deepseek.ps1",
+    "scripts\providers\invoke-xai.ps1",
+    "scripts\local-runtime\detect-hardware.ps1",
+    "scripts\local-runtime\resolve-local-runtime.ps1",
+    "scripts\local-runtime\benchmark-ollama.ps1",
+    "scripts\local-runtime\initialize-local-runtime.ps1",
     "scripts\run-gate-agent.ps1",
+    "scripts\finalize-task.ps1",
+    "scripts\task-execution-lock.ps1",
     "scripts\run-pending-gates.ps1",
     "scripts\generate-engineering-backlog.ps1",
     "scripts\materialize-engineering-backlog.ps1",
     ".codex\provider-config.json",
+    ".codex\local-runtime-config.json",
     "schemas\agent-result.schema.json",
     "schemas\writable-change-set.schema.json",
     ".codex\writable-policy.json",
@@ -54,17 +65,48 @@ if ([string]$schema.properties.blockers.description -notmatch 'Execution blocker
 $configPath = Join-Path $repoRoot ".codex\provider-config.json"
 $config = Get-Content $configPath -Raw | ConvertFrom-Json
 
-if (@($config.auto_order) -notcontains "Codex") { throw "Provider config must include Codex" }
-if (@($config.auto_order) -notcontains "OpenRouter") { throw "Provider config must include OpenRouter" }
-if (@($config.auto_order) -notcontains "Gemini") { throw "Provider config must include Gemini" }
+foreach ($providerName in @("Codex","OpenRouter","Gemini","Ollama","DeepSeek","Grok")) {
+    if (@($config.auto_order) -notcontains $providerName) {
+        throw "Provider config must include $providerName"
+    }
+}
+if ([bool]$config.allow_paid_fallback -ne $false) { throw "Paid provider fallback must default to disabled" }
+if ([string]$config.models.Ollama -ne "llama3.1:8b") { throw "Ollama must define the low-resource baseline model" }
 if ([string]$config.models.OpenRouter -ne "openrouter/free") { throw "OpenRouter must default to openrouter/free" }
 if ([string]$config.models.Gemini -ne "gemini-3.5-flash-lite") { throw "Gemini must default to gemini-3.5-flash-lite" }
-if (@($config.writable_auto_order) -join "," -ne "OpenRouter,Gemini") { throw "Writable Auto must be limited to OpenRouter then Gemini" }
+if ([string]$config.models.DeepSeek -ne "deepseek-flash") { throw "DeepSeek model default is missing" }
+if ([string]$config.models.Grok -ne "grok-4.7") { throw "Grok model default is missing" }
+if (@($config.writable_auto_order) -join "," -ne "Ollama,OpenRouter,Gemini,DeepSeek,Grok") { throw "Writable Auto order must include local/free providers before guarded paid fallbacks" }
+if ([bool]$config.writable_allow_paid_fallback -ne $false) { throw "Writable paid fallback must default to disabled" }
 if ([string]$config.writable_models.OpenRouter -ne "qwen/qwen3.8-27b:free") { throw "Writable OpenRouter must default to the pinned free structured coding model" }
 if ([string]$config.writable_models.Gemini -ne "gemini-3.5-flash-lite") { throw "Writable Gemini must default to gemini-3.5-flash-lite" }
 if ([int]$config.writable_context_max_chars -gt 160000 -or [int]$config.writable_context_max_chars -lt 60000) { throw "Writable context budget must remain bounded for free-tier execution" }
 if ([int]$config.context_max_chars -lt 300000) { throw "External provider context budget must be at least 300000 characters" }
 if ([int]$config.gate_context_max_chars -lt 100000) { throw "Gate context budget must be explicitly configured" }
+
+if ($null -eq $config.analysis_context_max_chars) { throw "Analysis context budget must be explicitly configured" }
+if ([int]$config.analysis_context_max_chars -gt 160000 -or [int]$config.analysis_context_max_chars -lt 60000) {
+    throw "Analysis context budget must remain bounded and useful"
+}
+if ($null -eq $config.analysis_context_max_chars_by_role) {
+    throw "Analysis context must support role-specific budgets"
+}
+$pmBudget = [int]$config.analysis_context_max_chars_by_role.pm
+if ($pmBudget -lt 20000 -or $pmBudget -gt 100000) {
+    throw "PM analysis context budget must be substantially below the historical 320000-character budget"
+}
+if ($null -eq $config.provider_timeout_seconds) { throw "Provider timeout configuration must be explicit" }
+foreach ($providerName in @("Codex","OpenRouter","Gemini")) {
+    $timeoutProperty = $config.provider_timeout_seconds.PSObject.Properties[$providerName]
+    if ($null -eq $timeoutProperty) { throw "Provider timeout missing for $providerName" }
+    $timeoutSeconds = [int]$timeoutProperty.Value
+    if ($timeoutSeconds -lt 1 -or $timeoutSeconds -gt 600) {
+        throw "Cloud provider timeout must be bounded for $providerName. Actual: $timeoutSeconds"
+    }
+}
+if ([int]$config.provider_timeout_seconds.Ollama -lt 600 -or [int]$config.provider_timeout_seconds.Ollama -gt 3600) {
+    throw "Ollama timeout must allow slower local inference"
+}
 
 $pmInstructions = Get-Content (Join-Path $repoRoot ".codex\agents\pm.md") -Raw
 if ($pmInstructions -notmatch 'Existing Project Context Fallback') {
@@ -77,8 +119,8 @@ if ($pmInstructions -notmatch 'product-intake\.md') {
 $runnerPath = Join-Path $repoRoot "scripts\run-agent-task.ps1"
 $runner = Get-Content $runnerPath -Raw
 
-if ($runner -notmatch 'ValidateSet\("Auto","Codex","OpenRouter","Gemini"\)') {
-    throw "Agent runner must expose multi-provider selection"
+if ($runner -notmatch 'ValidateSet\("Auto","Codex","OpenRouter","Gemini","Ollama","DeepSeek","Grok"\)') {
+    throw "Agent runner must expose the full multi-provider selection"
 }
 if ($runner -notmatch 'provider-router\.ps1') {
     throw "Agent runner must route through provider-router.ps1"
@@ -95,9 +137,24 @@ if ($runner -notmatch 'COMPLETED means you completed the assigned audit') {
 if ($runner -notmatch 'BLOCKED means you could not complete the assigned agent task itself') {
     throw "Agent runner must reserve BLOCKED for execution blockers"
 }
+if ($runner -notmatch 'analysis_context_max_chars_by_role') {
+    throw "Agent runner must honor role-specific analysis context budgets"
+}
+if ($runner -notmatch 'analysis_context_max_chars') {
+    throw "Agent runner must honor the global analysis context budget"
+}
+if ($runner -notmatch 'structured result concise|Keep the structured result concise') {
+    throw "Agent runner must instruct schema-critical analysis results to stay concise"
+}
 $writableRunner = Get-Content (Join-Path $repoRoot "scripts\run-writable-agent.ps1") -Raw
-if ($writableRunner -notmatch 'ValidateSet\("Auto","OpenRouter","Gemini"\)') {
-    throw "Writable runner must expose only Auto/OpenRouter/Gemini provider selection"
+if ($writableRunner -notmatch 'ValidateSet\("Auto","OpenRouter","Gemini","Ollama","DeepSeek","Grok"\)') {
+    throw "Writable runner must expose adaptive local and explicit cloud provider selection"
+}
+if ($writableRunner -notmatch 'writable_allow_paid_fallback') {
+    throw "Writable runner must guard paid automatic fallbacks"
+}
+if ($writableRunner -notmatch 'resolve-local-runtime\.ps1') {
+    throw "Writable runner must use the hardware-aware local runtime resolver"
 }
 if ($writableRunner -notmatch 'refuses to use the primary checkout') {
     throw "Writable runner must reject the primary checkout as a writable workspace"
@@ -137,6 +194,12 @@ foreach ($field in @("outcome","summary","report_markdown","changes","verificati
 $writablePolicy = Get-Content (Join-Path $repoRoot ".codex\writable-policy.json") -Raw -Encoding UTF8 | ConvertFrom-Json
 if (@($writablePolicy.free_provider_models.OpenRouter) -notcontains "qwen/qwen3.8-27b:free") {
     throw "Writable policy must allow the pinned free structured coding model"
+}
+if (@($writablePolicy.free_provider_models.Ollama) -notcontains "llama3.1:8b") {
+    throw "Writable policy must allow the low-resource local model"
+}
+if (@($writablePolicy.free_provider_models.Ollama) -notcontains "qwen2.5-coder:14b") {
+    throw "Writable policy must allow the stronger hardware-selected coder model"
 }
 if (@($writablePolicy.protected_path_prefixes) -notcontains ".git") {
     throw "Writable policy must protect .git"
@@ -207,6 +270,15 @@ if ($openRouter -notmatch 'StatusCode -eq 429') {
 if ($openRouter -notmatch 'StatusCode -ge 500') {
     throw "OpenRouter adapter must retry server errors"
 }
+if ($openRouter -notmatch 'finish_reason') {
+    throw "OpenRouter adapter must inspect completion finish_reason"
+}
+if ($openRouter -notmatch 'length') {
+    throw "OpenRouter adapter must explicitly reject length-truncated structured completions"
+}
+if ($openRouter -notmatch 'TimeoutSeconds') {
+    throw "OpenRouter adapter must honor configured HTTP timeout bounds"
+}
 
 $gemini = Get-Content (Join-Path $repoRoot "scripts\providers\invoke-gemini.ps1") -Raw
 if ($gemini -notmatch 'generativelanguage\.googleapis\.com') {
@@ -218,12 +290,60 @@ if ($gemini -notmatch 'GEMINI_API_KEY') {
 if ($gemini -notmatch 'responseJsonSchema') {
     throw "Gemini adapter must request structured JSON output"
 }
+if ($gemini -notmatch 'TimeoutSeconds') {
+    throw "Gemini adapter must honor configured HTTP timeout bounds"
+}
+
+$ollama = Get-Content (Join-Path $repoRoot "scripts\providers\invoke-ollama.ps1") -Raw
+if ($ollama -notmatch 'OLLAMA_BASE_URL') { throw "Ollama adapter must support a configurable endpoint" }
+if ($ollama -notmatch '\[int\]\$NumCtx = 8192') { throw "Ollama adapter must expose adaptive context" }
+if ($ollama -notmatch '\[int\]\$NumPredict = 1024') { throw "Ollama adapter must expose adaptive output budget" }
+
+$deepSeek = Get-Content (Join-Path $repoRoot "scripts\providers\invoke-deepseek.ps1") -Raw
+if ($deepSeek -notmatch 'DEEPSEEK_API_KEY') { throw "DeepSeek adapter must use DEEPSEEK_API_KEY" }
+
+$xai = Get-Content (Join-Path $repoRoot "scripts\providers\invoke-xai.ps1") -Raw
+if ($xai -notmatch 'XAI_API_KEY') { throw "Grok/xAI adapter must use XAI_API_KEY" }
+
+$router = Get-Content (Join-Path $repoRoot "scripts\provider-router.ps1") -Raw
+if ($router -notmatch 'resolve-local-runtime\.ps1') { throw "Provider router must use the local runtime resolver" }
+if ($router -notmatch 'allow_paid_fallback') { throw "Provider router must guard paid fallback" }
+if ($router -notmatch 'localRuntimeConfigPath') { throw "Provider router must require local config before Ollama pre-resolution" }
+foreach ($eventName in @("provider_attempt_started","provider_attempt_finished","provider_timeout")) {
+    if ($router -notmatch [regex]::Escape($eventName)) {
+        throw "Provider router must expose lifecycle event: $eventName"
+    }
+}
+if ($router -notmatch 'Get-ConfiguredTimeoutSeconds') {
+    throw "Provider router must resolve bounded provider timeouts from configuration"
+}
+
+foreach ($runnerName in @("run-agent-task.ps1","run-gate-agent.ps1","run-writable-agent.ps1")) {
+    $runnerText = Get-Content (Join-Path $repoRoot ("scripts\" + $runnerName)) -Raw
+    if ($runnerText -notmatch 'localRuntimeConfigPath') {
+        throw "$runnerName must guard local pre-resolution with the local runtime config"
+    }
+    if ($runnerText -notmatch 'Enter-TaskExecutionLock') {
+        throw "$runnerName must serialize execution through the per-task lock"
+    }
+}
+
+$finalizeRunner = Get-Content (Join-Path $repoRoot "scripts\finalize-task.ps1") -Raw
+if ($finalizeRunner -notmatch 'Enter-TaskExecutionLock') {
+    throw "finalize-task.ps1 must serialize final approval through the per-task lock"
+}
+
+$localConfig = Get-Content (Join-Path $repoRoot ".codex\local-runtime-config.json") -Raw | ConvertFrom-Json
+if ($null -eq $localConfig.profiles.PSObject.Properties["LOCAL_CPU_LOW"]) { throw "Local runtime config missing LOCAL_CPU_LOW" }
+if ($null -eq $localConfig.profiles.PSObject.Properties["LOCAL_GPU_12GB"]) { throw "Local runtime config missing LOCAL_GPU_12GB" }
 
 $contextBuilder = Get-Content (Join-Path $repoRoot "scripts\build-agent-context.ps1") -Raw
 if ($contextBuilder -notmatch '\.env') { throw "Context builder must explicitly exclude environment files" }
 if (-not $contextBuilder.Contains("private[-_]?key")) { throw "Context builder must exclude private-key files" }
 if ($contextBuilder -notmatch 'RequiredFiles') { throw "Context builder must support prioritized required files" }
 if ($contextBuilder -notmatch 'RequireComplete') { throw "Required context files must not be silently truncated" }
+if ($contextBuilder -notmatch 'managed-files\.json') { throw "Context builder must load the managed runtime manifest" }
+if ($contextBuilder -notmatch 'managed_files') { throw "Context builder must exclude manifest-owned runtime paths from generic context" }
 
 $requiredResolver = Get-Content (Join-Path $repoRoot "scripts\resolve-writable-required-files.ps1") -Raw
 if ($requiredResolver -notmatch 'ambiguous') { throw "Required-file resolver must reject ambiguous basenames" }
@@ -239,6 +359,13 @@ $parseTargets = @(
     "scripts\providers\invoke-codex.ps1",
     "scripts\providers\invoke-openrouter.ps1",
     "scripts\providers\invoke-gemini.ps1",
+    "scripts\providers\invoke-ollama.ps1",
+    "scripts\providers\invoke-deepseek.ps1",
+    "scripts\providers\invoke-xai.ps1",
+    "scripts\local-runtime\detect-hardware.ps1",
+    "scripts\local-runtime\resolve-local-runtime.ps1",
+    "scripts\local-runtime\benchmark-ollama.ps1",
+    "scripts\local-runtime\initialize-local-runtime.ps1",
     "scripts\run-gate-agent.ps1",
     "scripts\run-pending-gates.ps1",
     "scripts\generate-engineering-backlog.ps1",

@@ -19,6 +19,15 @@ class WorkRequestSummary:
 
 
 @dataclass(frozen=True)
+class WorkRequestTaskSummary:
+    id: str
+    status: str
+    owner: str
+    work_kind: str
+    source_plan: str
+
+
+@dataclass(frozen=True)
 class ReopenedPlanContext:
     project_name: str
     project_root: str
@@ -115,12 +124,20 @@ class WorkRequestService:
                 or "UNKNOWN"
             )
 
-            task_statuses = (
-                self._tasks_for_request(
-                    root,
-                    request_id,
-                )
+            request_tasks = self.tasks_for_request(
+                root,
+                request_id,
             )
+
+            task_statuses = {
+                task.id: task.status
+                for task in request_tasks
+            }
+
+            task_work_kinds = {
+                task.id: task.work_kind
+                for task in request_tasks
+            }
 
             results.append(
                 WorkRequestSummary(
@@ -132,7 +149,9 @@ class WorkRequestService:
                     source_status=source_status,
                     display_status=(
                         self._derive_status(
-                            task_statuses
+                            task_statuses,
+                            request_type=request_type,
+                            task_work_kinds=task_work_kinds,
                         )
                     ),
                     task_ids=sorted(
@@ -187,17 +206,18 @@ class WorkRequestService:
             ),
         )
 
-    def _tasks_for_request(
+    def tasks_for_request(
         self,
-        root: Path,
+        project_root: str | Path,
         request_id: str,
-    ) -> dict[str, str]:
+    ) -> list[WorkRequestTaskSummary]:
+        root = Path(project_root).resolve()
         tasks_dir = root / "tasks"
 
         if not tasks_dir.exists():
-            return {}
+            return []
 
-        result: dict[str, str] = {}
+        result: list[WorkRequestTaskSummary] = []
 
         for path in sorted(
             tasks_dir.glob("AICO-*.md")
@@ -209,41 +229,127 @@ class WorkRequestService:
                 encoding="utf-8-sig",
             )
 
-            task_request = (
-                self._read_field(
-                    content,
-                    "Work request",
-                )
+            task_request = self._read_field(
+                content,
+                "Work request",
             )
 
             if task_request != request_id:
                 continue
 
-            task_id = (
-                self._read_field(
-                    content,
-                    "ID",
+            result.append(
+                WorkRequestTaskSummary(
+                    id=(
+                        self._read_field(
+                            content,
+                            "ID",
+                        )
+                        or path.stem
+                    ),
+                    status=(
+                        self._read_field(
+                            content,
+                            "Status",
+                        )
+                        or "UNKNOWN"
+                    ),
+                    owner=(
+                        self._read_field(
+                            content,
+                            "Owner",
+                        )
+                        or "UNKNOWN"
+                    ),
+                    work_kind=self._read_field(
+                        content,
+                        "Work kind",
+                    ).upper(),
+                    source_plan=self._read_field(
+                        content,
+                        "Source plan",
+                    ),
                 )
-                or path.stem
             )
-
-            status = (
-                self._read_field(
-                    content,
-                    "Status",
-                )
-                or "UNKNOWN"
-            )
-
-            result[
-                task_id
-            ] = status
 
         return result
+
+    def request_ids_for_task_ids(
+        self,
+        project_root: str | Path,
+        task_ids: list[str],
+    ) -> list[str]:
+        root = Path(project_root).resolve()
+        tasks_dir = root / "tasks"
+        wanted = {
+            task_id
+            for task_id in task_ids
+            if task_id
+        }
+
+        if not wanted or not tasks_dir.exists():
+            return []
+
+        request_ids: set[str] = set()
+
+        for task_id in sorted(wanted):
+            path = tasks_dir / f"{task_id}.md"
+
+            if not path.exists():
+                continue
+
+            content = path.read_text(
+                encoding="utf-8-sig",
+            )
+            request_id = self._read_field(
+                content,
+                "Work request",
+            )
+
+            if request_id:
+                request_ids.add(request_id)
+
+        return sorted(request_ids)
+
+    def resolve_task_ids(
+        self,
+        project_root: str | Path,
+        work_request_ids: list[str],
+    ) -> list[str]:
+        root = Path(project_root).resolve()
+        task_ids: set[str] = set()
+
+        for request_id in work_request_ids:
+            if not request_id:
+                continue
+
+            task_ids.update(
+                task.id
+                for task in self.tasks_for_request(
+                    root,
+                    request_id,
+                )
+            )
+
+        return sorted(task_ids)
+
+    def _tasks_for_request(
+        self,
+        root: Path,
+        request_id: str,
+    ) -> dict[str, str]:
+        return {
+            task.id: task.status
+            for task in self.tasks_for_request(
+                root,
+                request_id,
+            )
+        }
 
     def _derive_status(
         self,
         task_statuses: dict[str, str],
+        request_type: str = "",
+        task_work_kinds: dict[str, str] | None = None,
     ) -> str:
         if not task_statuses:
             return "PLANNING"
@@ -253,6 +359,18 @@ class WorkRequestService:
         )
 
         if statuses == {"DONE"}:
+            if request_type.upper() == "FEATURE":
+                work_kinds = {
+                    value.upper()
+                    for value in (
+                        task_work_kinds or {}
+                    ).values()
+                    if value
+                }
+
+                if "IMPLEMENTATION" not in work_kinds:
+                    return "ENGINEERING_PENDING"
+
             return "DONE"
 
         if "ACTIVE" in statuses:

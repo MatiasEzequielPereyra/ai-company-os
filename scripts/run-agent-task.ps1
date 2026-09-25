@@ -2,7 +2,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Id,
     [string]$ProjectPath = ".",
-    [ValidateSet("Auto","Codex","OpenRouter","Gemini")]
+    [ValidateSet("Auto","Codex","OpenRouter","Gemini","Ollama","DeepSeek","Grok")]
     [string]$Provider = "Auto",
     [string]$Model = "",
     [ValidateSet("Auto","ChatGPT","ApiKey")]
@@ -28,7 +28,7 @@ if ($PSBoundParameters.ContainsKey("AuthMode") -and -not $PSBoundParameters.Cont
         $Provider = "Codex"
     }
     elseif ($AuthMode -eq "ApiKey") {
-        throw "Legacy -AuthMode ApiKey is disabled to prevent accidental OpenAI API spend. Use -Provider OpenRouter or -Provider Gemini for free-tier providers."
+        throw "Legacy -AuthMode ApiKey is disabled to prevent accidental OpenAI API spend. Select an explicit provider such as OpenRouter, Gemini, Ollama, DeepSeek, or Grok."
     }
 }
 
@@ -43,11 +43,22 @@ $owner = Read-Field $task "Owner"
 if ($status -ne "ACTIVE") { throw "Task $Id must be ACTIVE. Current status: $status" }
 if ([string]::IsNullOrWhiteSpace($owner)) { throw "Task $Id has no owner." }
 
+$lockHelperPath = Join-Path $PSScriptRoot "task-execution-lock.ps1"
+if (-not (Test-Path $lockHelperPath -PathType Leaf)) {
+    throw "Task execution lock helper not found: $lockHelperPath"
+}
+. $lockHelperPath
+$taskExecutionLock = Enter-TaskExecutionLock -ProjectPath $root -Id $Id -Operation "ANALYSIS"
+
+try {
+
 $dispatchPath = Join-Path $root ("docs\engineering\dispatch\" + $Id + ".md")
 $rolePath = Join-Path $root (".codex\agents\" + $owner + ".md")
 $schemaPath = Join-Path $root "schemas\agent-result.schema.json"
 $routerPath = Join-Path $PSScriptRoot "provider-router.ps1"
 $contextBuilderPath = Join-Path $PSScriptRoot "build-agent-context.ps1"
+$localResolverPath = Join-Path $PSScriptRoot "local-runtime\resolve-local-runtime.ps1"
+$localRuntimeConfigPath = Join-Path $root ".codex\local-runtime-config.json"
 
 if (-not (Test-Path $dispatchPath)) { throw "Dispatch packet not found: $dispatchPath" }
 if (-not (Test-Path $rolePath)) { throw "Role instructions not found: $rolePath" }
@@ -88,34 +99,113 @@ $promptLines = @(
     "",
     "The report_markdown field must contain the complete role report with findings, evidence, risks and recommended actions.",
     "The summary field must be concise.",
+    "Keep the structured result concise and evidence-dense.",
+    "Do not reproduce repository files or large code excerpts.",
+    "summary must stay within 800 characters.",
+    "report_markdown must stay within 8000 characters and should prefer concise evidence-backed bullets.",
+    "verification and decisions must each stay within 2000 characters.",
     "Return only the structured result required by the supplied JSON schema."
 )
 $prompt = $promptLines -join [Environment]::NewLine
 
-$context = ""
-$needsExternalContext = ($Provider -eq "OpenRouter" -or $Provider -eq "Gemini")
-if ($Provider -eq "Auto" -and (
-    -not [string]::IsNullOrWhiteSpace($env:OPENROUTER_API_KEY) -or
-    -not [string]::IsNullOrWhiteSpace($env:GEMINI_API_KEY)
-)) {
-    $needsExternalContext = $true
+$localRuntime = $null
+if ($Provider -in @("Auto","Ollama") -and (Test-Path $localResolverPath -PathType Leaf) -and (Test-Path $localRuntimeConfigPath -PathType Leaf)) {
+    $localArgs = @{
+        ProjectPath = $root
+        Role = $owner
+        Workload = "analysis"
+    }
+
+    if ($Provider -eq "Ollama" -and -not [string]::IsNullOrWhiteSpace($Model)) {
+        $localArgs.ModelOverride = $Model
+    }
+
+    $localRuntime = & $localResolverPath @localArgs
+    if ($Provider -eq "Ollama" -and -not [bool]$localRuntime.Available) {
+        throw ("Ollama local runtime unavailable: " + [string]$localRuntime.Reason)
+    }
+
+    if ([bool]$localRuntime.Available) {
+        Write-Host ("Local runtime: " + $localRuntime.Profile + " -> " + $localRuntime.Model) -ForegroundColor DarkGray
+    }
 }
+
+$context = ""
+# Codex can inspect the repository directly. Every other provider, including
+# local Ollama, requires the bounded Repository Context Pack. Auto always builds
+# it because the selected fallback provider is not known until routing time.
+$needsExternalContext = ($Provider -ne "Codex")
 
 if ($needsExternalContext) {
     if (-not (Test-Path $contextBuilderPath)) { throw "Context builder not found: $contextBuilderPath" }
 
-    $maxChars = 320000
+    $defaultGlobalAnalysisMax = 120000
+    $defaultRoleBudgets = @{
+        "pm" = 70000
+        "cto" = 110000
+        "engineering-manager" = 120000
+        "qa" = 90000
+        "security" = 100000
+        "devops" = 90000
+    }
+
+    $globalAnalysisMax = $defaultGlobalAnalysisMax
+    $maxChars = if ($defaultRoleBudgets.ContainsKey($owner.ToLowerInvariant())) {
+        [int]$defaultRoleBudgets[$owner.ToLowerInvariant()]
+    }
+    else {
+        $defaultGlobalAnalysisMax
+    }
+
     $configPath = Join-Path $root ".codex\provider-config.json"
     if (Test-Path $configPath) {
         try {
             $providerConfig = Get-Content $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
-            if ($null -ne $providerConfig.context_max_chars) {
-                $maxChars = [int]$providerConfig.context_max_chars
+
+            if ($null -ne $providerConfig.analysis_context_max_chars) {
+                $globalAnalysisMax = [int]$providerConfig.analysis_context_max_chars
+            }
+            elseif ($null -ne $providerConfig.context_max_chars) {
+                $globalAnalysisMax = [Math]::Min(
+                    [int]$providerConfig.context_max_chars,
+                    $defaultGlobalAnalysisMax
+                )
+            }
+
+            $maxChars = if ($defaultRoleBudgets.ContainsKey($owner.ToLowerInvariant())) {
+                [Math]::Min(
+                    [int]$defaultRoleBudgets[$owner.ToLowerInvariant()],
+                    $globalAnalysisMax
+                )
+            }
+            else {
+                $globalAnalysisMax
+            }
+
+            if ($null -ne $providerConfig.analysis_context_max_chars_by_role) {
+                $roleProperty = $providerConfig.analysis_context_max_chars_by_role.PSObject.Properties[$owner]
+                if ($null -ne $roleProperty -and $null -ne $roleProperty.Value) {
+                    $maxChars = [Math]::Min([int]$roleProperty.Value,$globalAnalysisMax)
+                }
+            }
+
+            if ($null -ne $localRuntime -and [bool]$localRuntime.Available) {
+                $maxChars = [Math]::Min($maxChars,[int]$localRuntime.ContextMaxChars)
+            }
+            elseif (
+                $Provider -eq "Ollama" -and
+                $null -ne $providerConfig.ollama_context_max_chars
+            ) {
+                $maxChars = [Math]::Min($maxChars,[int]$providerConfig.ollama_context_max_chars)
             }
         }
         catch {
             throw "Invalid provider configuration: $configPath"
         }
+    }
+
+    if ($maxChars -lt 10000) {
+        throw "Analysis context budget is too small for canonical task context: $maxChars"
     }
 
     Write-Host "Building role-aware repository context for $owner..." -ForegroundColor DarkGray
@@ -126,7 +216,7 @@ if ($needsExternalContext) {
 Write-Host "Running agent: $owner -> $Id" -ForegroundColor Cyan
 Write-Host "Provider mode: $Provider" -ForegroundColor DarkGray
 
-$execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $jsonPath -Model $Model
+$execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $jsonPath -Model $Model -Role $owner -Workload "analysis"
 
 if (-not (Test-Path $jsonPath)) { throw "Provider runtime did not produce structured output: $jsonPath" }
 
@@ -167,3 +257,7 @@ Write-Host "$Id - $owner - $($result.outcome)"
 Write-Host "Provider: $providerUsed"
 Write-Host "Model: $modelUsed"
 Write-Host "Report: $changed"
+}
+finally {
+    Exit-TaskExecutionLock -Lock $taskExecutionLock
+}

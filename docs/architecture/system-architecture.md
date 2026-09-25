@@ -36,8 +36,11 @@ Provider adapters:
 - Codex CLI: repository inspection in read-only sandbox.
 - OpenRouter: bounded context pack plus JSON schema request.
 - Gemini: bounded context pack plus JSON schema request.
+- Ollama: local HTTP runtime with schema-constrained structured output.
+- DeepSeek: OpenAI-compatible HTTP provider using JSON output plus local schema validation.
+- xAI/Grok: OpenAI-compatible HTTP provider using strict JSON-schema structured output.
 
-All provider output must pass the same local JSON contract validation before downstream workflow code trusts it.
+All provider output must pass the same local JSON contract validation before downstream workflow code trusts it. Automatic paid-provider fallback is disabled by default; explicit provider selection remains available.
 
 ### Validation boundary
 
