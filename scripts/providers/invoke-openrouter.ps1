@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Context,
     [Parameter(Mandatory = $true)][string]$SchemaPath,
     [Parameter(Mandatory = $true)][string]$OutputPath,
-    [string]$Model = "openrouter/free"
+    [string]$Model = "openrouter/free",
+    [ValidateRange(1,3600)][int]$TimeoutSeconds = 240
 )
 
 $ErrorActionPreference = "Stop"
@@ -156,7 +157,7 @@ $maxAttempts = 3
 
 for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
     try {
-        $response = Invoke-RestMethod -Method Post -Uri "https://openrouter.ai/api/v1/chat/completions" -Headers $headers -ContentType "application/json; charset=utf-8" -Body $bodyBytes -TimeoutSec 240
+        $response = Invoke-RestMethod -Method Post -Uri "https://openrouter.ai/api/v1/chat/completions" -Headers $headers -ContentType "application/json; charset=utf-8" -Body $bodyBytes -TimeoutSec $TimeoutSeconds
         break
     }
     catch {
@@ -190,6 +191,22 @@ if ($null -eq $response) {
 
 if ($null -eq $response.choices -or $response.choices.Count -lt 1) {
     throw "OpenRouter returned no completion choices."
+}
+
+$finishReason = if ($null -ne $response.choices[0].finish_reason) {
+    [string]$response.choices[0].finish_reason
+}
+else {
+    "UNKNOWN"
+}
+
+if ($finishReason -eq "length") {
+    $responseModel = if ($null -ne $response.model) { [string]$response.model } else { $Model }
+    throw (
+        "OpenRouter structured completion was truncated before completion. " +
+        "Model: $responseModel; finish_reason: length. " +
+        "The incomplete structured result was rejected and was not persisted."
+    )
 }
 
 $message = $response.choices[0].message
