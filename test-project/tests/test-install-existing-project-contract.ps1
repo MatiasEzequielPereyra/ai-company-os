@@ -24,6 +24,11 @@ try {
         "scripts\run-writable-agent.ps1",
         "scripts\resolve-writable-required-files.ps1",
         ".codex\writable-policy.json",
+        ".codex\local-runtime-config.json",
+        "scripts\local-runtime\detect-hardware.ps1",
+        "scripts\local-runtime\resolve-local-runtime.ps1",
+        "scripts\local-runtime\initialize-local-runtime.ps1",
+        "scripts\local-runtime\benchmark-ollama.ps1",
         "schemas\writable-change-set.schema.json",
         "schemas\task.schema.json",
         "schemas\company-state.schema.json",
@@ -41,7 +46,12 @@ try {
         "scripts/build-agent-context.ps1",
         "scripts/run-agent-task.ps1",
         "schemas/agent-result.schema.json",
-        ".codex/agents/pm.md"
+        ".codex/agents/pm.md",
+        ".codex/local-runtime-config.json",
+        "scripts/local-runtime/detect-hardware.ps1",
+        "scripts/local-runtime/resolve-local-runtime.ps1",
+        "scripts/local-runtime/initialize-local-runtime.ps1",
+        "scripts/local-runtime/benchmark-ollama.ps1"
     )) {
         if ($managed -notcontains $relative) {
             throw "Existing-project managed manifest missing: $relative"
