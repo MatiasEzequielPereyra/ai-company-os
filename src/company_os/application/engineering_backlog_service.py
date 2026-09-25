@@ -188,6 +188,27 @@ class EngineeringBacklogService:
                     provider,
                 ]
 
+                runtime_output_path = (
+                    root
+                    / ".codex"
+                    / "runtime"
+                    / (
+                        f"{source.task_id}"
+                        "-engineering-backlog.json"
+                    )
+                )
+
+                if runtime_output_path.exists():
+                    generate_args.append(
+                        "-ReuseExistingOutput"
+                    )
+                    if progress is not None:
+                        progress(
+                            "Reusing existing structured backlog "
+                            "provider output after a previous "
+                            "semantic validation failure."
+                        )
+
                 if model:
                     generate_args.extend(
                         [
