@@ -47,6 +47,21 @@ function Ensure-Property {
     }
 }
 
+function Merge-MissingObjectProperties {
+    param(
+        [object]$Target,
+        [object]$Source
+    )
+
+    if ($null -eq $Target -or $null -eq $Source) { return }
+
+    foreach ($sourceProperty in $Source.PSObject.Properties) {
+        if ($null -eq $Target.PSObject.Properties[$sourceProperty.Name]) {
+            $Target | Add-Member -NotePropertyName $sourceProperty.Name -NotePropertyValue $sourceProperty.Value
+        }
+    }
+}
+
 $sourceRoot = Split-Path -Parent $PSScriptRoot
 $targetRoot = (Resolve-Path $TargetProject).Path
 
@@ -169,8 +184,12 @@ if (Test-Path $providerSourcePath -PathType Leaf) {
     Ensure-Property -Object $targetConfig -Name "allow_paid_fallback" -Value $false
     Ensure-Property -Object $targetConfig -Name "context_max_chars" -Value $sourceConfig.context_max_chars
     Ensure-Property -Object $targetConfig -Name "analysis_context_max_chars" -Value $sourceConfig.analysis_context_max_chars
-    Ensure-Property -Object $targetConfig -Name "analysis_context_max_chars_by_role" -Value $sourceConfig.analysis_context_max_chars_by_role
-    Ensure-Property -Object $targetConfig -Name "provider_timeout_seconds" -Value $sourceConfig.provider_timeout_seconds
+    Ensure-Property -Object $targetConfig -Name "analysis_context_max_chars_by_role" -Value ([PSCustomObject]@{})
+    Merge-MissingObjectProperties -Target $targetConfig.analysis_context_max_chars_by_role -Source $sourceConfig.analysis_context_max_chars_by_role
+
+    Ensure-Property -Object $targetConfig -Name "provider_timeout_seconds" -Value ([PSCustomObject]@{})
+    Merge-MissingObjectProperties -Target $targetConfig.provider_timeout_seconds -Source $sourceConfig.provider_timeout_seconds
+
     Ensure-Property -Object $targetConfig -Name "gate_context_max_chars" -Value $sourceConfig.gate_context_max_chars
     Ensure-Property -Object $targetConfig -Name "ollama_context_max_chars" -Value $sourceConfig.ollama_context_max_chars
     Ensure-Property -Object $targetConfig -Name "ollama_gate_context_max_chars" -Value $sourceConfig.ollama_gate_context_max_chars
