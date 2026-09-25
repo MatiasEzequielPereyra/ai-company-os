@@ -43,3 +43,15 @@ def test_empty_active_run_is_rejected(tmp_path):
             "Expected execution without ACTIVE tasks "
             "to be rejected."
         )
+
+
+def test_gate_control_uses_streamed_process() -> None:
+    from pathlib import Path
+
+    source = Path(
+        "src/company_os/application/gate_control_service.py"
+    ).read_text(encoding="utf-8")
+
+    assert "run_streamed_process" in source
+    assert "__AICO_GATE__|" in source
+    assert "build_environment_all" in source
