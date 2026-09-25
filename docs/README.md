@@ -40,6 +40,18 @@ Errores de instalación, readiness, providers, gates, artifacts, Git/worktrees, 
 
 Parámetros verificados de los scripts PowerShell principales, con distinción entre comandos seguros, apply, provider, Git y avanzados.
 
+### 7. Preguntas frecuentes
+
+[FAQ.md](./FAQ.md)
+
+Respuestas cortas sobre autonomía, Work Requests, tasks, providers, gates, worktrees y límites del sistema.
+
+### 8. Estado de cobertura
+
+[DOCUMENTATION-STATUS.md](./DOCUMENTATION-STATUS.md)
+
+Matriz de qué está documentado como estable, parcial, pendiente o no soportado implícitamente.
+
 ## Documentación del sistema
 
 - [PROJECT-BRIEF.md](./PROJECT-BRIEF.md) — alcance, visión, usuarios objetivo, restricciones y criterios de éxito.
