@@ -90,6 +90,15 @@ if ($pmBudget -lt 20000 -or $pmBudget -gt 100000) {
     throw "PM analysis context budget must be substantially below the historical 320000-character budget"
 }
 if ([int]$config.gate_context_max_chars -lt 100000) { throw "Gate context budget must be explicitly configured" }
+if ($null -eq $config.provider_timeout_seconds) { throw "Provider timeout configuration must be explicit" }
+foreach ($providerName in @("Codex","OpenRouter","Gemini")) {
+    $timeoutProperty = $config.provider_timeout_seconds.PSObject.Properties[$providerName]
+    if ($null -eq $timeoutProperty) { throw "Provider timeout missing for $providerName" }
+    $timeoutSeconds = [int]$timeoutProperty.Value
+    if ($timeoutSeconds -lt 1 -or $timeoutSeconds -gt 600) {
+        throw "Provider timeout must be bounded for $providerName. Actual: $timeoutSeconds"
+    }
+}
 
 $pmInstructions = Get-Content (Join-Path $repoRoot ".codex\agents\pm.md") -Raw
 if ($pmInstructions -notmatch 'Existing Project Context Fallback') {
@@ -200,6 +209,12 @@ if ($codex -notmatch '"--output-schema"') {
 if ($codex -notmatch '\$env:CODEX_API_KEY = \$null') {
     throw "Codex adapter must disable paid API-key auth to prevent accidental spend"
 }
+if ($codex -notmatch 'TimeoutSeconds') {
+    throw "Codex adapter must enforce a configurable hard timeout"
+}
+if ($codex -notmatch 'Stop-ProcessTree') {
+    throw "Codex adapter must terminate the process tree when bounded execution fails or times out"
+}
 
 $openRouter = Get-Content (Join-Path $repoRoot "scripts\providers\invoke-openrouter.ps1") -Raw
 if ($openRouter -notmatch 'https://openrouter\.ai/api/v1/chat/completions') {
@@ -247,6 +262,9 @@ if ($openRouter -notmatch 'finish_reason') {
 if ($openRouter -notmatch 'length') {
     throw "OpenRouter adapter must explicitly reject length-truncated structured completions"
 }
+if ($openRouter -notmatch 'TimeoutSeconds') {
+    throw "OpenRouter adapter must honor configured HTTP timeout bounds"
+}
 
 $gemini = Get-Content (Join-Path $repoRoot "scripts\providers\invoke-gemini.ps1") -Raw
 if ($gemini -notmatch 'generativelanguage\.googleapis\.com') {
@@ -257,6 +275,19 @@ if ($gemini -notmatch 'GEMINI_API_KEY') {
 }
 if ($gemini -notmatch 'responseJsonSchema') {
     throw "Gemini adapter must request structured JSON output"
+}
+if ($gemini -notmatch 'TimeoutSeconds') {
+    throw "Gemini adapter must honor configured HTTP timeout bounds"
+}
+
+$providerRouter = Get-Content (Join-Path $repoRoot "scripts\provider-router.ps1") -Raw
+foreach ($eventName in @("provider_attempt_started","provider_attempt_finished","provider_timeout")) {
+    if ($providerRouter -notmatch [regex]::Escape($eventName)) {
+        throw "Provider router must expose lifecycle event: $eventName"
+    }
+}
+if ($providerRouter -notmatch 'Get-ConfiguredTimeoutSeconds') {
+    throw "Provider router must resolve bounded provider timeouts from configuration"
 }
 
 $contextBuilder = Get-Content (Join-Path $repoRoot "scripts\build-agent-context.ps1") -Raw
