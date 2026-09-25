@@ -69,20 +69,41 @@ Profiles live in `.codex/workflow-profiles.json`:
 
 Existing tasks without a `Workflow profile` field are treated as `standard` for backward compatibility.
 
-## Core commands
+## Typical user flow
 
-Run from the repository root:
+The normal entry point is a Work Request plus the orchestrator, not manual status editing.
+
+Run from the managed project root:
 
 ```powershell
 .\scripts\initialize-project.ps1
-.\scripts\new-task.ps1 -Title "Implement feature" -Owner backend -Priority P1
-.\scripts\evaluate-readiness.ps1 -Apply
-.\scripts\dispatch-ready-tasks.ps1 -Apply
-.\scripts\run-active-agents.ps1
-.\scripts\validate-artifacts.ps1
-.\scripts\sync-company-state.ps1
-.\scripts\summarize-metrics.ps1
+
+.\scripts\orchestrate.ps1 `
+  -Objective "Describe the work to prepare" `
+  -Type FEATURE `
+  -Priority P1
+
+.\scripts\list-tasks.ps1
+
+# After reviewing the generated plan, continue the real Work Request with -Apply.
+.\scripts\orchestrate.ps1 -WorkRequestId WR-XXX -Apply
+
+.\scripts\run-active-agents.ps1 -Provider Auto
+.\scripts\run-pending-gates.ps1 -Provider Auto
 ```
+
+Tasks with dependencies may require several lifecycle rounds. A completed dependency can make new work READY; that work must then be dispatched and executed.
+
+Final approval is explicit per task:
+
+```powershell
+.\scripts\finalize-task.ps1 `
+  -Id AICO-XXX `
+  -Decision APPROVE `
+  -Verification "Original objective and applicable gate evidence reviewed."
+```
+
+Manual task creation and low-level transition commands remain available for advanced operation; see `docs/COMMAND-REFERENCE.md`.
 
 For isolated mutating work:
 
