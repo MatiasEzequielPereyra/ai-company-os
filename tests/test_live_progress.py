@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import sys
 from types import SimpleNamespace
 
@@ -399,3 +400,47 @@ def test_progress_text_is_ascii_safe_and_bilingual():
         i18n.PROGRESS_TEXT["es"].values()
     ):
         assert value.isascii(), value
+
+
+
+def test_streamed_process_isolates_child_stdin(
+    monkeypatch,
+):
+    calls = []
+
+    class FakeProcess:
+        def __init__(self):
+            self.stdout = []
+
+        def poll(self):
+            return 0
+
+        def wait(self):
+            return 0
+
+        def kill(self):
+            return None
+
+    def fake_popen(command, **kwargs):
+        calls.append(
+            (command, kwargs)
+        )
+        return FakeProcess()
+
+    monkeypatch.setattr(
+        "company_os.application."
+        "process_stream.subprocess.Popen",
+        fake_popen,
+    )
+
+    result = run_streamed_process(
+        ["fake-runtime"],
+        timeout=1,
+    )
+
+    assert result.returncode == 0
+    assert len(calls) == 1
+    assert (
+        calls[0][1]["stdin"]
+        is subprocess.DEVNULL
+    )

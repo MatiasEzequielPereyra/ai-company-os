@@ -34,6 +34,22 @@ try {
     & $generatePlan -ProjectPath $tempRoot -WorkRequestId WR-001
     & $materializePlan -ProjectPath $tempRoot -WorkRequestId WR-001
 
+    $secondMaterializationRejected = $false
+    try {
+        & $materializePlan -ProjectPath $tempRoot -WorkRequestId WR-001
+    }
+    catch {
+        if ($_.Exception.Message -notmatch "already materialized") {
+            throw
+        }
+
+        $secondMaterializationRejected = $true
+    }
+
+    if (-not $secondMaterializationRejected) {
+        throw "Second materialization of the same Work Request must be rejected."
+    }
+
     $request = Join-Path $tempRoot "docs\engineering\work-requests\WR-001.md"
     $objective = Join-Path $tempRoot ".codex\state\current-objective.md"
     $plan = Join-Path $tempRoot "docs\engineering\plans\WR-001-plan.md"
