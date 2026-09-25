@@ -268,6 +268,7 @@ $promptLines = @(
     "Create small, independently verifiable tasks rather than giant work-stream tickets.",
     "Each item must have exactly one primary owner from the allowed roles.",
     "Encode dependencies only by logical item key; the materializer will translate them to AICO IDs.",
+    "An item must never include its own key in dependencies.",
     "Preserve the plan's priorities and critical path.",
     "Create explicit DECISION items for unresolved PM/CTO/CEO decisions before dependent implementation work.",
     "If implementation authorization is required, include an explicit DECISION task near the root of the graph and set implementation_authorization_key to that item key.",
@@ -326,11 +327,33 @@ $backlog = Get-Content $outputPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $backlog = Repair-MojibakeObject -Value $backlog
 
 # Canonicalize dependency arrays. Empty/null/whitespace entries mean no dependency.
+# A model may occasionally echo an item's own key in its dependencies. That
+# edge carries no useful information and would create a trivial cycle, so
+# remove it deterministically before graph validation.
 foreach ($item in @($backlog.items)) {
-    $normalizedDependencies = @(
+    $itemKey = [string]$item.key
+    $rawDependencies = @(
         @($item.dependencies) |
-            ForEach-Object { [string]$_ } |
-            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            ForEach-Object { ([string]$_).Trim() } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    )
+
+    $selfDependencies = @(
+        $rawDependencies |
+            Where-Object { $_ -eq $itemKey }
+    )
+
+    if ($selfDependencies.Count -gt 0) {
+        Write-Host (
+            "Repaired self-dependency for backlog item " +
+            $itemKey +
+            ": removed its own key from dependencies."
+        ) -ForegroundColor Yellow
+    }
+
+    $normalizedDependencies = @(
+        $rawDependencies |
+            Where-Object { $_ -ne $itemKey } |
             Select-Object -Unique
     )
 
