@@ -27,6 +27,7 @@ def run_streamed_process(
 ) -> StreamedProcessResult:
     process = subprocess.Popen(
         command,
+        stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
