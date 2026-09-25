@@ -102,12 +102,13 @@ crea Work Request
 No asumir que siempre será `WR-001`.
 
 ```powershell
-$WorkRequestId = (
-  Get-ChildItem .\docs\engineering\work-requests -Filter "WR-*.md" |
-  Sort-Object Name |
-  Select-Object -Last 1
-).BaseName
+$CurrentObjective = Get-Content .\.codex\state\current-objective.md -Raw
 
+if ($CurrentObjective -notmatch 'Work request:\s+docs/engineering/work-requests/(WR-\d+)\.md') {
+  throw "No pude resolver el Work Request actual."
+}
+
+$WorkRequestId = $Matches[1]
 $WorkRequestId
 ```
 
