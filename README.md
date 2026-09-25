@@ -133,6 +133,7 @@ For users who want to operate AI Company OS rather than inspect its internals:
 
 - [Quick Start](docs/QUICKSTART.md) — install the framework and prepare the first workflow.
 - [User Guide](docs/USER-GUIDE.md) — concepts, lifecycle, providers, quality gates, isolation, and troubleshooting-oriented operating guidance.
+- [End-to-End Walkthrough](docs/END-TO-END-WALKTHROUGH.md) — verified path from Work Request and planning to lifecycle gates and DONE.
 
 The user guide is living documentation. Experimental functionality is not presented as stable until it is integrated into the documented branch.
 
