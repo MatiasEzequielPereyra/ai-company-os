@@ -1196,19 +1196,32 @@ class PlanControlScreen(Screen):
     def _refresh_view(self) -> None:
         tasks = self._tasks()
 
-        active_role = next(
+        active_task = next(
             (
-                task.owner
+                task
                 for task in tasks
                 if task.status == "ACTIVE"
             ),
-            "pm",
+            None,
+        )
+        active_role = (
+            active_task.owner
+            if active_task is not None
+            else "pm"
+        )
+        local_workload = (
+            "writable"
+            if (
+                active_task is not None
+                and active_task.work_kind == "IMPLEMENTATION"
+            )
+            else "analysis"
         )
 
         local_status = self.local_runtime.inspect(
             self.plan_data.project_root,
             role=active_role,
-            workload="analysis",
+            workload=local_workload,
         )
 
         if local_status.available:
