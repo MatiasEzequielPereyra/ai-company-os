@@ -75,3 +75,42 @@ El runner compartido de agentes es de análisis/read-only. Para cambios de códi
 Readiness no equivale a permiso de modificación, merge o deployment.
 
 Para el manual completo, ver [USER-GUIDE.md](./USER-GUIDE.md).
+
+
+## 8. Ejecutar gates y cerrar la task
+
+```powershell
+.\scripts\run-pending-gates.ps1 -Provider Auto
+```
+
+Si Review, QA y Security quedan satisfechos, la task puede permanecer en `SECURITY`.
+
+Eso es esperado: los gates **no realizan la aprobación final**.
+
+Después de revisar la evidencia:
+
+```powershell
+.\scripts\finalize-task.ps1 `
+  -Id AICO-001 `
+  -Decision APPROVE `
+  -Verification "Original objective and applicable gates verified"
+```
+
+Recién entonces la task puede llegar a:
+
+```text
+DONE
+```
+
+## 9. Validar estado final
+
+```powershell
+.\scripts\sync-company-state.ps1
+.\scripts\validate-artifacts.ps1
+```
+
+Para una primera instalación completa, seguir [FIRST-RUN-CHECKLIST.md](./FIRST-RUN-CHECKLIST.md).
+
+Para errores, consultar [TROUBLESHOOTING.md](./TROUBLESHOOTING.md).
+
+Para parámetros y comandos disponibles, consultar [COMMAND-REFERENCE.md](./COMMAND-REFERENCE.md).
