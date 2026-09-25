@@ -759,7 +759,7 @@ AI Company OS automatiza coordinación y validaciones, pero no convierte toda ac
 | Ejecutar análisis con provider | Sí | Consume provider configurado |
 | Crear worktree aislado | Sí | No autoriza merge/push/deploy |
 | Modificar código | Parcial / en evolución | Sí, alcance de escritura autorizado |
-| Review/QA/Security | Sí o manual | Deben producir evidencia independiente |
+| Review/QA/Security | Sí o manual | Deben producir evidencia separada; Review tiene una limitación conocida para tasks owned por engineering-manager |
 | Finalizar task | Script asistido | `APPROVE` o `REJECT` explícito |
 | Merge/Rebase/Push | No implícito | Sí |
 | Deployment | No implícito | Sí |
