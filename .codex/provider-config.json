@@ -27,5 +27,10 @@
     "qa": 90000,
     "security": 100000,
     "devops": 90000
+  },
+  "provider_timeout_seconds": {
+    "Codex": 180,
+    "OpenRouter": 240,
+    "Gemini": 240
   }
 }
