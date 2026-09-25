@@ -339,11 +339,28 @@ class PlanControlScreen(Screen):
         )
 
         if not pending:
-            self.notify(
-                "No DONE Engineering Manager plan is ready "
-                "for backlog materialization.",
-                severity="warning",
+            ready = self.engineering_backlog.ready_sources(
+                self.plan_data.project_root,
+                self._work_request_ids(),
             )
+
+            materialized = [
+                source.task_id
+                for source in ready
+                if source.materialized
+            ]
+
+            if materialized:
+                self.notify(
+                    "Engineering backlog already materialized for: "
+                    + ", ".join(materialized),
+                )
+            else:
+                self.notify(
+                    "No DONE Engineering Manager plan is ready "
+                    "for backlog materialization.",
+                    severity="warning",
+                )
             return
 
         self.busy = True
