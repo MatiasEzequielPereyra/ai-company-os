@@ -43,6 +43,15 @@ $owner = Read-Field $task "Owner"
 if ($status -ne "ACTIVE") { throw "Task $Id must be ACTIVE. Current status: $status" }
 if ([string]::IsNullOrWhiteSpace($owner)) { throw "Task $Id has no owner." }
 
+$lockHelperPath = Join-Path $PSScriptRoot "task-execution-lock.ps1"
+if (-not (Test-Path $lockHelperPath -PathType Leaf)) {
+    throw "Task execution lock helper not found: $lockHelperPath"
+}
+. $lockHelperPath
+$taskExecutionLock = Enter-TaskExecutionLock -ProjectPath $root -Id $Id -Operation "ANALYSIS"
+
+try {
+
 $dispatchPath = Join-Path $root ("docs\engineering\dispatch\" + $Id + ".md")
 $rolePath = Join-Path $root (".codex\agents\" + $owner + ".md")
 $schemaPath = Join-Path $root "schemas\agent-result.schema.json"
@@ -198,3 +207,7 @@ Write-Host "$Id - $owner - $($result.outcome)"
 Write-Host "Provider: $providerUsed"
 Write-Host "Model: $modelUsed"
 Write-Host "Report: $changed"
+}
+finally {
+    Exit-TaskExecutionLock -Lock $taskExecutionLock
+}
