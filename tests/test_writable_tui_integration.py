@@ -470,6 +470,7 @@ def test_plan_control_preserves_local_runtime_live_progress_and_p0_routing() -> 
     assert "_writable_task_ids" in source
     assert "_analysis_task_ids" in source
     assert "request_ids_for_task_ids" in source
+    assert "Engineering backlog already materialized for:" in source
     assert "LocalRuntimeService" in source
     assert "Local Runtime / Auto" in source
     assert "Live Progress" in source
