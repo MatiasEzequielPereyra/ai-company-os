@@ -65,7 +65,7 @@ if (-not (Test-Path (Join-Path $targetRoot ".git"))) {
 $directories = @(
     ".codex", ".codex\agents", ".codex\policies", ".codex\protocols", ".codex\state", ".codex\workflows", ".codex\templates",
     ".agents", ".agents\skills", "docs", "docs\product", "docs\architecture", "docs\engineering",
-    "docs\operations", "docs\decisions", "tasks", "scripts", "scripts\providers", "schemas"
+    "docs\operations", "docs\decisions", "tasks", "scripts", "scripts\providers", "scripts\local-runtime", "schemas"
 )
 foreach ($dir in $directories) { New-Item -ItemType Directory -Force -Path (Join-Path $targetRoot $dir) | Out-Null }
 
@@ -73,6 +73,7 @@ $frameworkFiles = @(
     @{ Source="AGENTS.md"; Target="AGENTS.md" },
     @{ Source=".codex\config.toml"; Target=".codex\config.toml" },
     @{ Source=".codex\provider-config.json"; Target=".codex\provider-config.json" },
+    @{ Source=".codex\local-runtime-config.json"; Target=".codex\local-runtime-config.json" },
     @{ Source=".codex\workflow-profiles.json"; Target=".codex\workflow-profiles.json" },
     @{ Source=".codex\writable-policy.json"; Target=".codex\writable-policy.json" }
 )
@@ -150,6 +151,22 @@ if (Test-Path $providersSource) {
             Copy-Item $_.FullName $target -Force
             Add-ManagedFile ("scripts\providers\" + $_.Name)
             Write-Host "INSTALLED provider: $($_.Name)" -ForegroundColor Green
+        }
+    }
+}
+
+$localRuntimeSource = Join-Path $sourceRoot "scripts\local-runtime"
+$localRuntimeTarget = Join-Path $targetRoot "scripts\local-runtime"
+if (Test-Path $localRuntimeSource) {
+    Get-ChildItem $localRuntimeSource -File | ForEach-Object {
+        $target = Join-Path $localRuntimeTarget $_.Name
+        if ((Test-Path $target) -and -not $Force) {
+            Write-Host "SKIP existing local runtime: $($_.Name)" -ForegroundColor DarkYellow
+        }
+        else {
+            Copy-Item $_.FullName $target -Force
+            Add-ManagedFile ("scripts\local-runtime\" + $_.Name)
+            Write-Host "INSTALLED local runtime: $($_.Name)" -ForegroundColor Green
         }
     }
 }
