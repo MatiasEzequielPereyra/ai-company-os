@@ -34,5 +34,22 @@
     "DeepSeek": "deepseek-flash",
     "Grok": "grok-4.7"
   },
-  "writable_context_max_chars": 120000
+  "writable_context_max_chars": 120000,
+  "analysis_context_max_chars": 120000,
+  "analysis_context_max_chars_by_role": {
+    "pm": 70000,
+    "cto": 110000,
+    "engineering-manager": 120000,
+    "qa": 90000,
+    "security": 100000,
+    "devops": 90000
+  },
+  "provider_timeout_seconds": {
+    "Codex": 180,
+    "OpenRouter": 240,
+    "Gemini": 240,
+    "Ollama": 1800,
+    "DeepSeek": 240,
+    "Grok": 240
+  }
 }
