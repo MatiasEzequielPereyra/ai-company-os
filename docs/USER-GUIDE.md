@@ -170,13 +170,13 @@ El archivo `.codex/workflow-profiles.json` define tres perfiles.
 
 Para trabajo de bajo riesgo y reversible.
 
-Requiere review y QA. Security es condicional.
+Requiere review y QA. En el lifecycle actual, una task que pasa QA entra en `SECURITY`; para este profile el gate puede registrar `NOT_APPLICABLE` cuando una revisión adicional de seguridad no aporta verificación significativa.
 
 ### standard
 
 Perfil por defecto para trabajo normal de producto.
 
-Requiere review y QA. Security depende del riesgo.
+Requiere review y QA. En el lifecycle actual también se genera una disposición de Security: puede ser `PASS`, `FAIL` o `NOT_APPLICABLE` cuando corresponde.
 
 ### high-assurance
 
@@ -276,6 +276,47 @@ cd "C:\Proyectos\MiProyecto"
 .\scripts\initialize-project.ps1
 ```
 
+## 11.1 Actualizar una instalación existente
+
+El instalador actual no mantiene una versión embebida ni realiza un merge inteligente de personalizaciones.
+
+Sin `-Force`, preserva varios archivos existentes. Con `-Force`, puede reemplazar componentes del framework como:
+
+```text
+AGENTS.md
+.codex/config.toml
+.codex/provider-config.json
+.codex/workflow-profiles.json
+.codex/agents/*
+scripts/*
+scripts/providers/*
+schemas/*
+```
+
+Por eso una actualización debe hacerse como cambio revisable:
+
+```powershell
+# En el proyecto target:
+git status --short --branch
+
+# Crear/cambiar a una branch de actualización según el workflow del proyecto.
+# Luego, desde el checkout actualizado de AI Company OS:
+.\scripts\install-existing-project.ps1 `
+  -TargetProject "C:\ruta\de\mi-proyecto" `
+  -Force
+```
+
+Después, en el proyecto target:
+
+```powershell
+git diff
+.\scripts\validate-artifacts.ps1
+```
+
+Revisar especialmente cualquier personalización previa de `AGENTS.md`, `.codex/`, scripts y schemas.
+
+No ejecutar `-Force` sobre cambios locales no revisados.
+
 ## 12. Crear un Work Request
 
 Un Work Request representa una solicitud de trabajo de alto nivel.
@@ -301,6 +342,25 @@ RELEASE
 RESEARCH
 DOCUMENTATION
 ```
+
+### Elegir el tipo de Work Request
+
+El tipo no es solo una etiqueta: determina qué roles aparecen en el plan inicial.
+
+| Tipo | Usarlo cuando | Roles de planificación actuales |
+|---|---|---|
+| FEATURE | agregar capacidad de producto | PM → CTO → Engineering Manager → QA |
+| BUG | corregir un defecto acotado | Engineering Manager → QA |
+| REFACTOR | cambiar estructura sin redefinir producto | CTO → Engineering Manager → QA |
+| INFRASTRUCTURE | cambiar infraestructura/operaciones | CTO, Engineering Manager, DevOps, Security, QA |
+| AUDIT | evaluar integralmente un proyecto o release | PM, CTO, QA, Security, DevOps → Engineering Manager |
+| RELEASE | preparar/verificar una entrega | Engineering Manager, QA, Security, DevOps |
+| RESEARCH | investigar antes de decidir implementación | PM → CTO |
+| DOCUMENTATION | trabajo documental acotado | Engineering Manager |
+
+Las flechas indican dependencias típicas del materializer actual; las comas indican roles que pueden participar sin esa cadena simple.
+
+`DOCUMENTATION` tiene una limitación conocida para pruebas de independencia de Review cuando la task pertenece a `engineering-manager`, porque el Review gate actual usa ese mismo rol.
 
 El Work Request se almacena bajo:
 
