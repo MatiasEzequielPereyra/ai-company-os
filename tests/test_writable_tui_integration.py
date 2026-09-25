@@ -36,8 +36,11 @@ def test_plan_control_exposes_retry_and_canonical_gates() -> None:
     assert '"DONE"' in source
     assert "LocalRuntimeService" in source
     assert "Local Runtime / Auto" in source
-    assert "_show_startup_error" in source
-    assert "tui-startup-error.log" in source
+    tui_source = Path(
+        "src/company_os/cli/tui.py"
+    ).read_text(encoding="utf-8")
+    assert "_show_startup_error" in tui_source
+    assert "tui-startup-error.log" in tui_source
     assert "Live Progress" in source
     assert "_progress_from_worker" in source
     assert "_handle_progress_line" in source
