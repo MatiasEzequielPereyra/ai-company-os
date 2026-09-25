@@ -53,11 +53,13 @@ try {
         "scripts\run-gate-agent.ps1",
         "scripts\run-writable-agent.ps1",
         "scripts\update-runtime.ps1",
+        "scripts\task-execution-lock.ps1",
         "scripts\local-runtime\resolve-local-runtime.ps1",
         "scripts\local-runtime\detect-hardware.ps1",
         "scripts\providers\invoke-ollama.ps1",
         ".codex\local-runtime-config.json",
-        ".codex\writable-policy.json"
+        ".codex\writable-policy.json",
+        ".codex\managed-files.json"
     )) {
         if (-not (Test-Path (Join-Path $tempRoot $relative))) {
             throw "Runtime upgrade is missing required artifact: $relative"
@@ -93,6 +95,38 @@ try {
     }
     if ([bool]$config.allow_paid_fallback -ne $false) {
         throw "Runtime upgrade must keep paid fallback disabled by default."
+    }
+
+    if ([int]$config.analysis_context_max_chars -ne 120000) {
+        throw "Runtime upgrade must add the bounded analysis context budget."
+    }
+    if ([int]$config.analysis_context_max_chars_by_role.pm -ne 70000) {
+        throw "Runtime upgrade must add role-specific analysis context budgets."
+    }
+    if ([int]$config.provider_timeout_seconds.OpenRouter -ne 240) {
+        throw "Runtime upgrade must add cloud provider timeout configuration."
+    }
+    if ([int]$config.provider_timeout_seconds.Ollama -ne 1800) {
+        throw "Runtime upgrade must preserve a local-inference-safe Ollama timeout."
+    }
+
+    $manifest = Get-Content (Join-Path $tempRoot ".codex\managed-files.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+    $managed = @($manifest.managed_files)
+
+    foreach ($relative in @(
+        "scripts/provider-router.ps1",
+        "scripts/task-execution-lock.ps1",
+        "scripts/local-runtime/resolve-local-runtime.ps1",
+        ".codex/provider-config.json",
+        ".codex/local-runtime-config.json"
+    )) {
+        if ($managed -notcontains $relative) {
+            throw "Runtime upgrade managed manifest missing: $relative"
+        }
+    }
+
+    if ($managed -contains "app-source.txt") {
+        throw "Runtime upgrade must never claim application source as managed."
     }
 
     $backup = @(Get-ChildItem (Join-Path $tempRoot ".codex\runtime") -Filter "provider-config.backup-*.json" -File)
