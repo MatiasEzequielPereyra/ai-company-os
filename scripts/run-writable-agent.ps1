@@ -378,6 +378,12 @@ if (-not (Test-Path $taskPath)) {
 $task = Get-Content $taskPath -Raw -Encoding UTF8
 $status = Read-Field -Content $task -Key "Status"
 $owner = Read-Field -Content $task -Key "Owner"
+$workKind = (Read-Field -Content $task -Key "Work kind").ToUpperInvariant()
+
+if ($workKind -ne "IMPLEMENTATION") {
+    $displayWorkKind = if ([string]::IsNullOrWhiteSpace($workKind)) { "<missing>" } else { $workKind }
+    throw "Writable execution requires Work kind IMPLEMENTATION. Current Work kind: $displayWorkKind"
+}
 
 if ($status -notin @("READY","ACTIVE")) {
     throw "Task $Id must be READY or ACTIVE for writable execution. Current status: $status"
