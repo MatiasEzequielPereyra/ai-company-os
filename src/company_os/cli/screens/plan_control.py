@@ -347,16 +347,24 @@ class PlanControlScreen(Screen):
             return
 
         self.busy = True
+        backlog_ids = [
+            source.task_id
+            for source in pending
+        ]
+        self._operation_owners = {
+            task.id: task.owner
+            for task in self._tasks()
+            if task.id in backlog_ids
+        }
 
-        self._working(
-            "Generating and materializing engineering "
-            "backlog from:\n\n"
-            + "\n".join(
-                source.task_id
-                for source in pending
-            ),
-            "ENGINEERING BACKLOG",
+        self.progress.start(
+            kind="backlog",
+            title="ENGINEERING BACKLOG",
+            task_ids=backlog_ids,
+            initial_event="Starting engineering backlog generation...",
+            provider="Auto",
         )
+        self._render_operation_progress()
 
         self.engineering_backlog_worker()
 
@@ -374,6 +382,7 @@ class PlanControlScreen(Screen):
                     self.plan_data.project_root,
                     self._work_request_ids(),
                     provider="Auto",
+                    progress=self._progress_from_worker,
                 )
             )
 
@@ -880,6 +889,34 @@ class PlanControlScreen(Screen):
             return
 
         if line.startswith(
+            "__AICO_BACKLOG__|"
+        ):
+            parts = line.split("|")
+
+            if len(parts) == 4:
+                _marker, task_id, stage, state = parts
+                self.progress.current_task = task_id
+                self.progress.stage = stage
+
+                labels = {
+                    "GENERATE": "Generating structured backlog",
+                    "MATERIALIZE": "Materializing tasks",
+                }
+                label = labels.get(stage, stage.title())
+
+                if state == "START":
+                    self.progress.add_event(
+                        f"{label}..."
+                    )
+                elif state == "DONE":
+                    self.progress.add_event(
+                        f"{label} finished."
+                    )
+
+            self._render_operation_progress()
+            return
+
+        if line.startswith(
             "__AICO_GATE__|"
         ):
             parts = line.split("|")
@@ -965,6 +1002,9 @@ class PlanControlScreen(Screen):
             "security",
             "gate",
             "qa",
+            "backlog",
+            "materializ",
+            "structured",
         )
 
         if any(
@@ -1009,6 +1049,24 @@ class PlanControlScreen(Screen):
             f"Task: {task}",
             f"Agent: {owner}",
         ]
+
+        if self.progress.kind == "backlog":
+            stage_labels = {
+                "GENERATE": "Generating structured backlog",
+                "MATERIALIZE": "Materializing tasks",
+            }
+            if self.progress.stage:
+                lines.extend(
+                    [
+                        "",
+                        "Stage: "
+                        + stage_labels.get(
+                            self.progress.stage,
+                            self.progress.stage.title(),
+                        ),
+                        "",
+                    ]
+                )
 
         if self.progress.kind == "gates":
             markers = {
