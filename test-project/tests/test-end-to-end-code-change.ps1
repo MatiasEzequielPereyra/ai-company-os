@@ -31,6 +31,7 @@ try {
         "qa-task.ps1",
         "security-task.ps1",
         "finalize-task.ps1",
+        "task-execution-lock.ps1",
         "sync-company-state.ps1",
         "write-operational-event.ps1",
         "validate-json-contract.ps1",
