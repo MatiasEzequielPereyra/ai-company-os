@@ -1,8 +1,26 @@
 # AI Company OS — Quick Start
 
-> Guía mínima para pasar de un repositorio existente al primer workflow.
+> Guía mínima para pasar de cero a un primer workflow real sin asumir IDs ni saltar dependencias.
 
-## 1. Instalar sobre un proyecto existente
+## 0. Requisitos
+
+Necesitás:
+
+- Windows con PowerShell;
+- Git, especialmente si vas a trabajar sobre un repositorio real o usar worktrees;
+- acceso al repositorio de AI Company OS;
+- al menos un provider disponible para ejecutar agentes: Codex CLI, OpenRouter o Gemini.
+
+Clonar AI Company OS:
+
+```powershell
+git clone https://github.com/MatiasEzequielPereyra/ai-company-os.git
+cd .\ai-company-os
+```
+
+Si el repositorio requiere autenticación, Git debe estar autenticado previamente.
+
+## 1. Instalarlo sobre un proyecto existente
 
 Desde el repositorio de AI Company OS:
 
@@ -10,107 +28,244 @@ Desde el repositorio de AI Company OS:
 .\scripts\install-existing-project.ps1 -TargetProject "C:\ruta\de\mi-proyecto"
 ```
 
-## 2. Entrar al proyecto e inicializar
+El target debería ser un repositorio Git si vas a usar aislamiento por worktrees.
+
+Luego:
 
 ```powershell
-cd "C:\ruta\de\mi-proyecto"
+Set-Location "C:\ruta\de\mi-proyecto"
+```
+
+## 2. Inicializar el proyecto
+
+```powershell
 .\scripts\initialize-project.ps1
 ```
 
-Revisá los archivos generados bajo `docs/` antes de tratar las detecciones automáticas como decisiones confirmadas.
+Revisá:
 
-## 3. Crear y preparar un objetivo
+```text
+docs/engineering/project-intake.md
+docs/product/product-intake.md
+docs/architecture/architecture-intake.md
+docs/operations/operations-intake.md
+```
+
+El intake es evidencia automática. No convierte detecciones en decisiones aprobadas.
+
+## 3. Comprobar que existe un provider
+
+Codex:
+
+```powershell
+Get-Command codex -ErrorAction SilentlyContinue
+```
+
+OpenRouter:
+
+```powershell
+Test-Path Env:OPENROUTER_API_KEY
+```
+
+Gemini:
+
+```powershell
+Test-Path Env:GEMINI_API_KEY
+```
+
+No necesitás los tres. Para `-Provider Auto`, al menos uno debe estar realmente disponible.
+
+## 4. Crear un objetivo en modo PREPARE
+
+Ejemplo:
 
 ```powershell
 .\scripts\orchestrate.ps1 `
-  -Objective "Describir claramente el cambio que quiero realizar" `
+  -Objective "Revisar el proyecto y definir el cambio que necesito" `
   -Type FEATURE `
   -Priority P1
 ```
 
-Esto prepara Work Request, plan, tasks, readiness y dispatch sin activar tareas automáticamente.
+Sin `-Apply`, el orchestrator:
 
-## 4. Revisar las tasks
+```text
+crea Work Request
+→ genera plan
+→ materializa planning tasks
+→ evalúa readiness
+→ prepara dispatch
+→ NO activa tasks
+```
+
+## 5. Obtener el Work Request real
+
+No asumir que siempre será `WR-001`.
+
+```powershell
+$WorkRequestId = (
+  Get-ChildItem .\docs\engineering\work-requests -Filter "WR-*.md" |
+  Sort-Object Name |
+  Select-Object -Last 1
+).BaseName
+
+$WorkRequestId
+```
+
+Revisar el plan:
+
+```powershell
+Get-Content ".\docs\engineering\plans\$WorkRequestId-plan.md"
+```
+
+Y las tasks:
 
 ```powershell
 .\scripts\list-tasks.ps1
 ```
 
-## 5. Activar trabajo elegible
+## 6. Aplicar el primer lote elegible
 
-Cuando el plan haya sido revisado:
-
-```powershell
-.\scripts\evaluate-readiness.ps1 -Apply
-.\scripts\dispatch-ready-tasks.ps1 -Apply
-```
-
-## 6. Ejecutar agentes de análisis
+Cuando el plan sea correcto:
 
 ```powershell
-.\scripts\run-active-agents.ps1
+.\scripts\orchestrate.ps1 `
+  -WorkRequestId $WorkRequestId `
+  -Apply
 ```
 
-Provider explícito:
+Ver las activas:
 
 ```powershell
-.\scripts\run-active-agents.ps1 -Provider Codex
+.\scripts\list-tasks.ps1 -Status ACTIVE
 ```
 
-## 7. Validar y sincronizar
+Solo las tasks cuyas dependencias estén satisfechas deberían estar `ACTIVE`.
+
+## 7. Ejecutar los agentes activos
 
 ```powershell
-.\scripts\validate-artifacts.ps1
-.\scripts\sync-company-state.ps1
+.\scripts\run-active-agents.ps1 -Provider Auto
 ```
 
-## Importante
+Una entrega `COMPLETED` pasa normalmente:
 
-El runner compartido de agentes es de análisis/read-only. Para cambios de código autorizados y aislados:
-
-```powershell
-.\scripts\new-agent-workspace.ps1 -Id AICO-123
+```text
+ACTIVE → REVIEW
 ```
 
-Readiness no equivale a permiso de modificación, merge o deployment.
-
-Para el manual completo, ver [USER-GUIDE.md](./USER-GUIDE.md).
-
-
-## 8. Ejecutar gates y cerrar la task
+## 8. Ejecutar Review, QA y Security
 
 ```powershell
 .\scripts\run-pending-gates.ps1 -Provider Auto
 ```
 
-Si Review, QA y Security quedan satisfechos, la task puede permanecer en `SECURITY`.
+Con gates satisfactorios, la task queda normalmente en:
 
-Eso es esperado: los gates **no realizan la aprobación final**.
+```text
+SECURITY
+```
 
-Después de revisar la evidencia:
+No llega sola a `DONE`.
+
+## 9. Revisar evidencia y aprobar explícitamente
+
+Ver qué tasks están esperando decisión final:
+
+```powershell
+.\scripts\list-tasks.ps1 -Status SECURITY
+```
+
+Elegí una task y revisá sus artifacts antes de aprobarla.
+
+Ejemplo, reemplazando el ID por el real:
+
+```powershell
+Get-Content .\tasks\AICO-123.md
+Get-Content .\docs\engineering\qa\AICO-123-qa.md
+Get-Content .\docs\engineering\security\AICO-123-security.md
+```
+
+Si corresponde aprobar:
 
 ```powershell
 .\scripts\finalize-task.ps1 `
-  -Id AICO-001 `
+  -Id AICO-123 `
   -Decision APPROVE `
-  -Verification "Original objective and applicable gates verified"
+  -Verification "Original objective and applicable gate evidence reviewed."
 ```
 
-Recién entonces la task puede llegar a:
+La aprobación final es una decisión. No automatices un `APPROVE` masivo sin inspeccionar la evidencia.
+
+## 10. Repetir el lifecycle mientras aparezca trabajo nuevo
+
+Después de una task `DONE`, sus dependientes pueden pasar automáticamente de `BACKLOG` a `READY`.
+
+Comprobar:
+
+```powershell
+.\scripts\list-tasks.ps1
+```
+
+Si aparecen nuevas tasks `READY`:
+
+```powershell
+.\scripts\dispatch-ready-tasks.ps1 -Apply
+.\scripts\run-active-agents.ps1 -Provider Auto
+.\scripts\run-pending-gates.ps1 -Provider Auto
+```
+
+Después volver a revisar y finalizar cada task que corresponda.
+
+El ciclo real es:
 
 ```text
+READY
+  ↓
+ACTIVE
+  ↓
+RESULT
+  ↓
+REVIEW
+  ↓
+QA
+  ↓
+SECURITY
+  ↓
+FINAL APPROVAL
+  ↓
 DONE
+  ↓
+desbloquea dependencias
+  ↓
+nuevas READY
+  ↺
 ```
 
-## 9. Validar estado final
+## 11. Validar y sincronizar
+
+Cuando termines una ronda:
 
 ```powershell
 .\scripts\sync-company-state.ps1
 .\scripts\validate-artifacts.ps1
+.\scripts\summarize-metrics.ps1
 ```
 
-Para una primera instalación completa, seguir [FIRST-RUN-CHECKLIST.md](./FIRST-RUN-CHECKLIST.md).
+## 12. Si la task necesita modificar código
 
-Para errores, consultar [TROUBLESHOOTING.md](./TROUBLESHOOTING.md).
+El runner compartido de agents es de análisis/read-only.
 
-Para parámetros y comandos disponibles, consultar [COMMAND-REFERENCE.md](./COMMAND-REFERENCE.md).
+Para una task con escritura explícitamente autorizada:
+
+```powershell
+.\scripts\new-agent-workspace.ps1 -Id AICO-123
+```
+
+Eso crea aislamiento. No autoriza automáticamente merge, push o deployment.
+
+## Siguiente lectura
+
+- [First Run Checklist](./FIRST-RUN-CHECKLIST.md) — demo controlado sin usar IDs fijos.
+- [User Guide](./USER-GUIDE.md) — manual completo.
+- [End-to-End Walkthrough](./END-TO-END-WALKTHROUGH.md) — modelo profundo del workflow.
+- [Troubleshooting](./TROUBLESHOOTING.md) — errores y recuperación.
