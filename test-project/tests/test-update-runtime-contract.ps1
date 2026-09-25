@@ -37,6 +37,12 @@ try {
         writable_models = @{
             OpenRouter = "custom/writable-model"
         }
+        analysis_context_max_chars_by_role = @{
+            pm = 65000
+        }
+        provider_timeout_seconds = @{
+            OpenRouter = 333
+        }
     } | ConvertTo-Json -Depth 10
 
     [System.IO.File]::WriteAllText(
@@ -100,14 +106,20 @@ try {
     if ([int]$config.analysis_context_max_chars -ne 120000) {
         throw "Runtime upgrade must add the bounded analysis context budget."
     }
-    if ([int]$config.analysis_context_max_chars_by_role.pm -ne 70000) {
-        throw "Runtime upgrade must add role-specific analysis context budgets."
+    if ([int]$config.analysis_context_max_chars_by_role.pm -ne 65000) {
+        throw "Runtime upgrade must preserve existing role-specific context overrides."
     }
-    if ([int]$config.provider_timeout_seconds.OpenRouter -ne 240) {
-        throw "Runtime upgrade must add cloud provider timeout configuration."
+    if ([int]$config.analysis_context_max_chars_by_role.cto -ne 110000) {
+        throw "Runtime upgrade must add missing role-specific analysis budgets."
+    }
+    if ([int]$config.provider_timeout_seconds.OpenRouter -ne 333) {
+        throw "Runtime upgrade must preserve existing provider timeout overrides."
+    }
+    if ([int]$config.provider_timeout_seconds.Gemini -ne 240) {
+        throw "Runtime upgrade must add missing cloud provider timeout defaults."
     }
     if ([int]$config.provider_timeout_seconds.Ollama -ne 1800) {
-        throw "Runtime upgrade must preserve a local-inference-safe Ollama timeout."
+        throw "Runtime upgrade must add the local-inference-safe Ollama timeout."
     }
 
     $manifest = Get-Content (Join-Path $tempRoot ".codex\managed-files.json") -Raw -Encoding UTF8 | ConvertFrom-Json
