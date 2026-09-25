@@ -23,6 +23,7 @@ class ControlledTask:
     title: str
     owner: str
     status: str
+    work_kind: str
 
 
 @dataclass
@@ -72,12 +73,20 @@ class AgentControlService:
                 str(task.status),
             )
 
+            content = task.source_path.read_text(
+                encoding="utf-8-sig",
+            )
+
             result.append(
                 ControlledTask(
                     id=task_id,
                     title=str(task.title),
                     owner=str(task.owner),
                     status=str(status),
+                    work_kind=self._read_field(
+                        content,
+                        "Work kind",
+                    ).upper(),
                 )
             )
 
@@ -243,10 +252,32 @@ class AgentControlService:
         root = Path(project_root).resolve()
         allowed = set(allowed_task_ids)
 
-        active = self._ids_with_status(
-            root,
-            "ACTIVE",
-        )
+        active_tasks = [
+            task
+            for task in self.get_tasks(root)
+            if task.status == "ACTIVE"
+        ]
+
+        implementation_active = [
+            task.id
+            for task in active_tasks
+            if task.work_kind == "IMPLEMENTATION"
+        ]
+
+        if implementation_active:
+            raise RuntimeError(
+                "Analysis execution refused because ACTIVE "
+                "IMPLEMENTATION tasks must use the writable "
+                "runner: "
+                + ", ".join(
+                    sorted(implementation_active)
+                )
+            )
+
+        active = {
+            task.id
+            for task in active_tasks
+        }
 
         unexpected = active - allowed
 
