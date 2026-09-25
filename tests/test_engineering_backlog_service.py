@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -157,3 +159,14 @@ Work request: WR-101
         "AICO-101"
     ]
     assert calls == []
+
+
+def test_engineering_backlog_service_streams_runtime_progress() -> None:
+    source = Path(
+        "src/company_os/application/engineering_backlog_service.py"
+    ).read_text(encoding="utf-8")
+
+    assert "run_streamed_process" in source
+    assert "ProgressCallback" in source
+    assert "__AICO_BACKLOG__|" in source
+    assert "build_environment_all" in source
