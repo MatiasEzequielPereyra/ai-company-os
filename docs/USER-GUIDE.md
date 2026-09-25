@@ -768,3 +768,5 @@ autorización
 - [End-to-End Walkthrough](./END-TO-END-WALKTHROUGH.md)
 - [Troubleshooting](./TROUBLESHOOTING.md)
 - [Command Reference](./COMMAND-REFERENCE.md)
+- [FAQ](./FAQ.md)
+- [Documentation Status](./DOCUMENTATION-STATUS.md)
