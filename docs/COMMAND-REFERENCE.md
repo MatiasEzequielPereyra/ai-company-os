@@ -131,14 +131,14 @@ Continuar uno existente:
 
 ```powershell
 .\scripts\orchestrate.ps1 `
-  -WorkRequestId WR-001
+  -WorkRequestId WR-XXX
 ```
 
 Aplicar readiness y dispatch:
 
 ```powershell
 .\scripts\orchestrate.ps1 `
-  -WorkRequestId WR-001 `
+  -WorkRequestId WR-XXX `
   -Apply
 ```
 
@@ -756,7 +756,7 @@ Para un usuario, la mayoría de las veces alcanza con conocer:
 .\scripts\list-tasks.ps1
 
 .\scripts\orchestrate.ps1 `
-  -WorkRequestId WR-001 `
+  -WorkRequestId WR-XXX `
   -Apply
 
 .\scripts\run-active-agents.ps1 -Provider Auto
