@@ -132,7 +132,8 @@ try {
         "update-task.ps1",
         "submit-task-result.ps1",
         "build-agent-context.ps1",
-        "resolve-writable-required-files.ps1"
+        "resolve-writable-required-files.ps1",
+        "task-execution-lock.ps1"
     )) {
         Copy-Item (Join-Path $repoRoot ("scripts\" + $name)) (Join-Path $fixtureRepo ("scripts\" + $name)) -Force
     }
