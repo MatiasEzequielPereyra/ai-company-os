@@ -7,6 +7,7 @@
 ```text
 Manual: v0.1
 Target documentado: main
+Verified runtime baseline: ed4820f8cbd8cf62a6b5d9494e0633b47b5fc9f3
 Estado: living documentation / review candidate
 ```
 
@@ -48,6 +49,7 @@ Estado: living documentation / review candidate
 | Smoke tests | Cubierto | User Guide + Troubleshooting |
 | E2E real code change | Cubierto | Walkthrough |
 | Command reference | Cubierto | COMMAND-REFERENCE.md |
+| Actualización del runtime instalado | Cubierto con cautela | Installer no es version-aware; requiere branch + diff |
 | FAQ | Cubierto | FAQ.md |
 | TUI visual | Pendiente | No estable en main |
 | Writable autonomous runtime | Parcial | Infraestructura documentada; automatización completa en evolución |
