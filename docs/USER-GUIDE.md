@@ -178,7 +178,7 @@ Una tarea `high-assurance` no puede satisfacer Security con `NOT_APPLICABLE`.
 ## 8. Estructura principal del repositorio
 
 ```text
-.ai-company-os/
+ai-company-os/
 ├── .codex/
 │   ├── agents/
 │   ├── policies/
