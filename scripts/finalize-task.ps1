@@ -21,6 +21,15 @@ $profile=Read-Field $content "Workflow profile"
 if([string]::IsNullOrWhiteSpace($profile)){$profile="standard"}
 if($status -ne "SECURITY"){throw "Task $Id must be SECURITY for final approval. Current status: $status"}
 
+$lockHelperPath = Join-Path $PSScriptRoot "task-execution-lock.ps1"
+if (-not (Test-Path $lockHelperPath -PathType Leaf)) {
+    throw "Task execution lock helper not found: $lockHelperPath"
+}
+. $lockHelperPath
+$taskExecutionLock = Enter-TaskExecutionLock -ProjectPath $root -Id $Id -Operation "FINALIZE"
+
+try {
+
 $qaPath=Join-Path $root ("docs\engineering\qa\"+$Id+"-qa.md")
 $securityPath=Join-Path $root ("docs\engineering\security\"+$Id+"-security.md")
 if(-not(Test-Path $qaPath)){throw "QA artifact missing for $Id"}
@@ -68,3 +77,7 @@ if($Decision -eq "APPROVE"){
 }
 
 Write-Host "Final approval recorded: $Decision" -ForegroundColor Green
+}
+finally {
+    Exit-TaskExecutionLock -Lock $taskExecutionLock
+}
