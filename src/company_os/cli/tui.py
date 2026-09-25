@@ -1509,4 +1509,4 @@ def run_tui() -> None:
     if project is None:
         project = Path.cwd()
 
-    AICompanyTUI(project).run()
+    AICompanyTUI(project).run(mouse=False)
