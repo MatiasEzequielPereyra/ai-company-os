@@ -13,6 +13,7 @@ try {
 
     foreach ($relative in @(
         "existing-source.txt",
+        ".codex\managed-files.json",
         ".codex\workflow-profiles.json",
         ".codex\policies\workflow-policy.md",
         ".codex\protocols\task-lifecycle.md",
@@ -23,6 +24,7 @@ try {
         "scripts\run-writable-agent.ps1",
         "scripts\resolve-writable-required-files.ps1",
         "scripts\update-runtime.ps1",
+        "scripts\task-execution-lock.ps1",
         "scripts\local-runtime\resolve-local-runtime.ps1",
         "scripts\local-runtime\detect-hardware.ps1",
         ".codex\local-runtime-config.json",
@@ -36,6 +38,24 @@ try {
         if (-not (Test-Path (Join-Path $tempRoot $relative))) {
             throw "Existing-project installation is missing required artifact: $relative"
         }
+    }
+
+    $manifest = Get-Content (Join-Path $tempRoot ".codex\managed-files.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+    $managed = @($manifest.managed_files)
+    foreach ($relative in @(
+        "scripts/build-agent-context.ps1",
+        "scripts/run-agent-task.ps1",
+        "scripts/task-execution-lock.ps1",
+        "scripts/local-runtime/resolve-local-runtime.ps1",
+        "schemas/agent-result.schema.json",
+        ".codex/agents/pm.md"
+    )) {
+        if ($managed -notcontains $relative) {
+            throw "Existing-project managed manifest missing: $relative"
+        }
+    }
+    if ($managed -contains "existing-source.txt") {
+        throw "Existing client files must never be claimed as AI Company OS-managed"
     }
 
     & (Join-Path $tempRoot "scripts\validate-artifacts.ps1") -ProjectPath $tempRoot | Out-Null
