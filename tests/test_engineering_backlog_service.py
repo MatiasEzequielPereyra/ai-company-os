@@ -93,7 +93,11 @@ Work request: WR-101
     service = EngineeringBacklogService()
     calls: list[tuple[str, list[str]]] = []
 
-    def fake_run(script: Path, arguments: list[str]) -> str:
+    def fake_run(
+        script: Path,
+        arguments: list[str],
+        progress=None,
+    ) -> str:
         calls.append(
             (
                 script.name,
