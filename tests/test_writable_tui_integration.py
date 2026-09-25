@@ -476,6 +476,8 @@ def test_plan_control_preserves_local_runtime_live_progress_and_p0_routing() -> 
     assert "_progress_from_worker" in source
     assert "_handle_progress_line" in source
     assert "__AICO_GATE__|" in source
+    assert "__AICO_BACKLOG__|" in source
+    assert 'self.progress.kind == "backlog"' in source
     assert "gate_states" in source
     assert "CHANGES_REQUIRED / QA FAIL / SECURITY FAIL" in source
 
