@@ -4,6 +4,8 @@
 > **Verificado contra:** rama `main`  
 > **Objetivo:** mostrar cómo un pedido del usuario se convierte en trabajo trazable y cómo una tarea real atraviesa los gates hasta `DONE`.
 
+Los IDs `WR-001` y `AICO-001` que aparecen en ejemplos pertenecen al escenario explicado o al fixture E2E. En un proyecto real se deben utilizar los IDs generados por ese proyecto.
+
 Este documento une dos comportamientos que hoy están validados por separado en el repositorio:
 
 1. **Orquestación:** objetivo → Work Request → plan → tasks → readiness → dispatch.
@@ -368,7 +370,7 @@ QA
 SECURITY
 ```
 
-Cada gate utiliza un agente independiente del owner original cuando corresponde.
+Los gates usan roles de verificación separados cuando el runtime lo permite. En la implementación actual, Review utiliza `engineering-manager`; por eso una task cuyo owner también sea `engineering-manager` no tiene independencia garantizada por identidad de rol.
 
 ---
 
