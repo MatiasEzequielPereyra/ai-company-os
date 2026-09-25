@@ -192,6 +192,7 @@ $ScriptFiles = @(
     "new-agent-workspace.ps1",
     "run-writable-agent.ps1",
     "resolve-writable-required-files.ps1",
+    "task-execution-lock.ps1",
     "update-runtime.ps1"
 )
 
