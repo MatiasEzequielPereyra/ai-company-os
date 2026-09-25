@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Context,
     [Parameter(Mandatory = $true)][string]$SchemaPath,
     [Parameter(Mandatory = $true)][string]$OutputPath,
-    [string]$Model = "deepseek-flash"
+    [string]$Model = "deepseek-flash",
+    [ValidateRange(1,3600)][int]$TimeoutSeconds = 240
 )
 
 $ErrorActionPreference = "Stop"
