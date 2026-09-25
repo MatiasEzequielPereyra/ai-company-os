@@ -100,3 +100,16 @@ docs/FAQ.md
 ```
 
 Después ejecutar nuevamente la revisión de consistencia documental.
+
+
+## Known runtime limitations discovered during documentation testing
+
+### Review independence for engineering-manager-owned tasks
+
+Current `run-gate-agent.ps1` assigns the `engineering-manager` role to the Review gate.
+
+Therefore, when the original task owner is also `engineering-manager`, independence is not guaranteed **by role identity**.
+
+The documentation does not treat this case as a fully independent review. The First Run demo intentionally uses PM and CTO tasks so the review role differs from the original owner.
+
+Resolving the runtime policy itself requires an explicit architecture/product decision about who should review Engineering Manager-owned work.
