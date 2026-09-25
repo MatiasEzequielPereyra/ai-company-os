@@ -11,6 +11,9 @@ import pytest
 from textual.app import App
 from textual.widgets import Input, Static
 
+from company_os.application.work_request_service import (
+    WorkRequestService,
+)
 from company_os.cli.screens.command_center import (
     CommandCenterScreen,
     CommandProposalScreen,
@@ -209,17 +212,129 @@ $ErrorActionPreference = "Stop"
 $name = [System.IO.Path]::GetFileName($SchemaPath)
 
 switch ($name) {
-    "writable-change-set.schema.json" {
+    "agent-result.schema.json" {
         $result = [ordered]@{
             outcome = "COMPLETED"
-            summary = "Applied full TUI objective E2E change."
-            report_markdown = "# Full TUI E2E\nApplied deterministic worktree change."
+            summary = "Completed deterministic analysis/planning task."
+            report_markdown = "# Deterministic analysis report`nCompleted the assigned planning or analysis work without modifying production files."
+            verification = "E2E deterministic analysis pass."
+            decisions = "NONE"
+            blockers = "NONE"
+            recommended_next = "REVIEW"
+        }
+    }
+
+    "engineering-backlog.schema.json" {
+        if ($Prompt -notmatch '(?m)^Source task:\s*(AICO-\d+)\s*$') {
+            throw "Engineering backlog stub could not resolve source task."
+        }
+        $sourceTaskId = $Matches[1]
+
+        if ($Prompt -notmatch '(?m)^Work request:\s*(\S+)\s*$') {
+            throw "Engineering backlog stub could not resolve work request."
+        }
+        $workRequestId = $Matches[1]
+
+        $result = [ordered]@{
+            source_task_id = $sourceTaskId
+            work_request_id = $workRequestId
+            summary = "Deterministic executable backlog for full TUI E2E."
+            implementation_authorization_key = "NONE"
+            items = @(
+                [ordered]@{
+                    key = "IMPLEMENT-SAMPLE"
+                    kind = "IMPLEMENTATION"
+                    title = "Implement sample.txt objective"
+                    owner = "frontend"
+                    priority = "P0"
+                    objective = "Modify sample.txt so it contains changed by full TUI E2E."
+                    context = "This is the only task authorized to modify sample.txt."
+                    acceptance_criteria = @(
+                        "sample.txt contains changed by full TUI E2E."
+                    )
+                    dependencies = @()
+                    affected_areas = @(
+                        "sample.txt"
+                    )
+                    testing_requirements = @(
+                        "git diff --check"
+                    )
+                    risks = @(
+                        "Keep the primary checkout unchanged."
+                    )
+                },
+                [ordered]@{
+                    key = "VALIDATE-SAMPLE"
+                    kind = "VALIDATION"
+                    title = "Validate sample implementation"
+                    owner = "qa"
+                    priority = "P0"
+                    objective = "Validate the completed sample.txt implementation."
+                    context = "Validation is analysis-only and follows implementation."
+                    acceptance_criteria = @(
+                        "Implementation evidence is reviewed."
+                    )
+                    dependencies = @(
+                        "IMPLEMENT-SAMPLE"
+                    )
+                    affected_areas = @(
+                        "sample.txt"
+                    )
+                    testing_requirements = @(
+                        "Review implementation evidence."
+                    )
+                    risks = @(
+                        "Do not modify production files."
+                    )
+                },
+                [ordered]@{
+                    key = "OPERATE-SAMPLE"
+                    kind = "OPERATIONS"
+                    title = "Record operational readiness"
+                    owner = "devops"
+                    priority = "P1"
+                    objective = "Record operational readiness after validation."
+                    context = "Operations is analysis-only for this fixture."
+                    acceptance_criteria = @(
+                        "Operational readiness is recorded."
+                    )
+                    dependencies = @(
+                        "VALIDATE-SAMPLE"
+                    )
+                    affected_areas = @(
+                        "sample.txt"
+                    )
+                    testing_requirements = @(
+                        "Review validation evidence."
+                    )
+                    risks = @(
+                        "Do not modify production files."
+                    )
+                }
+            )
+        }
+    }
+
+    "writable-change-set.schema.json" {
+        if ($Prompt -notmatch '(?m)^Task:\s*(AICO-\d+)\s*$') {
+            throw "Writable stub could not resolve task id."
+        }
+        $writableTaskId = $Matches[1]
+
+        if ($Prompt -notmatch '(?m)^Work kind:\s*IMPLEMENTATION\s*$') {
+            throw "P0 regression: writable-change-set requested for non-IMPLEMENTATION task $writableTaskId"
+        }
+
+        $result = [ordered]@{
+            outcome = "COMPLETED"
+            summary = "Applied full TUI objective E2E change from $writableTaskId."
+            report_markdown = "# Full TUI E2E`nApplied deterministic implementation worktree change."
             changes = @(
                 [ordered]@{
                     path = "sample.txt"
                     operation = "WRITE"
                     content = "changed by full TUI E2E" + [Environment]::NewLine
-                    reason = "Exercise full Objective-to-DONE TUI orchestration."
+                    reason = "Exercise downstream IMPLEMENTATION writable execution."
                 }
             )
             verification_commands = @(
@@ -489,9 +604,22 @@ def test_objective_to_done_is_operated_from_tui(
                 attempts=1200,
             )
 
-            task_ids = control._task_ids()
+            initial_task_ids = list(
+                control.preparation_result
+                .created_task_ids
+            )
 
-            assert task_ids
+            assert initial_task_ids
+            assert control._task_ids() == sorted(
+                initial_task_ids
+            )
+
+            work_request_ids = (
+                control._work_request_ids()
+            )
+
+            assert len(work_request_ids) == 1
+            work_request_id = work_request_ids[0]
 
             requests = (
                 root
@@ -504,10 +632,10 @@ def test_objective_to_done_is_operated_from_tui(
                 requests.glob("WR-*.md")
             )
 
-            for _wave in range(12):
+            for _wave in range(20):
                 statuses = read_statuses(
                     root,
-                    task_ids,
+                    initial_task_ids,
                 )
 
                 if all(
@@ -531,65 +659,294 @@ def test_objective_to_done_is_operated_from_tui(
                         control,
                     )
 
+                current_tasks = {
+                    task.id: task
+                    for task in control._tasks()
+                    if task.id in initial_task_ids
+                }
+
+                if any(
+                    task.status == "ACTIVE"
+                    for task in current_tasks.values()
+                ):
+                    assert all(
+                        task.work_kind != "IMPLEMENTATION"
+                        for task in current_tasks.values()
+                        if task.status == "ACTIVE"
+                    )
+
+                    await pilot.press("r")
+                    await wait_idle(
+                        pilot,
+                        control,
+                        attempts=1600,
+                    )
+
+                statuses = read_statuses(
+                    root,
+                    initial_task_ids,
+                )
+
+                if any(
+                    value in {
+                        "REVIEW",
+                        "QA",
+                        "SECURITY",
+                    }
+                    for value in statuses.values()
+                ):
+                    await pilot.press("g")
+                    await wait_idle(
+                        pilot,
+                        control,
+                        attempts=1600,
+                    )
+
+                finalizable = (
+                    control.gates
+                    .finalizable_task_ids(
+                        root,
+                        initial_task_ids,
+                    )
+                )
+
+                if finalizable:
+                    await pilot.press("f")
+                    await wait_idle(
+                        pilot,
+                        control,
+                        attempts=1200,
+                    )
+
+            initial_statuses = read_statuses(
+                root,
+                initial_task_ids,
+            )
+
+            assert set(
+                initial_statuses.values()
+            ) == {"DONE"}
+
+            request_service = WorkRequestService()
+
+            summary = next(
+                item
+                for item in (
+                    request_service
+                    .list_work_requests(root)
+                )
+                if item.id == work_request_id
+            )
+
+            assert (
+                summary.display_status
+                == "ENGINEERING_PENDING"
+            )
+
+            initial_tasks = {
+                task.id: task
+                for task in control._tasks()
+                if task.id in initial_task_ids
+            }
+
+            engineering_manager_ids = [
+                task.id
+                for task in initial_tasks.values()
+                if task.owner == "engineering-manager"
+            ]
+
+            assert len(engineering_manager_ids) == 1
+            engineering_manager_id = (
+                engineering_manager_ids[0]
+            )
+
+            assert (
+                root
+                / "docs"
+                / "engineering"
+                / "agent-reports"
+                / f"{engineering_manager_id}.md"
+            ).exists()
+
+            assert (
+                root
+                / "sample.txt"
+            ).read_text(
+                encoding="utf-8"
+            ) == "original\n"
+
+            pending = (
+                control.engineering_backlog
+                .pending_sources(
+                    root,
+                    work_request_ids,
+                )
+            )
+
+            assert [
+                source.task_id
+                for source in pending
+            ] == [engineering_manager_id]
+
+            await pilot.press("b")
+            await wait_idle(
+                pilot,
+                control,
+                attempts=1600,
+            )
+
+            dynamic_task_ids = control._task_ids()
+            downstream_ids = sorted(
+                set(dynamic_task_ids)
+                - set(initial_task_ids)
+            )
+
+            assert downstream_ids
+
+            downstream_tasks = {
+                task.id: task
+                for task in control._tasks()
+                if task.id in downstream_ids
+            }
+
+            implementation_ids = [
+                task.id
+                for task in downstream_tasks.values()
+                if task.work_kind == "IMPLEMENTATION"
+            ]
+
+            assert len(implementation_ids) == 1
+
+            for _wave in range(30):
+                task_ids = control._task_ids()
                 statuses = read_statuses(
                     root,
                     task_ids,
                 )
 
-                assert any(
-                    value == "ACTIVE"
+                summary = next(
+                    item
+                    for item in (
+                        request_service
+                        .list_work_requests(root)
+                    )
+                    if item.id == work_request_id
+                )
+
+                if (
+                    summary.display_status == "DONE"
+                    and all(
+                        value == "DONE"
+                        for value in statuses.values()
+                    )
+                ):
+                    break
+
+                assert "BLOCKED" not in statuses.values()
+
+                if any(
+                    value in {
+                        "BACKLOG",
+                        "READY",
+                    }
                     for value in statuses.values()
-                )
+                ):
+                    await pilot.press("a")
+                    await wait_idle(
+                        pilot,
+                        control,
+                    )
 
-                await pilot.press("w")
-                await wait_idle(
-                    pilot,
-                    control,
-                    attempts=1600,
-                )
+                tasks = control._tasks()
 
+                if any(
+                    (
+                        task.status == "ACTIVE"
+                        and task.work_kind == "IMPLEMENTATION"
+                    )
+                    for task in tasks
+                ):
+                    await pilot.press("w")
+                    await wait_idle(
+                        pilot,
+                        control,
+                        attempts=1600,
+                    )
+
+                tasks = control._tasks()
+
+                if any(
+                    (
+                        task.status == "ACTIVE"
+                        and task.work_kind != "IMPLEMENTATION"
+                    )
+                    for task in tasks
+                ):
+                    await pilot.press("r")
+                    await wait_idle(
+                        pilot,
+                        control,
+                        attempts=1600,
+                    )
+
+                task_ids = control._task_ids()
                 statuses = read_statuses(
                     root,
                     task_ids,
                 )
 
-                assert any(
-                    value == "REVIEW"
+                if any(
+                    value in {
+                        "REVIEW",
+                        "QA",
+                        "SECURITY",
+                    }
                     for value in statuses.values()
-                ), control.last_error_text
+                ):
+                    await pilot.press("g")
+                    await wait_idle(
+                        pilot,
+                        control,
+                        attempts=1600,
+                    )
 
-                await pilot.press("g")
-                await wait_idle(
-                    pilot,
-                    control,
-                    attempts=1600,
+                task_ids = control._task_ids()
+                finalizable = (
+                    control.gates
+                    .finalizable_task_ids(
+                        root,
+                        task_ids,
+                    )
                 )
 
-                statuses = read_statuses(
-                    root,
-                    task_ids,
-                )
+                if finalizable:
+                    await pilot.press("f")
+                    await wait_idle(
+                        pilot,
+                        control,
+                        attempts=1200,
+                    )
 
-                assert any(
-                    value == "SECURITY"
-                    for value in statuses.values()
-                )
-
-                await pilot.press("f")
-                await wait_idle(
-                    pilot,
-                    control,
-                    attempts=1200,
-                )
-
+            final_task_ids = control._task_ids()
             final_statuses = read_statuses(
                 root,
-                task_ids,
+                final_task_ids,
             )
 
             assert set(
                 final_statuses.values()
             ) == {"DONE"}
+
+            final_summary = next(
+                item
+                for item in (
+                    request_service
+                    .list_work_requests(root)
+                )
+                if item.id == work_request_id
+            )
+
+            assert final_summary.display_status == "DONE"
 
             worktree_root = (
                 root.parent
@@ -598,7 +955,7 @@ def test_objective_to_done_is_operated_from_tui(
 
             changed_worktrees = []
 
-            for task_id in task_ids:
+            for task_id in final_task_ids:
                 workspace = (
                     worktree_root
                     / task_id
@@ -620,7 +977,28 @@ def test_objective_to_done_is_operated_from_tui(
                         task_id
                     )
 
-            assert changed_worktrees
+            assert changed_worktrees == implementation_ids
+
+            implementation_task_id = (
+                changed_worktrees[0]
+            )
+
+            implementation_markdown = (
+                root
+                / "tasks"
+                / f"{implementation_task_id}.md"
+            ).read_text(
+                encoding="utf-8-sig"
+            )
+
+            assert (
+                "Work kind: IMPLEMENTATION"
+                in implementation_markdown
+            )
+            assert (
+                f"Source plan: {engineering_manager_id}"
+                in implementation_markdown
+            )
 
             assert (
                 root
@@ -636,7 +1014,7 @@ def test_objective_to_done_is_operated_from_tui(
                 / "final-approvals"
             )
 
-            for task_id in task_ids:
+            for task_id in final_task_ids:
                 assert (
                     approvals
                     / f"{task_id}-final.md"
