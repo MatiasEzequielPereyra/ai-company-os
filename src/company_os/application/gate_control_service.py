@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import shutil
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 from company_os.application.agent_control_service import (
     AgentControlService,
+)
+from company_os.application.process_stream import (
+    ProgressCallback,
+    run_streamed_process,
+)
+from company_os.application.provider_service import (
+    ProviderService,
 )
 
 
@@ -32,12 +38,18 @@ class GateControlService:
         allowed_task_ids: list[str],
         provider: str = "Auto",
         model: str = "",
+        progress: ProgressCallback | None = None,
     ) -> GateBatchResult:
         root = Path(project_root).resolve()
         allowed = set(allowed_task_ids)
 
         processed: list[str] = []
         output: list[str] = []
+
+        if progress is not None:
+            progress(
+                f"Provider requested: {provider}"
+            )
 
         for task_id in sorted(allowed):
             touched = False
@@ -90,6 +102,12 @@ class GateControlService:
                         ]
                     )
 
+                if progress is not None:
+                    progress(
+                        "__AICO_GATE__|"
+                        f"{task_id}|{gate.upper()}|START"
+                    )
+
                 output.append(
                     self._run_script(
                         root
@@ -97,8 +115,15 @@ class GateControlService:
                         / "run-gate-agent.ps1",
                         args,
                         timeout=1800,
+                        progress=progress,
                     )
                 )
+
+                if progress is not None:
+                    progress(
+                        "__AICO_GATE__|"
+                        f"{task_id}|{gate.upper()}|DONE"
+                    )
 
                 touched = True
 
@@ -314,13 +339,19 @@ class GateControlService:
         script: Path,
         arguments: list[str],
         timeout: int,
+        progress: ProgressCallback | None = None,
     ) -> str:
         if not script.exists():
             raise FileNotFoundError(
                 f"Required script not found: {script}"
             )
 
-        process = subprocess.run(
+        providers = ProviderService()
+        environment = (
+            providers.build_environment_all()
+        )
+
+        process = run_streamed_process(
             [
                 self._powershell(),
                 "-NoProfile",
@@ -330,19 +361,12 @@ class GateControlService:
                 str(script),
                 *arguments,
             ],
-            capture_output=True,
-            text=True,
             timeout=timeout,
+            env=environment,
+            on_line=progress,
         )
 
-        output = (
-            (process.stdout or "")
-            + (
-                "\n" + process.stderr
-                if process.stderr
-                else ""
-            )
-        ).strip()
+        output = process.output
 
         if process.returncode != 0:
             raise RuntimeError(
