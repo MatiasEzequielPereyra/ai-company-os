@@ -154,23 +154,23 @@ function Assert-WritableRejected {
         if ($_.Exception.Message -match "writable execution requires Work kind IMPLEMENTATION") { $rejected = $true } else { throw }
     }
 
-    if (-not $rejected) { throw "$Id: unauthorized writable execution was not rejected." }
+    if (-not $rejected) { throw "${Id}: unauthorized writable execution was not rejected." }
 
     $afterBytes = [System.IO.File]::ReadAllBytes($taskPath)
     if (-not [System.Linq.Enumerable]::SequenceEqual([byte[]]$beforeBytes,[byte[]]$afterBytes)) {
-        throw "$Id: rejection modified the canonical task file."
+        throw "${Id}: rejection modified the canonical task file."
     }
 
     $afterStatus = Get-TaskStatus -Id $Id
-    if ($afterStatus -ne $beforeStatus) { throw "$Id: rejection changed task status from $beforeStatus to $afterStatus." }
+    if ($afterStatus -ne $beforeStatus) { throw "${Id}: rejection changed task status from $beforeStatus to $afterStatus." }
 
-    if (Test-Path $providerMarker) { throw "$Id: provider was invoked before writable authorization was validated." }
+    if (Test-Path $providerMarker) { throw "${Id}: provider was invoked before writable authorization was validated." }
 
     $evidencePath = Join-Path $fixtureRepo ("docs\engineering\writable-evidence\" + $Id + ".md")
-    if (Test-Path $evidencePath) { throw "$Id: rejection created writable evidence." }
+    if (Test-Path $evidencePath) { throw "${Id}: rejection created writable evidence." }
 
     $workspaceStatus = @(& git -C $Workspace status --porcelain)
-    if (@($workspaceStatus).Count -gt 0) { throw "$Id: rejection modified the writable worktree." }
+    if (@($workspaceStatus).Count -gt 0) { throw "${Id}: rejection modified the writable worktree." }
 }
 
 try {
