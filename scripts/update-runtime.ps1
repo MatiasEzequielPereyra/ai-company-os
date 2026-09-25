@@ -168,6 +168,9 @@ if (Test-Path $providerSourcePath -PathType Leaf) {
 
     Ensure-Property -Object $targetConfig -Name "allow_paid_fallback" -Value $false
     Ensure-Property -Object $targetConfig -Name "context_max_chars" -Value $sourceConfig.context_max_chars
+    Ensure-Property -Object $targetConfig -Name "analysis_context_max_chars" -Value $sourceConfig.analysis_context_max_chars
+    Ensure-Property -Object $targetConfig -Name "analysis_context_max_chars_by_role" -Value $sourceConfig.analysis_context_max_chars_by_role
+    Ensure-Property -Object $targetConfig -Name "provider_timeout_seconds" -Value $sourceConfig.provider_timeout_seconds
     Ensure-Property -Object $targetConfig -Name "gate_context_max_chars" -Value $sourceConfig.gate_context_max_chars
     Ensure-Property -Object $targetConfig -Name "ollama_context_max_chars" -Value $sourceConfig.ollama_context_max_chars
     Ensure-Property -Object $targetConfig -Name "ollama_gate_context_max_chars" -Value $sourceConfig.ollama_gate_context_max_chars
@@ -241,6 +244,69 @@ if (Test-Path $writableSourcePath -PathType Leaf) {
     Write-Utf8NoBom -Path $writableTargetPath -Value ($targetPolicy | ConvertTo-Json -Depth 30)
     Write-Host "MERGED: .codex\writable-policy.json" -ForegroundColor Green
 }
+
+$managedManifestPath = Join-Path $targetRoot ".codex\managed-files.json"
+$managedSet = @{}
+
+if (Test-Path $managedManifestPath -PathType Leaf) {
+    try {
+        $existingManaged = Get-Content $managedManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        foreach ($relative in @($existingManaged.managed_files)) {
+            $value = ([string]$relative).Trim().Replace("\","/")
+            if (-not [string]::IsNullOrWhiteSpace($value)) {
+                $managedSet[$value] = $true
+            }
+        }
+    }
+    catch {
+        throw "Invalid managed-files manifest: $managedManifestPath"
+    }
+}
+
+foreach ($name in $scriptNames) {
+    $pathToCheck = Join-Path $targetRoot ("scripts\" + $name)
+    if (Test-Path $pathToCheck -PathType Leaf) {
+        $managedSet[("scripts/" + $name)] = $true
+    }
+}
+
+foreach ($folder in @("providers","local-runtime")) {
+    $targetDir = Join-Path $targetRoot ("scripts\" + $folder)
+    if (Test-Path $targetDir -PathType Container) {
+        Get-ChildItem $targetDir -File | ForEach-Object {
+            $managedSet[("scripts/" + $folder + "/" + $_.Name)] = $true
+        }
+    }
+}
+
+$schemasTarget = Join-Path $targetRoot "schemas"
+if (Test-Path $schemasTarget -PathType Container) {
+    Get-ChildItem $schemasTarget -Filter "*.schema.json" -File | ForEach-Object {
+        $managedSet[("schemas/" + $_.Name)] = $true
+    }
+}
+
+foreach ($relative in @(
+    ".codex/provider-config.json",
+    ".codex/local-runtime-config.json",
+    ".codex/writable-policy.json",
+    ".codex/managed-files.json"
+)) {
+    if (
+        $relative -eq ".codex/managed-files.json" -or
+        (Test-Path (Join-Path $targetRoot ($relative.Replace("/","\"))) -PathType Leaf)
+    ) {
+        $managedSet[$relative] = $true
+    }
+}
+
+$managedPayload = [ordered]@{
+    version = 1
+    managed_files = @($managedSet.Keys | Sort-Object)
+} | ConvertTo-Json -Depth 10
+
+Write-Utf8NoBom -Path $managedManifestPath -Value $managedPayload
+Write-Host "UPDATED: .codex\managed-files.json" -ForegroundColor Green
 
 Write-Host ""
 Write-Host "AI Company OS runtime upgraded." -ForegroundColor Green
