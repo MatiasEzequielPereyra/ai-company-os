@@ -434,6 +434,15 @@ if ([string]::IsNullOrWhiteSpace($owner)) {
     throw "Task $Id has no owner."
 }
 
+$lockHelperPath = Join-Path $PSScriptRoot "task-execution-lock.ps1"
+if (-not (Test-Path $lockHelperPath -PathType Leaf)) {
+    throw "Task execution lock helper not found: $lockHelperPath"
+}
+. $lockHelperPath
+$taskExecutionLock = Enter-TaskExecutionLock -ProjectPath $root -Id $Id -Operation "WRITABLE"
+
+try {
+
 if ([string]::IsNullOrWhiteSpace($WorkspacePath)) {
     $workspaceRoot = Join-Path (Split-Path -Parent $root) ((Split-Path $root -Leaf) + "-worktrees")
     $WorkspacePath = Join-Path $workspaceRoot $Id
@@ -962,4 +971,8 @@ try {
 catch {
     Restore-PlannedFiles -Backups $backups
     throw
+}
+}
+finally {
+    Exit-TaskExecutionLock -Lock $taskExecutionLock
 }
