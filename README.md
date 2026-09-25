@@ -4,6 +4,16 @@ AI Company OS is a **PowerShell-first engineering workflow framework for coordin
 
 It is not an autonomous software company and it is not a replacement for Git, CI, code review, or human authorization. Its purpose is to make AI-assisted engineering work **durable, inspectable, repeatable, and gated** instead of leaving important decisions and execution state inside chat history.
 
+## Start here
+
+If this is your first time using the project:
+
+1. Read [Quick Start](docs/QUICKSTART.md).
+2. Run the disposable [First Run Checklist](docs/FIRST-RUN-CHECKLIST.md).
+3. Use the [User Guide](docs/USER-GUIDE.md) when moving to a real repository.
+
+The current user manual is written in Spanish; command names, role IDs, statuses, and machine contracts keep their canonical English identifiers.
+
 ## What problem it solves
 
 AI coding agents are useful at implementation and analysis, but multi-step work becomes unreliable when:
