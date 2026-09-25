@@ -200,10 +200,8 @@ catch {
         try { [void]$process.WaitForExit(5000) } catch {}
     }
 
-    if ($_.Exception.Message -match "(?i)timed out|timeout|failed|could not be started|did not produce|unavailable") {
-        if (Test-Path $OutputPath -and $_.Exception.Message -notmatch "did not produce") {
-            Remove-Item $OutputPath -Force -ErrorAction SilentlyContinue
-        }
+    if (Test-Path $OutputPath) {
+        Remove-Item $OutputPath -Force -ErrorAction SilentlyContinue
     }
 
     throw
