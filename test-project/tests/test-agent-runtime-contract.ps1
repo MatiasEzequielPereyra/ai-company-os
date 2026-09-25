@@ -84,6 +84,30 @@ if ([int]$config.writable_context_max_chars -gt 160000 -or [int]$config.writable
 if ([int]$config.context_max_chars -lt 300000) { throw "External provider context budget must be at least 300000 characters" }
 if ([int]$config.gate_context_max_chars -lt 100000) { throw "Gate context budget must be explicitly configured" }
 
+if ($null -eq $config.analysis_context_max_chars) { throw "Analysis context budget must be explicitly configured" }
+if ([int]$config.analysis_context_max_chars -gt 160000 -or [int]$config.analysis_context_max_chars -lt 60000) {
+    throw "Analysis context budget must remain bounded and useful"
+}
+if ($null -eq $config.analysis_context_max_chars_by_role) {
+    throw "Analysis context must support role-specific budgets"
+}
+$pmBudget = [int]$config.analysis_context_max_chars_by_role.pm
+if ($pmBudget -lt 20000 -or $pmBudget -gt 100000) {
+    throw "PM analysis context budget must be substantially below the historical 320000-character budget"
+}
+if ($null -eq $config.provider_timeout_seconds) { throw "Provider timeout configuration must be explicit" }
+foreach ($providerName in @("Codex","OpenRouter","Gemini")) {
+    $timeoutProperty = $config.provider_timeout_seconds.PSObject.Properties[$providerName]
+    if ($null -eq $timeoutProperty) { throw "Provider timeout missing for $providerName" }
+    $timeoutSeconds = [int]$timeoutProperty.Value
+    if ($timeoutSeconds -lt 1 -or $timeoutSeconds -gt 600) {
+        throw "Cloud provider timeout must be bounded for $providerName. Actual: $timeoutSeconds"
+    }
+}
+if ([int]$config.provider_timeout_seconds.Ollama -lt 600 -or [int]$config.provider_timeout_seconds.Ollama -gt 3600) {
+    throw "Ollama timeout must allow slower local inference"
+}
+
 $pmInstructions = Get-Content (Join-Path $repoRoot ".codex\agents\pm.md") -Raw
 if ($pmInstructions -notmatch 'Existing Project Context Fallback') {
     throw "PM instructions must support existing-project intake baselines"
@@ -112,6 +136,15 @@ if ($runner -notmatch 'COMPLETED means you completed the assigned audit') {
 }
 if ($runner -notmatch 'BLOCKED means you could not complete the assigned agent task itself') {
     throw "Agent runner must reserve BLOCKED for execution blockers"
+}
+if ($runner -notmatch 'analysis_context_max_chars_by_role') {
+    throw "Agent runner must honor role-specific analysis context budgets"
+}
+if ($runner -notmatch 'analysis_context_max_chars') {
+    throw "Agent runner must honor the global analysis context budget"
+}
+if ($runner -notmatch 'structured result concise|Keep the structured result concise') {
+    throw "Agent runner must instruct schema-critical analysis results to stay concise"
 }
 $writableRunner = Get-Content (Join-Path $repoRoot "scripts\run-writable-agent.ps1") -Raw
 if ($writableRunner -notmatch 'ValidateSet\("Auto","OpenRouter","Gemini","Ollama","DeepSeek","Grok"\)') {
@@ -237,6 +270,15 @@ if ($openRouter -notmatch 'StatusCode -eq 429') {
 if ($openRouter -notmatch 'StatusCode -ge 500') {
     throw "OpenRouter adapter must retry server errors"
 }
+if ($openRouter -notmatch 'finish_reason') {
+    throw "OpenRouter adapter must inspect completion finish_reason"
+}
+if ($openRouter -notmatch 'length') {
+    throw "OpenRouter adapter must explicitly reject length-truncated structured completions"
+}
+if ($openRouter -notmatch 'TimeoutSeconds') {
+    throw "OpenRouter adapter must honor configured HTTP timeout bounds"
+}
 
 $gemini = Get-Content (Join-Path $repoRoot "scripts\providers\invoke-gemini.ps1") -Raw
 if ($gemini -notmatch 'generativelanguage\.googleapis\.com') {
@@ -247,6 +289,9 @@ if ($gemini -notmatch 'GEMINI_API_KEY') {
 }
 if ($gemini -notmatch 'responseJsonSchema') {
     throw "Gemini adapter must request structured JSON output"
+}
+if ($gemini -notmatch 'TimeoutSeconds') {
+    throw "Gemini adapter must honor configured HTTP timeout bounds"
 }
 
 $ollama = Get-Content (Join-Path $repoRoot "scripts\providers\invoke-ollama.ps1") -Raw
@@ -264,6 +309,14 @@ $router = Get-Content (Join-Path $repoRoot "scripts\provider-router.ps1") -Raw
 if ($router -notmatch 'resolve-local-runtime\.ps1') { throw "Provider router must use the local runtime resolver" }
 if ($router -notmatch 'allow_paid_fallback') { throw "Provider router must guard paid fallback" }
 if ($router -notmatch 'localRuntimeConfigPath') { throw "Provider router must require local config before Ollama pre-resolution" }
+foreach ($eventName in @("provider_attempt_started","provider_attempt_finished","provider_timeout")) {
+    if ($router -notmatch [regex]::Escape($eventName)) {
+        throw "Provider router must expose lifecycle event: $eventName"
+    }
+}
+if ($router -notmatch 'Get-ConfiguredTimeoutSeconds') {
+    throw "Provider router must resolve bounded provider timeouts from configuration"
+}
 
 foreach ($runnerName in @("run-agent-task.ps1","run-gate-agent.ps1","run-writable-agent.ps1")) {
     $runnerText = Get-Content (Join-Path $repoRoot ("scripts\" + $runnerName)) -Raw
@@ -289,6 +342,8 @@ if ($contextBuilder -notmatch '\.env') { throw "Context builder must explicitly 
 if (-not $contextBuilder.Contains("private[-_]?key")) { throw "Context builder must exclude private-key files" }
 if ($contextBuilder -notmatch 'RequiredFiles') { throw "Context builder must support prioritized required files" }
 if ($contextBuilder -notmatch 'RequireComplete') { throw "Required context files must not be silently truncated" }
+if ($contextBuilder -notmatch 'managed-files\.json') { throw "Context builder must load the managed runtime manifest" }
+if ($contextBuilder -notmatch 'managed_files') { throw "Context builder must exclude manifest-owned runtime paths from generic context" }
 
 $requiredResolver = Get-Content (Join-Path $repoRoot "scripts\resolve-writable-required-files.ps1") -Raw
 if ($requiredResolver -notmatch 'ambiguous') { throw "Required-file resolver must reject ambiguous basenames" }
