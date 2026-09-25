@@ -539,3 +539,14 @@ evidencia aprobada
 ```
 
 El sistema existe precisamente para hacer visibles esas diferencias.
+
+
+## ¿Review siempre usa un rol diferente al owner?
+
+No, no en la implementación actual.
+
+El Review gate utiliza `engineering-manager`. Para tasks cuyo owner es PM, CTO, Backend, Frontend, DevOps, QA o Security, eso produce separación de rol.
+
+Para una task cuyo owner original también es `engineering-manager`, esa independencia no está garantizada por identidad de rol.
+
+La documentación lo registra como limitación conocida en lugar de afirmar una independencia que el runtime actual no asegura.
