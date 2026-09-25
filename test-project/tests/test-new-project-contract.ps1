@@ -15,6 +15,7 @@ try {
     foreach ($relative in @(
         "AGENTS.md",
         ".codex\config.toml",
+        ".codex\managed-files.json",
         ".codex\workflow-profiles.json",
         ".codex\policies\workflow-policy.md",
         ".codex\protocols\task-lifecycle.md",
@@ -25,6 +26,7 @@ try {
         "scripts\run-writable-agent.ps1",
         "scripts\resolve-writable-required-files.ps1",
         "scripts\update-runtime.ps1",
+        "scripts\task-execution-lock.ps1",
         "scripts\local-runtime\resolve-local-runtime.ps1",
         "scripts\local-runtime\detect-hardware.ps1",
         ".codex\local-runtime-config.json",
@@ -37,6 +39,22 @@ try {
     )) {
         if (-not (Test-Path (Join-Path $projectPath $relative))) {
             throw "Generated project is missing required runtime artifact: $relative"
+        }
+    }
+
+    $manifest = Get-Content (Join-Path $projectPath ".codex\managed-files.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+    $managed = @($manifest.managed_files)
+    foreach ($relative in @(
+        "scripts/build-agent-context.ps1",
+        "scripts/run-agent-task.ps1",
+        "scripts/task-execution-lock.ps1",
+        "scripts/local-runtime/resolve-local-runtime.ps1",
+        "schemas/agent-result.schema.json",
+        ".codex/agents/pm.md",
+        "docs/PROJECT-BRIEF.md"
+    )) {
+        if ($managed -notcontains $relative) {
+            throw "Generated-project managed manifest missing: $relative"
         }
     }
 
