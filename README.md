@@ -134,6 +134,9 @@ For users who want to operate AI Company OS rather than inspect its internals:
 - [Quick Start](docs/QUICKSTART.md) — install the framework and prepare the first workflow.
 - [User Guide](docs/USER-GUIDE.md) — concepts, lifecycle, providers, quality gates, isolation, and troubleshooting-oriented operating guidance.
 - [End-to-End Walkthrough](docs/END-TO-END-WALKTHROUGH.md) — verified path from Work Request and planning to lifecycle gates and DONE.
+- [First Run Checklist](docs/FIRST-RUN-CHECKLIST.md) — controlled first execution for a fresh user.
+- [Troubleshooting](docs/TROUBLESHOOTING.md) — recovery by symptom and verified failure modes.
+- [Command Reference](docs/COMMAND-REFERENCE.md) — verified parameters for the main PowerShell commands.
 
 The user guide is living documentation. Experimental functionality is not presented as stable until it is integrated into the documented branch.
 
