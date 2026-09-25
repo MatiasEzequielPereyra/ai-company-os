@@ -137,6 +137,8 @@ For users who want to operate AI Company OS rather than inspect its internals:
 - [First Run Checklist](docs/FIRST-RUN-CHECKLIST.md) — controlled first execution for a fresh user.
 - [Troubleshooting](docs/TROUBLESHOOTING.md) — recovery by symptom and verified failure modes.
 - [Command Reference](docs/COMMAND-REFERENCE.md) — verified parameters for the main PowerShell commands.
+- [FAQ](docs/FAQ.md) — concise answers about concepts, autonomy, providers, gates, and authorization.
+- [Documentation Status](docs/DOCUMENTATION-STATUS.md) — coverage and known documentation gaps.
 
 The user guide is living documentation. Experimental functionality is not presented as stable until it is integrated into the documented branch.
 
