@@ -4,6 +4,7 @@ param(
     [string]$Workload = "general",
     [string]$ModelOverride = "",
     [string]$HardwareFixturePath = "",
+    [string]$HardwareSnapshotPath = "",
     [string]$BenchmarkPath = ""
 )
 
@@ -30,11 +31,27 @@ if (-not (Test-Path $detectorPath -PathType Leaf)) {
 
 $config = Get-Content $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
 
-$detectArgs = @{}
-if (-not [string]::IsNullOrWhiteSpace($HardwareFixturePath)) {
-    $detectArgs.FixturePath = $HardwareFixturePath
+$hardware = $null
+
+if (-not [string]::IsNullOrWhiteSpace($HardwareSnapshotPath)) {
+    if (-not (Test-Path $HardwareSnapshotPath -PathType Leaf)) {
+        throw "Hardware snapshot not found: $HardwareSnapshotPath"
+    }
+
+    try {
+        $hardware = Get-Content $HardwareSnapshotPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    }
+    catch {
+        throw "Invalid hardware snapshot: $HardwareSnapshotPath"
+    }
 }
-$hardware = & $detectorPath @detectArgs
+else {
+    $detectArgs = @{}
+    if (-not [string]::IsNullOrWhiteSpace($HardwareFixturePath)) {
+        $detectArgs.FixturePath = $HardwareFixturePath
+    }
+    $hardware = & $detectorPath @detectArgs
+}
 
 $profileName = [string]$hardware.profile
 $profile = Get-PropertyValue -Object $config.profiles -Name $profileName
