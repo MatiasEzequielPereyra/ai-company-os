@@ -36,8 +36,19 @@ class EngineeringBacklogService:
         root = Path(project_root).resolve()
         result: list[EngineeringBacklogSource] = []
 
+        feature_requests = {
+            request.id
+            for request in self.work_requests.list_work_requests(
+                root
+            )
+            if request.request_type.upper() == "FEATURE"
+        }
+
         for request_id in work_request_ids:
-            if not request_id:
+            if (
+                not request_id
+                or request_id not in feature_requests
+            ):
                 continue
 
             for task in self.work_requests.tasks_for_request(
