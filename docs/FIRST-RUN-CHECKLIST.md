@@ -48,6 +48,7 @@ if (Test-Path $DemoRoot) {
   -Destination $env:TEMP
 
 Set-Location $DemoRoot
+git init
 ```
 
 Este demo no necesita contener una aplicación real. Su objetivo es aprender el workflow.
@@ -117,12 +118,13 @@ CTO
 ## 7. Capturar el Work Request real
 
 ```powershell
-$WorkRequestId = (
-  Get-ChildItem .\docs\engineering\work-requests -Filter "WR-*.md" |
-  Sort-Object Name |
-  Select-Object -Last 1
-).BaseName
+$CurrentObjective = Get-Content .\.codex\state\current-objective.md -Raw
 
+if ($CurrentObjective -notmatch 'Work request:\s+docs/engineering/work-requests/(WR-\d+)\.md') {
+  throw "No pude resolver el Work Request actual."
+}
+
+$WorkRequestId = $Matches[1]
 $WorkRequestId
 ```
 
@@ -174,6 +176,10 @@ $PmTask = Get-ChildItem .\tasks -Filter "AICO-*.md" |
     $content -match "(?m)^Owner:\s*pm\s*$"
   } |
   Select-Object -First 1
+
+if ($null -eq $PmTask) {
+  throw "No se encontró la task PM para $WorkRequestId."
+}
 
 $PmTaskId = $PmTask.BaseName
 $PmTaskId
@@ -275,6 +281,10 @@ $CtoTask = Get-ChildItem .\tasks -Filter "AICO-*.md" |
     $content -match "(?m)^Owner:\s*cto\s*$"
   } |
   Select-Object -First 1
+
+if ($null -eq $CtoTask) {
+  throw "No se encontró la task CTO para $WorkRequestId."
+}
 
 $CtoTaskId = $CtoTask.BaseName
 
