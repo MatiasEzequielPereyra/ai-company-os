@@ -196,6 +196,17 @@ if ([long]$writablePolicy.required_context_max_total_bytes -lt 1) {
     throw "Writable policy must bound explicit required context total size"
 }
 
+$gateRunner = Get-Content (Join-Path $repoRoot "scripts\run-gate-agent.ps1") -Raw
+if ($gateRunner -notmatch 'Repository-relative path') {
+    throw "Gate runner must attach canonical repository-relative identity to explicit artifacts"
+}
+if ($gateRunner -notmatch 'Explicit gate artifacts are authoritative') {
+    throw "Gate prompt must treat explicit gate artifacts as authoritative supplied evidence"
+}
+if ($gateRunner -notmatch 'generic repository inventory') {
+    throw "Gate prompt must distinguish explicit artifact evidence from the generic inventory"
+}
+
 $gateBatch = Get-Content (Join-Path $repoRoot "scripts\run-pending-gates.ps1") -Raw
 if ($gateBatch -notmatch 'securityOutcome -in @\("PASS","NOT_APPLICABLE"\)') {
     throw "Pending gate runner must skip already satisfied security gates"

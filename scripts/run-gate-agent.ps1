@@ -26,6 +26,7 @@ function Read-Field {
 function Add-Artifact {
     param(
         [System.Text.StringBuilder]$Builder,
+        [string]$Root,
         [string]$Path,
         [string]$Label,
         [int]$MaxChars = 60000
@@ -33,7 +34,17 @@ function Add-Artifact {
 
     if (-not (Test-Path $Path -PathType Leaf)) { return }
 
-    $content = Get-Content $Path -Raw -Encoding UTF8
+    $rootFull = [System.IO.Path]::GetFullPath($Root).TrimEnd([char[]]@("\","/"))
+    $pathFull = [System.IO.Path]::GetFullPath((Resolve-Path $Path).Path)
+    $rootPrefix = $rootFull + [System.IO.Path]::DirectorySeparatorChar
+
+    if (-not $pathFull.StartsWith($rootPrefix,[System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Explicit gate artifact is outside the project root: $pathFull"
+    }
+
+    $relativePath = $pathFull.Substring($rootPrefix.Length).Replace("\","/")
+
+    $content = Get-Content $pathFull -Raw -Encoding UTF8
     if ($null -eq $content) { $content = "" }
     if ($content.Length -gt $MaxChars) {
         $content = $content.Substring(0,$MaxChars) + [Environment]::NewLine + "[TRUNCATED]"
@@ -42,6 +53,9 @@ function Add-Artifact {
     [void]$Builder.AppendLine("")
     [void]$Builder.AppendLine("")
     [void]$Builder.AppendLine("===== " + $Label + " =====")
+    [void]$Builder.AppendLine("Repository-relative path: " + $relativePath)
+    [void]$Builder.AppendLine("Evidence type: explicit gate artifact")
+    [void]$Builder.AppendLine("")
     [void]$Builder.AppendLine($content)
 }
 
@@ -156,13 +170,13 @@ $evidence = New-Object System.Text.StringBuilder
 [void]$evidence.Append($baseContext)
 
 $reportPath = Join-Path $root ("docs\engineering\agent-reports\" + $Id + ".md")
-Add-Artifact -Builder $evidence -Path $reportPath -Label "PRIMARY AGENT REPORT" -MaxChars $artifactMaxChars
+Add-Artifact -Builder $evidence -Root $root -Path $reportPath -Label "PRIMARY AGENT REPORT" -MaxChars $artifactMaxChars
 
 $latestResult = Get-ChildItem (Join-Path $root "docs\engineering\results") -Filter ($Id + "-result-*.md") -File -ErrorAction SilentlyContinue |
     Sort-Object Name -Descending |
     Select-Object -First 1
 if ($null -ne $latestResult) {
-    Add-Artifact -Builder $evidence -Path $latestResult.FullName -Label "LATEST TASK RESULT" -MaxChars $artifactMaxChars
+    Add-Artifact -Builder $evidence -Root $root -Path $latestResult.FullName -Label "LATEST TASK RESULT" -MaxChars $artifactMaxChars
 }
 
 if ($Gate -in @("QA","Security")) {
@@ -170,13 +184,13 @@ if ($Gate -in @("QA","Security")) {
         Sort-Object Name -Descending |
         Select-Object -First 1
     if ($null -ne $latestReview) {
-        Add-Artifact -Builder $evidence -Path $latestReview.FullName -Label "LATEST INDEPENDENT REVIEW" -MaxChars $artifactMaxChars
+        Add-Artifact -Builder $evidence -Root $root -Path $latestReview.FullName -Label "LATEST INDEPENDENT REVIEW" -MaxChars $artifactMaxChars
     }
 }
 
 if ($Gate -eq "Security") {
     $qaPath = Join-Path $root ("docs\engineering\qa\" + $Id + "-qa.md")
-    Add-Artifact -Builder $evidence -Path $qaPath -Label "QA GATE" -MaxChars $artifactMaxChars
+    Add-Artifact -Builder $evidence -Root $root -Path $qaPath -Label "QA GATE" -MaxChars $artifactMaxChars
 }
 
 $promptLines = @(
@@ -194,6 +208,10 @@ $promptLines = @(
     "Reject/fail only when the report or task delivery itself is materially incomplete, unsupported, contradictory, outside role authority, or fails the assigned acceptance criteria.",
     "Do not invent repository evidence.",
     "Use only the supplied context and artifacts.",
+    "Explicit gate artifacts are authoritative supplied evidence when they include a Repository-relative path.",
+    "An explicit gate artifact remains authoritative even when its path is intentionally excluded from the generic repository inventory.",
+    "Do not infer that an explicit gate artifact is missing merely because it is absent from the generic repository inventory.",
+    "Correlate result ChangedArtifacts references with the canonical Repository-relative path attached to explicit gate artifacts.",
     "",
     "For Review: APPROVE means the deliverable is fit to proceed to QA; CHANGES_REQUIRED means the deliverable itself needs corrective work.",
     "For QA: PASS means the deliverable satisfies its task-level acceptance and evidence requirements; FAIL means the deliverable itself does not.",
