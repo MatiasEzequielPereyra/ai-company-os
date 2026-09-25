@@ -723,3 +723,12 @@ Regla de mantenimiento:
 > Una feature no debe documentarse como estable hasta existir en la rama objetivo y tener comportamiento verificable.
 
 Las funciones experimentales deben permanecer marcadas como `🚧 En desarrollo` hasta su integración.
+
+
+## 30. Recorrido end-to-end verificado
+
+Para ver cómo un objetivo se convierte en Work Request, planning tasks, engineering backlog y una task atraviesa Review, QA, Security y aprobación final, consultar:
+
+[Recorrido End-to-End](./END-TO-END-WALKTHROUGH.md)
+
+El walkthrough separa explícitamente el comportamiento probado del comportamiento todavía en desarrollo.
