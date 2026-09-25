@@ -38,6 +38,9 @@ def test_plan_control_exposes_retry_and_canonical_gates() -> None:
     assert "Local Runtime / Auto" in source
     assert "_show_startup_error" in source
     assert "tui-startup-error.log" in source
+    assert "Live Progress" in source
+    assert "_progress_from_worker" in source
+    assert "_handle_progress_line" in source
 
 
 def test_task_result_service_surfaces_writable_evidence_and_retry() -> None:
