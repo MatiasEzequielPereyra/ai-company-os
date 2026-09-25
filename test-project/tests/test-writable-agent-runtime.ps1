@@ -33,6 +33,7 @@ function New-FixtureTask {
         "Priority: P1",
         "Owner: frontend",
         "Workflow phase: PLANNING",
+        "Work kind: IMPLEMENTATION",
         "Work request: WR-TEST",
         "",
         "---",
