@@ -15,6 +15,7 @@ def test_writable_adapter_accepts_ready_and_active() -> None:
 
     assert '"READY"' in source
     assert '"ACTIVE"' in source
+    assert "IMPLEMENTATION" in source
     assert "changed_paths" in source
     assert "evidence_path" in source
     assert "diff_stat" in source
@@ -46,6 +47,13 @@ def test_plan_control_exposes_retry_and_canonical_gates() -> None:
     assert "_handle_progress_line" in source
     assert "__AICO_GATE__|" in source
     assert "gate_states" in source
+    assert 'Binding("b", "engineering_backlog"' in source
+    assert "EngineeringBacklogService" in source
+    assert "WorkRequestService" in source
+    assert "work_kind" in source
+    assert "IMPLEMENTATION" in source
+    assert "_writable_task_ids" in source
+    assert "_analysis_task_ids" in source
 
 
 def test_task_result_service_surfaces_writable_evidence_and_retry() -> None:
