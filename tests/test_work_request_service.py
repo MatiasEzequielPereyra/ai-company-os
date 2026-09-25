@@ -222,3 +222,31 @@ Work kind: IMPLEMENTATION
 
     assert downstream.work_kind == "IMPLEMENTATION"
     assert downstream.source_plan == "AICO-030"
+
+
+def test_request_ids_for_task_ids_recovers_legacy_scope(
+    tmp_path,
+):
+    tasks = tmp_path / "tasks"
+    tasks.mkdir()
+
+    (
+        tasks
+        / "AICO-001.md"
+    ).write_text(
+        """# AICO-001
+
+ID: AICO-001
+Status: DONE
+Owner: engineering-manager
+Work request: WR-001
+""",
+        encoding="utf-8",
+    )
+
+    service = WorkRequestService()
+
+    assert service.request_ids_for_task_ids(
+        tmp_path,
+        ["AICO-001"],
+    ) == ["WR-001"]
