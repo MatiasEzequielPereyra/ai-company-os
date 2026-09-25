@@ -30,6 +30,8 @@ Desde el repositorio de AI Company OS:
 
 El target debería ser un repositorio Git si vas a usar aislamiento por worktrees.
 
+Prestá atención a mensajes `SKIP existing:`. El instalador preserva determinados archivos existentes, por ejemplo `AGENTS.md` y configuración del framework. No uses `-Force` automáticamente: primero decidí si corresponde conservar, fusionar o reemplazar esos archivos.
+
 Luego:
 
 ```powershell
@@ -104,11 +106,13 @@ No asumir que siempre será `WR-001`.
 ```powershell
 $CurrentObjective = Get-Content .\.codex\state\current-objective.md -Raw
 
-if ($CurrentObjective -notmatch 'Work request:\s+docs/engineering/work-requests/(WR-\d+)\.md') {
+if ($CurrentObjective -match 'Work request:\s+docs/engineering/work-requests/(WR-\d+)\.md') {
+  $WorkRequestId = $Matches[1]
+}
+else {
   throw "No pude resolver el Work Request actual."
 }
 
-$WorkRequestId = $Matches[1]
 $WorkRequestId
 ```
 
