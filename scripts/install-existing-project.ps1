@@ -11,8 +11,52 @@ function Write-Utf8NoBom {
     [System.IO.File]::WriteAllText($Path,$Value,(New-Object System.Text.UTF8Encoding($false)))
 }
 
+$script:managedFiles = @{}
+
+function Add-ManagedFile {
+    param([string]$RelativePath)
+
+    if ([string]::IsNullOrWhiteSpace($RelativePath)) { return }
+
+    $normalized = $RelativePath.Trim().Replace("\","/")
+    while ($normalized.StartsWith("./")) {
+        $normalized = $normalized.Substring(2)
+    }
+    $normalized = $normalized.TrimStart("/")
+
+    if (-not [string]::IsNullOrWhiteSpace($normalized)) {
+        $script:managedFiles[$normalized] = $true
+    }
+}
+
+function Write-ManagedManifest {
+    param([string]$TargetRoot)
+
+    Add-ManagedFile ".codex/managed-files.json"
+
+    $payload = [ordered]@{
+        version = 1
+        managed_files = @($script:managedFiles.Keys | Sort-Object)
+    } | ConvertTo-Json -Depth 10
+
+    Write-Utf8NoBom (Join-Path $TargetRoot ".codex\managed-files.json") $payload
+}
+
 $sourceRoot = Split-Path -Parent $PSScriptRoot
 $targetRoot = (Resolve-Path $TargetProject).Path
+
+$existingManifestPath = Join-Path $targetRoot ".codex\managed-files.json"
+if (Test-Path $existingManifestPath -PathType Leaf) {
+    try {
+        $existingManifest = Get-Content $existingManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        foreach ($relative in @($existingManifest.managed_files)) {
+            Add-ManagedFile ([string]$relative)
+        }
+    }
+    catch {
+        throw "Invalid existing AI Company OS managed-files manifest: $existingManifestPath"
+    }
+}
 
 if (-not (Test-Path (Join-Path $targetRoot ".git"))) {
     Write-Host "WARNING: target does not appear to be a Git repository." -ForegroundColor Yellow
@@ -38,7 +82,11 @@ foreach ($entry in $frameworkFiles) {
     $target = Join-Path $targetRoot $entry.Target
     if (-not (Test-Path $source)) { continue }
     if ((Test-Path $target) -and -not $Force) { Write-Host "SKIP existing: $($entry.Target)" -ForegroundColor DarkYellow }
-    else { Copy-Item $source $target -Force; Write-Host "INSTALLED: $($entry.Target)" -ForegroundColor Green }
+    else {
+        Copy-Item $source $target -Force
+        Add-ManagedFile $entry.Target
+        Write-Host "INSTALLED: $($entry.Target)" -ForegroundColor Green
+    }
 }
 
 foreach ($folder in @(".codex\agents",".codex\policies",".codex\protocols",".codex\workflows",".codex\templates")) {
@@ -48,7 +96,11 @@ foreach ($folder in @(".codex\agents",".codex\policies",".codex\protocols",".cod
         Get-ChildItem $sourceFolder -File | ForEach-Object {
             $target = Join-Path $targetFolder $_.Name
             if ((Test-Path $target) -and -not $Force) { Write-Host "SKIP existing: $folder\$($_.Name)" -ForegroundColor DarkYellow }
-            else { Copy-Item $_.FullName $target -Force; Write-Host "INSTALLED: $folder\$($_.Name)" -ForegroundColor Green }
+            else {
+                Copy-Item $_.FullName $target -Force
+                Add-ManagedFile ($folder + "\" + $_.Name)
+                Write-Host "INSTALLED: $folder\$($_.Name)" -ForegroundColor Green
+            }
         }
     }
 }
@@ -58,7 +110,13 @@ if (Test-Path $skillsSource) {
     Get-ChildItem $skillsSource -Directory | ForEach-Object {
         $destination = Join-Path $targetRoot (".agents\skills\" + $_.Name)
         if ((Test-Path $destination) -and -not $Force) { Write-Host "SKIP existing skill: $($_.Name)" -ForegroundColor DarkYellow }
-        else { Copy-Item $_.FullName $destination -Recurse -Force; Write-Host "INSTALLED skill: $($_.Name)" -ForegroundColor Green }
+        else {
+            Copy-Item $_.FullName $destination -Recurse -Force
+            Get-ChildItem $_.FullName -File -Recurse | ForEach-Object {
+                Add-ManagedFile $_.FullName.Substring($sourceRoot.Length + 1)
+            }
+            Write-Host "INSTALLED skill: $($_.Name)" -ForegroundColor Green
+        }
     }
 }
 
@@ -74,7 +132,11 @@ foreach ($name in $scriptNames) {
     $target = Join-Path $targetRoot ("scripts\" + $name)
     if (-not (Test-Path $source)) { continue }
     if ((Test-Path $target) -and -not $Force) { Write-Host "SKIP existing script: $name" -ForegroundColor DarkYellow }
-    else { Copy-Item $source $target -Force; Write-Host "INSTALLED script: $name" -ForegroundColor Green }
+    else {
+        Copy-Item $source $target -Force
+        Add-ManagedFile ("scripts\" + $name)
+        Write-Host "INSTALLED script: $name" -ForegroundColor Green
+    }
 }
 
 $providersSource = Join-Path $sourceRoot "scripts\providers"
@@ -87,6 +149,7 @@ if (Test-Path $providersSource) {
         }
         else {
             Copy-Item $_.FullName $target -Force
+            Add-ManagedFile ("scripts\providers\" + $_.Name)
             Write-Host "INSTALLED provider: $($_.Name)" -ForegroundColor Green
         }
     }
@@ -102,6 +165,7 @@ if (Test-Path $localRuntimeSource) {
         }
         else {
             Copy-Item $_.FullName $target -Force
+            Add-ManagedFile ("scripts\local-runtime\" + $_.Name)
             Write-Host "INSTALLED local runtime: $($_.Name)" -ForegroundColor Green
         }
     }
@@ -116,6 +180,7 @@ if (Test-Path $schemasSource) {
         }
         else {
             Copy-Item $_.FullName $schemaTarget -Force
+            Add-ManagedFile ("schemas\" + $_.Name)
             Write-Host "INSTALLED schema: $($_.Name)" -ForegroundColor Green
         }
     }
@@ -128,19 +193,31 @@ $stateFiles[".codex\state\company-state.md"] = "# Company State" + $nl + $nl + "
 $stateFiles[".codex\state\blockers.md"] = "# Blockers" + $nl + $nl + "-" + $nl
 foreach ($relative in $stateFiles.Keys) {
     $path = Join-Path $targetRoot $relative
-    if (-not (Test-Path $path)) { Write-Utf8NoBom $path $stateFiles[$relative]; Write-Host "CREATED: $relative" -ForegroundColor Green }
+    if (-not (Test-Path $path)) {
+        Write-Utf8NoBom $path $stateFiles[$relative]
+        Add-ManagedFile $relative
+        Write-Host "CREATED: $relative" -ForegroundColor Green
+    }
 }
 
 $tasksReadme = Join-Path $targetRoot "tasks\README.md"
 if (-not (Test-Path $tasksReadme)) {
     $sourceTasksReadme = Join-Path $sourceRoot "tasks\README.md"
-    if (Test-Path $sourceTasksReadme) { Copy-Item $sourceTasksReadme $tasksReadme -Force }
+    if (Test-Path $sourceTasksReadme) {
+        Copy-Item $sourceTasksReadme $tasksReadme -Force
+        Add-ManagedFile "tasks\README.md"
+    }
 }
 
 $syncScript = Join-Path $targetRoot "scripts\sync-company-state.ps1"
 if (Test-Path $syncScript) {
     & $syncScript -TasksPath (Join-Path $targetRoot "tasks") -SprintPath (Join-Path $targetRoot ".codex\state\current-sprint.md") | Out-Null
+    if (Test-Path (Join-Path $targetRoot ".codex\state\company-state.json")) {
+        Add-ManagedFile ".codex\state\company-state.json"
+    }
 }
+
+Write-ManagedManifest -TargetRoot $targetRoot
 
 Write-Host ""
 Write-Host "AI Company OS installed into existing project." -ForegroundColor Green
