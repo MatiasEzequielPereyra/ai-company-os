@@ -91,6 +91,21 @@ try {
         throw "PM should prefer the installed general model even on stronger hardware"
     }
 
+    $snapshotPath = Join-Path $tempRoot ".codex\runtime\local-capability.json"
+    [System.IO.File]::WriteAllText(
+        $snapshotPath,
+        ($highHardware | ConvertTo-Json -Depth 20),
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+
+    $snapshotBackend = & $resolvePath -ProjectPath $tempRoot -Role "backend" -Workload "analysis" -HardwareSnapshotPath $snapshotPath
+    if ([string]$snapshotBackend.Profile -ne "LOCAL_GPU_12GB") {
+        throw "Hardware snapshot must preserve the detected capability profile"
+    }
+    if ([string]$snapshotBackend.Model -ne "qwen2.5-coder:14b") {
+        throw "Hardware snapshot must preserve role-aware model selection"
+    }
+
     $env:AICO_OLLAMA_ALLOW_OVERSIZE = $null
     $unsafeOverride = & $resolvePath -ProjectPath $tempRoot -Role "backend" -ModelOverride "qwen2.5-coder:14b" -HardwareFixturePath $lowFixture
     if ([bool]$unsafeOverride.Available) {
