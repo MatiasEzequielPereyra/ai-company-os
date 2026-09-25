@@ -273,8 +273,15 @@ Después:
 
 ```powershell
 cd "C:\Proyectos\MiProyecto"
+
+# new-project.ps1 no inicializa Git.
+# Hacelo si el proyecto utilizará Git/worktrees.
+git init
+
 .\scripts\initialize-project.ps1
 ```
+
+`new-project.ps1` crea la estructura administrada por AI Company OS, pero actualmente no ejecuta `git init` por sí mismo.
 
 ## 11.1 Actualizar una instalación existente
 
