@@ -244,7 +244,7 @@ $payload = @{
     if ($null -eq $reviewArtifact) { throw "Review artifact was not generated." }
 
     $reviewContent = Get-Content $reviewArtifact.FullName -Raw -Encoding UTF8
-    if ($reviewContent -notmatch "(?m)^Recommendation:\s*APPROVE$") {
+    if ($reviewContent -notmatch "(?m)^Recommendation:\s*APPROVE\r?$") {
         throw "Review did not approve the verifiable explicit report artifact."
     }
 
