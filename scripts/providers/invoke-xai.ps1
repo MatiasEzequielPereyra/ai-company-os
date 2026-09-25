@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Context,
     [Parameter(Mandatory = $true)][string]$SchemaPath,
     [Parameter(Mandatory = $true)][string]$OutputPath,
-    [string]$Model = "grok-4.7"
+    [string]$Model = "grok-4.7",
+    [ValidateRange(1,3600)][int]$TimeoutSeconds = 240
 )
 
 $ErrorActionPreference = "Stop"
