@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import subprocess
 
 from rich.console import Group
@@ -32,6 +33,9 @@ from company_os.application.task_result_service import (
 )
 from company_os.application.local_runtime_service import (
     LocalRuntimeService,
+)
+from company_os.cli.operation_progress import (
+    OperationProgressState,
 )
 
 
@@ -68,6 +72,8 @@ class PlanControlScreen(Screen):
 
         self.busy = False
         self.last_error_text = ""
+        self.progress = OperationProgressState()
+        self._operation_owners: dict[str, str] = {}
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -80,6 +86,10 @@ class PlanControlScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
+        self.set_interval(
+            0.25,
+            self._tick_operation_progress,
+        )
         self._refresh_view()
 
     def action_back(self) -> None:
@@ -210,13 +220,20 @@ class PlanControlScreen(Screen):
             return
 
         self.busy = True
+        self._operation_owners = {
+            task.id: task.owner
+            for task in self._tasks()
+            if task.id in active
+        }
 
-        self._working(
-            "Running ACTIVE agents:\n\n"
-            + "\n".join(active)
-            + "\n\nProvider: Auto",
-            "RUN AGENTS",
+        self.progress.start(
+            kind="analysis",
+            title="RUN AGENTS",
+            task_ids=active,
+            initial_event="Starting analysis runtime...",
+            provider="Auto",
         )
+        self._render_operation_progress()
 
         self.run_agents_worker()
 
@@ -234,6 +251,7 @@ class PlanControlScreen(Screen):
                     self.plan_data.project_root,
                     self._task_ids(),
                     provider="Auto",
+                    progress=self._progress_from_worker,
                 )
             )
 
@@ -698,6 +716,173 @@ class PlanControlScreen(Screen):
                 str(exc),
             )
 
+    def _progress_from_worker(
+        self,
+        line: str,
+    ) -> None:
+        self.app.call_from_thread(
+            self._handle_progress_line,
+            line,
+        )
+
+    def _handle_progress_line(
+        self,
+        line: str,
+    ) -> None:
+        if not self.progress.busy:
+            return
+
+        line = re.sub(
+            r"\x1b\[[0-?]*[ -/]*[@-~]",
+            "",
+            str(line),
+        ).strip()
+
+        if not line:
+            return
+
+        task_match = re.match(
+            r"(?i)^Running agent:\s*([^\s]+)\s*->\s*(AICO-\d+)",
+            line,
+        )
+        if task_match:
+            self.progress.current_task = (
+                task_match.group(2)
+            )
+
+        provider_match = re.match(
+            r"(?i)^Provider (?:attempt|succeeded|mode|requested):\s*(.+)$",
+            line,
+        )
+        if provider_match:
+            value = provider_match.group(1).strip()
+            if (
+                "attempt" in line.casefold()
+                or "succeeded" in line.casefold()
+            ):
+                self.progress.provider = value
+
+        model_match = re.match(
+            r"(?i)^Ollama model:\s*(.+)$",
+            line,
+        )
+        if model_match:
+            self.progress.model = (
+                model_match.group(1).strip()
+            )
+
+        context_match = re.search(
+            r"(?i)^Context pack:\s*([0-9,]+)\s*characters",
+            line,
+        )
+        if context_match:
+            self.progress.context_chars = (
+                context_match.group(1).replace(",", "")
+            )
+
+        lower = line.casefold()
+        relevant_terms = (
+            "building",
+            "context",
+            "provider",
+            "ollama",
+            "inference",
+            "running agent",
+            "task advanced",
+            "task result",
+            "outcome",
+            "completed",
+            "failed",
+            "runtime",
+        )
+
+        if any(
+            term in lower
+            for term in relevant_terms
+        ):
+            self.progress.add_event(
+                " ".join(line.split())[:180]
+            )
+
+        self._render_operation_progress()
+
+    def _tick_operation_progress(
+        self,
+    ) -> None:
+        if not (
+            self.busy
+            and self.progress.busy
+        ):
+            return
+
+        self.progress.tick()
+        self._render_operation_progress()
+
+    def _render_operation_progress(
+        self,
+    ) -> None:
+        if not self.progress.busy:
+            return
+
+        task = (
+            self.progress.current_task
+            or ", ".join(self.progress.task_ids)
+            or "-"
+        )
+        owner = self._operation_owners.get(
+            self.progress.current_task,
+            "-"
+        )
+
+        lines = [
+            f"Task: {task}",
+            f"Agent: {owner}",
+            f"Provider: {self.progress.provider or '-'}",
+            f"Model: {self.progress.model or '-'}",
+        ]
+
+        if self.progress.context_chars:
+            lines.append(
+                "Context: "
+                + f"{int(self.progress.context_chars):,}"
+                + " chars"
+            )
+
+        lines.extend(
+            [
+                f"Elapsed: {self.progress.elapsed_text()}",
+                "",
+                f"Activity: {self.progress.activity_bar()}",
+                (
+                    f"{self.progress.spinner()} "
+                    f"{self.progress.last_event or 'Working...'}"
+                ),
+            ]
+        )
+
+        if self.progress.recent_events:
+            lines.extend(
+                [
+                    "",
+                    "Recent events:",
+                    *[
+                        f"- {item}"
+                        for item
+                        in self.progress.recent_events
+                    ],
+                ]
+            )
+
+        self.query_one(
+            "#plan-control-content",
+            Static,
+        ).update(
+            Panel(
+                Text("\n".join(lines)),
+                title="Live Progress",
+            )
+        )
+
     def _working(
         self,
         message: str,
@@ -717,6 +902,11 @@ class PlanControlScreen(Screen):
         self,
         message: str,
     ) -> None:
+        if self.progress.busy:
+            self.progress.finish(
+                status="COMPLETED",
+                summary=message,
+            )
         self.busy = False
         self._refresh_view()
         self.notify(message)
@@ -726,6 +916,11 @@ class PlanControlScreen(Screen):
         title: str,
         message: str,
     ) -> None:
+        if self.progress.busy:
+            self.progress.finish(
+                status="FAILED",
+                summary=message,
+            )
         self.busy = False
 
         self.last_error_text = (
