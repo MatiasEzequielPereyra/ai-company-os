@@ -273,6 +273,43 @@ class WorkRequestService:
 
         return result
 
+    def request_ids_for_task_ids(
+        self,
+        project_root: str | Path,
+        task_ids: list[str],
+    ) -> list[str]:
+        root = Path(project_root).resolve()
+        tasks_dir = root / "tasks"
+        wanted = {
+            task_id
+            for task_id in task_ids
+            if task_id
+        }
+
+        if not wanted or not tasks_dir.exists():
+            return []
+
+        request_ids: set[str] = set()
+
+        for task_id in sorted(wanted):
+            path = tasks_dir / f"{task_id}.md"
+
+            if not path.exists():
+                continue
+
+            content = path.read_text(
+                encoding="utf-8-sig",
+            )
+            request_id = self._read_field(
+                content,
+                "Work request",
+            )
+
+            if request_id:
+                request_ids.add(request_id)
+
+        return sorted(request_ids)
+
     def resolve_task_ids(
         self,
         project_root: str | Path,
