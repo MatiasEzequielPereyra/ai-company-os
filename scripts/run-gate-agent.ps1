@@ -63,6 +63,15 @@ if ($status -ne $expectedStatus) {
     throw "Task $Id must be $expectedStatus for $Gate gate. Current status: $status"
 }
 
+$lockHelperPath = Join-Path $PSScriptRoot "task-execution-lock.ps1"
+if (-not (Test-Path $lockHelperPath -PathType Leaf)) {
+    throw "Task execution lock helper not found: $lockHelperPath"
+}
+. $lockHelperPath
+$taskExecutionLock = Enter-TaskExecutionLock -ProjectPath $root -Id $Id -Operation "GATE"
+
+try {
+
 $reviewerRole = switch ($Gate) {
     "Review" { "engineering-manager" }
     "QA" {
@@ -237,3 +246,7 @@ Write-Host ""
 Write-Host "$Gate gate completed for $Id" -ForegroundColor Green
 Write-Host ("Provider: " + $execution.Provider)
 Write-Host ("Model: " + $execution.Model)
+}
+finally {
+    Exit-TaskExecutionLock -Lock $taskExecutionLock
+}
