@@ -34,6 +34,12 @@ Checklist para comprobar que una instalación nueva es comprensible y funcional.
 
 Errores de instalación, readiness, providers, gates, artifacts, Git/worktrees, encoding y recuperación de estado.
 
+### 6. Referencia de comandos
+
+[COMMAND-REFERENCE.md](./COMMAND-REFERENCE.md)
+
+Parámetros verificados de los scripts PowerShell principales, con distinción entre comandos seguros, apply, provider, Git y avanzados.
+
 ## Documentación del sistema
 
 - [PROJECT-BRIEF.md](./PROJECT-BRIEF.md) — alcance, visión, usuarios objetivo, restricciones y criterios de éxito.
