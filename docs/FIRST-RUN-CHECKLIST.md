@@ -30,9 +30,10 @@ Desde el checkout del framework:
 
 ```powershell
 git status --short --branch
+$AiCompanyOsRoot = (Get-Location).Path
 ```
 
-Confirmá que estás en el repositorio correcto.
+Confirmá que estás en el repositorio correcto. Guardamos `$AiCompanyOsRoot` para poder volver a la documentación y test suite del framework después del demo.
 
 ## 2. Crear un proyecto descartable
 
@@ -120,11 +121,13 @@ CTO
 ```powershell
 $CurrentObjective = Get-Content .\.codex\state\current-objective.md -Raw
 
-if ($CurrentObjective -notmatch 'Work request:\s+docs/engineering/work-requests/(WR-\d+)\.md') {
+if ($CurrentObjective -match 'Work request:\s+docs/engineering/work-requests/(WR-\d+)\.md') {
+  $WorkRequestId = $Matches[1]
+}
+else {
   throw "No pude resolver el Work Request actual."
 }
 
-$WorkRequestId = $Matches[1]
 $WorkRequestId
 ```
 
@@ -410,4 +413,10 @@ Si alguno de esos puntos no está claro, consultar:
 - `docs/END-TO-END-WALKTHROUGH.md`;
 - `docs/TROUBLESHOOTING.md`.
 
-Nota: esos documentos viven en el repositorio fuente de AI Company OS; el instalador runtime no copia necesariamente toda la documentación de usuario al proyecto target.
+Los documentos de usuario viven en el repositorio fuente de AI Company OS. Para volver:
+
+```powershell
+Set-Location $AiCompanyOsRoot
+```
+
+El instalador runtime no copia necesariamente toda la documentación de usuario al proyecto target.
