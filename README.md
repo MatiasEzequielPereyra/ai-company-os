@@ -126,3 +126,13 @@ GitHub Actions also runs the suite on Windows PowerShell for pushes and pull req
 ## Current maturity
 
 This repository is an engineering workflow framework, not yet a fully autonomous execution platform. The strongest current capabilities are durable coordination, structured analysis, lifecycle enforcement, and evidence capture. Remaining maturity work includes richer merge/reconciliation automation for isolated agent branches, deeper provider transport simulation, and longitudinal quality metrics across real projects.
+
+## User documentation
+
+For users who want to operate AI Company OS rather than inspect its internals:
+
+- [Quick Start](docs/QUICKSTART.md) — install the framework and prepare the first workflow.
+- [User Guide](docs/USER-GUIDE.md) — concepts, lifecycle, providers, quality gates, isolation, and troubleshooting-oriented operating guidance.
+
+The user guide is living documentation. Experimental functionality is not presented as stable until it is integrated into the documented branch.
+
