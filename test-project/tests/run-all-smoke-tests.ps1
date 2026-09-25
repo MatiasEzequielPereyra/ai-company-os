@@ -22,6 +22,7 @@ $tests = @(
     "test-openrouter-truncation.ps1",
     "test-canonical-contracts.ps1",
     "test-provider-router-contract.ps1",
+    "test-provider-timeout.ps1",
     "test-agent-workspace-isolation.ps1",
     "test-writable-agent-runtime.ps1",
     "test-writable-context-resolution.ps1",
