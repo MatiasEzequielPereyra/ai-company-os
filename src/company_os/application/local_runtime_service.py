@@ -23,15 +23,18 @@ class LocalRuntimeStatus:
 
 
 class LocalRuntimeService:
+    _shared_cache: dict[
+        tuple[str, str, str],
+        tuple[float, LocalRuntimeStatus],
+    ] = {}
+    _force_refresh_projects: set[str] = set()
+
     def __init__(
         self,
-        cache_seconds: float = 30.0,
+        cache_seconds: float = 300.0,
     ) -> None:
         self.cache_seconds = cache_seconds
-        self._cache: dict[
-            tuple[str, str, str],
-            tuple[float, LocalRuntimeStatus],
-        ] = {}
+        self._cache = self._shared_cache
 
     def inspect(
         self,
@@ -56,10 +59,21 @@ class LocalRuntimeService:
         ):
             return cached[1]
 
+        root_key = str(root)
+        force_refresh = (
+            root_key
+            in self._force_refresh_projects
+        )
+
         status = self._inspect_uncached(
             root,
             role,
             workload,
+            force_hardware_probe=force_refresh,
+        )
+
+        self._force_refresh_projects.discard(
+            root_key
         )
 
         self._cache[key] = (
@@ -75,6 +89,7 @@ class LocalRuntimeService:
     ) -> None:
         if project_root is None:
             self._cache.clear()
+            self._force_refresh_projects.clear()
             return
 
         root = str(
@@ -88,11 +103,16 @@ class LocalRuntimeService:
                     None,
                 )
 
+        self._force_refresh_projects.add(
+            root
+        )
+
     def _inspect_uncached(
         self,
         root: Path,
         role: str,
         workload: str,
+        force_hardware_probe: bool = False,
     ) -> LocalRuntimeStatus:
         script = (
             root
@@ -115,6 +135,26 @@ class LocalRuntimeService:
                 "PowerShell runtime was not found."
             )
 
+        capability_path = (
+            root
+            / ".codex"
+            / "runtime"
+            / "local-capability.json"
+        )
+
+        snapshot_argument = ""
+
+        if (
+            not force_hardware_probe
+            and capability_path.exists()
+        ):
+            snapshot_argument = (
+                " -HardwareSnapshotPath "
+                + self._ps_literal(
+                    str(capability_path)
+                )
+            )
+
         command_text = (
             "$result = & "
             + self._ps_literal(str(script))
@@ -124,6 +164,7 @@ class LocalRuntimeService:
             + self._ps_literal(role)
             + " -Workload "
             + self._ps_literal(workload)
+            + snapshot_argument
             + "; $result | ConvertTo-Json "
             + "-Depth 20 -Compress"
         )
@@ -173,6 +214,23 @@ class LocalRuntimeService:
         hardware = payload.get(
             "Hardware"
         ) or {}
+
+        if hardware:
+            try:
+                capability_path.parent.mkdir(
+                    parents=True,
+                    exist_ok=True,
+                )
+                capability_path.write_text(
+                    json.dumps(
+                        hardware,
+                        indent=2,
+                        ensure_ascii=False,
+                    ),
+                    encoding="utf-8",
+                )
+            except OSError:
+                pass
 
         memory = hardware.get(
             "memory"
