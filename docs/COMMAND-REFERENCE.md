@@ -6,6 +6,8 @@
 
 ---
 
+Los IDs `WR-XXX` y `AICO-XXX` son placeholders. Reemplazarlos por IDs reales antes de ejecutar un comando.
+
 ## Convenciones
 
 ```text
@@ -58,7 +60,7 @@ Parámetros:
 -Force           reemplaza componentes existentes cuando el instalador lo permite
 ```
 
-Usar `-Force` con cuidado.
+Usar `-Force` con cuidado: puede reemplazar archivos de configuración, roles, scripts y schemas ya presentes en el proyecto target. Hacerlo sobre una branch limpia y revisar `git diff`.
 
 ---
 
