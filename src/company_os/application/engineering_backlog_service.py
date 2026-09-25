@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 import shutil
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from company_os.application.process_stream import (
+    ProgressCallback,
+    run_streamed_process,
+)
+from company_os.application.provider_service import (
+    ProviderService,
+)
 from company_os.application.work_request_service import (
     WorkRequestService,
 )
@@ -105,6 +111,7 @@ class EngineeringBacklogService:
         work_request_ids: list[str],
         provider: str = "Auto",
         model: str = "",
+        progress: ProgressCallback | None = None,
     ) -> EngineeringBacklogResult:
         root = Path(project_root).resolve()
         sources = self.ready_sources(
@@ -189,10 +196,23 @@ class EngineeringBacklogService:
                         ]
                     )
 
+                if progress is not None:
+                    progress(
+                        "__AICO_BACKLOG__|"
+                        f"{source.task_id}|GENERATE|START"
+                    )
+
                 self._run_script(
                     generate_script,
                     generate_args,
+                    progress=progress,
                 )
+
+                if progress is not None:
+                    progress(
+                        "__AICO_BACKLOG__|"
+                        f"{source.task_id}|GENERATE|DONE"
+                    )
 
                 if not plan_path.exists():
                     raise RuntimeError(
@@ -200,6 +220,12 @@ class EngineeringBacklogService:
                         "completed without producing the "
                         f"canonical plan: {plan_path}"
                     )
+
+            if progress is not None:
+                progress(
+                    "__AICO_BACKLOG__|"
+                    f"{source.task_id}|MATERIALIZE|START"
+                )
 
             self._run_script(
                 materialize_script,
@@ -209,7 +235,14 @@ class EngineeringBacklogService:
                     "-ProjectPath",
                     str(root),
                 ],
+                progress=progress,
             )
+
+            if progress is not None:
+                progress(
+                    "__AICO_BACKLOG__|"
+                    f"{source.task_id}|MATERIALIZE|DONE"
+                )
 
             if not mapping_path.exists():
                 raise RuntimeError(
@@ -250,8 +283,12 @@ class EngineeringBacklogService:
         self,
         script: Path,
         arguments: list[str],
+        progress: ProgressCallback | None = None,
     ) -> str:
-        process = subprocess.run(
+        providers = ProviderService()
+        environment = providers.build_environment_all()
+
+        process = run_streamed_process(
             [
                 self._powershell(),
                 "-NoProfile",
@@ -261,19 +298,12 @@ class EngineeringBacklogService:
                 str(script),
                 *arguments,
             ],
-            capture_output=True,
-            text=True,
             timeout=1800,
+            env=environment,
+            on_line=progress,
         )
 
-        output = (
-            (process.stdout or "")
-            + (
-                "\n" + process.stderr
-                if process.stderr
-                else ""
-            )
-        ).strip()
+        output = process.output
 
         if process.returncode != 0:
             raise RuntimeError(
