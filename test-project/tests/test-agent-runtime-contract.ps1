@@ -11,6 +11,7 @@ $required = @(
     "scripts\provider-router.ps1",
     "scripts\build-agent-context.ps1",
     "scripts\resolve-writable-required-files.ps1",
+    "scripts\task-execution-lock.ps1",
     "scripts\providers\invoke-codex.ps1",
     "scripts\providers\invoke-openrouter.ps1",
     "scripts\providers\invoke-gemini.ps1",
@@ -22,6 +23,8 @@ $required = @(
     "scripts\local-runtime\benchmark-ollama.ps1",
     "scripts\local-runtime\initialize-local-runtime.ps1",
     "scripts\run-gate-agent.ps1",
+    "scripts\finalize-task.ps1",
+    "scripts\task-execution-lock.ps1",
     "scripts\run-pending-gates.ps1",
     "scripts\generate-engineering-backlog.ps1",
     "scripts\materialize-engineering-backlog.ps1",
@@ -267,6 +270,14 @@ foreach ($runnerName in @("run-agent-task.ps1","run-gate-agent.ps1","run-writabl
     if ($runnerText -notmatch 'localRuntimeConfigPath') {
         throw "$runnerName must guard local pre-resolution with the local runtime config"
     }
+    if ($runnerText -notmatch 'Enter-TaskExecutionLock') {
+        throw "$runnerName must serialize execution through the per-task lock"
+    }
+}
+
+$finalizeRunner = Get-Content (Join-Path $repoRoot "scripts\finalize-task.ps1") -Raw
+if ($finalizeRunner -notmatch 'Enter-TaskExecutionLock') {
+    throw "finalize-task.ps1 must serialize final approval through the per-task lock"
 }
 
 $localConfig = Get-Content (Join-Path $repoRoot ".codex\local-runtime-config.json") -Raw | ConvertFrom-Json
