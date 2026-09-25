@@ -613,7 +613,7 @@ El sistema intenta mantener el fallo dentro del límite del provider y evita ace
 
 Con `Provider Auto`, el router puede utilizar el orden de providers configurado.
 
-La política exacta de timeout/retry sigue evolucionando y debe verificarse contra la versión del adapter instalada antes de asumir valores concretos.
+En la rama `main`, OpenRouter y Gemini utilizan actualmente un timeout de 240 segundos por request y hasta 3 intentos para errores transitorios. Esa configuración está implementada en los adapters y todavía no debe confundirse con una propiedad estable `provider_timeout_seconds` en `.codex/provider-config.json`.
 
 ## 24. Recuperación entre sesiones
 
@@ -732,3 +732,39 @@ Para ver cómo un objetivo se convierte en Work Request, planning tasks, enginee
 [Recorrido End-to-End](./END-TO-END-WALKTHROUGH.md)
 
 El walkthrough separa explícitamente el comportamiento probado del comportamiento todavía en desarrollo.
+
+
+## 31. Puntos de decisión humana
+
+AI Company OS automatiza coordinación y validaciones, pero no convierte toda acción en autoridad implícita.
+
+| Acción | Puede automatizarse | Requiere decisión/autorización explícita |
+|---|---:|---:|
+| Crear intake | Sí | No |
+| Crear Work Request | Sí | El objetivo proviene del usuario |
+| Generar plan | Sí | No equivale a implementar |
+| Evaluar readiness | Sí | No autoriza escritura |
+| Dispatch a ACTIVE | Sí | Activa ejecución dentro del contrato de la task |
+| Ejecutar análisis con provider | Sí | Consume provider configurado |
+| Crear worktree aislado | Sí | No autoriza merge/push/deploy |
+| Modificar código | Parcial / en evolución | Sí, alcance de escritura autorizado |
+| Review/QA/Security | Sí o manual | Deben producir evidencia independiente |
+| Finalizar task | Script asistido | `APPROVE` o `REJECT` explícito |
+| Merge/Rebase/Push | No implícito | Sí |
+| Deployment | No implícito | Sí |
+
+La regla operativa es:
+
+```text
+automatización
+≠
+autorización
+```
+
+## 32. Documentación de apoyo
+
+- [Quick Start](./QUICKSTART.md)
+- [First Run Checklist](./FIRST-RUN-CHECKLIST.md)
+- [End-to-End Walkthrough](./END-TO-END-WALKTHROUGH.md)
+- [Troubleshooting](./TROUBLESHOOTING.md)
+- [Command Reference](./COMMAND-REFERENCE.md)
