@@ -26,6 +26,7 @@ $tests = @(
     "test-provider-router-contract.ps1",
     "test-agent-workspace-isolation.ps1",
     "test-writable-agent-runtime.ps1",
+    "test-writable-authorization-guard.ps1",
     "test-writable-context-resolution.ps1",
     "test-tui-runtime-integration-contract.ps1",
     "test-workflow-profiles.ps1",
