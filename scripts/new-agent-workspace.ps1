@@ -23,11 +23,11 @@ $taskPath = Join-Path $root ("tasks\" + $Id + ".md")
 if (-not (Test-Path $taskPath)) { throw "Task not found: $taskPath" }
 
 $task = Get-Content $taskPath -Raw -Encoding UTF8
-$workKind = (Read-Field -Content $task -Key "Work kind").ToUpperInvariant()
+$workKind = Read-Field -Content $task -Key "Work kind"
 
-if ($workKind -ne "IMPLEMENTATION") {
+if ($workKind -cne "IMPLEMENTATION") {
     $displayWorkKind = if ([string]::IsNullOrWhiteSpace($workKind)) { "<missing>" } else { $workKind }
-    throw "Writable workspace creation requires Work kind IMPLEMENTATION. Current Work kind: $displayWorkKind"
+    throw "writable workspace creation requires Work kind IMPLEMENTATION. Current Work kind: $displayWorkKind"
 }
 
 if ([string]::IsNullOrWhiteSpace($WorkspaceRoot)) {
