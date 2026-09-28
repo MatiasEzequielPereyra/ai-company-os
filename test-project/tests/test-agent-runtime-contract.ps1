@@ -10,6 +10,7 @@ $required = @(
     "scripts\run-writable-agent.ps1",
     "scripts\provider-router.ps1",
     "scripts\build-agent-context.ps1",
+    "scripts\validate-engineering-plan-result.ps1",
     "scripts\resolve-writable-required-files.ps1",
     "scripts\task-execution-lock.ps1",
     "scripts\providers\invoke-codex.ps1",
@@ -147,8 +148,11 @@ if ($runner -notmatch 'analysis_context_max_chars') {
 if ($runner -notmatch 'structured result concise|Keep the structured result concise') {
     throw "Agent runner must instruct schema-critical analysis results to stay concise"
 }
-if ($runner -notmatch 'Assert-ConcreteEngineeringPlanResult') {
-    throw "Agent runner must deterministically validate Engineering Manager planning output"
+if ($runner -notmatch 'validate-engineering-plan-result\.ps1') {
+    throw "Agent runner must route Engineering Manager planning through semantic validation"
+}
+if ($runner -notmatch 'SemanticValidatorPath') {
+    throw "Agent runner must pass semantic validation into provider fallback"
 }
 if ($runner -notmatch 'engineering-plan-result\.schema\.json') {
     throw "Engineering Manager planning must use the dedicated structured result schema"
@@ -156,8 +160,12 @@ if ($runner -notmatch 'engineering-plan-result\.schema\.json') {
 if ($runner -notmatch 'execution-plan\.json') {
     throw "Engineering Manager planning must persist a canonical structured execution plan"
 }
-if ($runner -notmatch 'contains no real IMPLEMENTATION work') {
+$planValidator = Get-Content (Join-Path $repoRoot "scripts\validate-engineering-plan-result.ps1") -Raw
+if ($planValidator -notmatch 'contains no real IMPLEMENTATION work') {
     throw "Engineering Manager planning validation must require actual implementation work"
+}
+if ($planValidator -notmatch 'control-plane area') {
+    throw "Engineering Manager planning validation must reject control-plane implementation targets"
 }
 $writableRunner = Get-Content (Join-Path $repoRoot "scripts\run-writable-agent.ps1") -Raw
 if ($writableRunner -notmatch 'ValidateSet\("Auto","OpenRouter","Gemini","Ollama","DeepSeek","Grok"\)') {
@@ -366,6 +374,9 @@ foreach ($eventName in @("provider_attempt_started","provider_attempt_finished",
 if ($router -notmatch 'Get-ConfiguredTimeoutSeconds') {
     throw "Provider router must resolve bounded provider timeouts from configuration"
 }
+if ($router -notmatch 'SemanticValidatorPath') {
+    throw "Provider router must support semantic validators inside the provider attempt loop"
+}
 
 foreach ($runnerName in @("run-agent-task.ps1","run-gate-agent.ps1","run-writable-agent.ps1")) {
     $runnerText = Get-Content (Join-Path $repoRoot ("scripts\" + $runnerName)) -Raw
@@ -424,7 +435,8 @@ $parseTargets = @(
     "scripts\run-gate-agent.ps1",
     "scripts\run-pending-gates.ps1",
     "scripts\generate-engineering-backlog.ps1",
-    "scripts\materialize-engineering-backlog.ps1"
+    "scripts\materialize-engineering-backlog.ps1",
+    "scripts\validate-engineering-plan-result.ps1"
 )
 
 foreach ($relative in $parseTargets) {
