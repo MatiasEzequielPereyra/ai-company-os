@@ -229,4 +229,92 @@ finally {
     }
 }
 
+
+$metaRoot = Join-Path $env:TEMP ("aico-backlog-meta-" + [Guid]::NewGuid().ToString("N"))
+try {
+    New-Item -ItemType Directory -Force -Path (Join-Path $metaRoot "tasks") | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Path $metaRoot "docs\engineering\plans") | Out-Null
+
+    $sourceTask = @(
+        "# AICO-001 - Engineering Plan",
+        "",
+        "ID: AICO-001",
+        "",
+        "Status: DONE",
+        "",
+        "Priority: P1",
+        "",
+        "Owner: engineering-manager",
+        "",
+        "Work request: WR-001"
+    ) -join [Environment]::NewLine
+
+    [System.IO.File]::WriteAllText(
+        (Join-Path $metaRoot "tasks\AICO-001.md"),
+        $sourceTask,
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+
+    $metaFixture = @{
+        source_task_id = "AICO-001"
+        work_request_id = "WR-001"
+        summary = "Invalid recursive backlog"
+        implementation_authorization_key = "NONE"
+        items = @(
+            @{
+                key = "META"
+                kind = "IMPLEMENTATION"
+                title = "Create executable tasks for WR-001"
+                owner = "engineering-manager"
+                priority = "P1"
+                objective = "Create executable engineering tasks from the plan."
+                context = "Materialize the next task set."
+                acceptance_criteria = @("Executable tasks exist.")
+                dependencies = @()
+                affected_areas = @("tasks")
+                testing_requirements = @("Inspect generated tasks.")
+                risks = @("Recursive planning.")
+            }
+        )
+    }
+
+    [System.IO.File]::WriteAllText(
+        (Join-Path $metaRoot "docs\engineering\plans\AICO-001-engineering-backlog.json"),
+        ($metaFixture | ConvertTo-Json -Depth 20),
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+
+    $metaRejected = $false
+
+    try {
+        & $materializer -SourceTaskId "AICO-001" -ProjectPath $metaRoot
+    }
+    catch {
+        if ($_.Exception.Message -match "Invalid meta-implementation backlog item") {
+            $metaRejected = $true
+        }
+        else {
+            throw
+        }
+    }
+
+    if (-not $metaRejected) {
+        throw "Materializer did not reject recursive meta-implementation work."
+    }
+
+    $unexpected = @(
+        Get-ChildItem (Join-Path $metaRoot "tasks") -Filter "AICO-*.md" -File |
+            Where-Object { $_.BaseName -ne "AICO-001" }
+    )
+
+    if ($unexpected.Count -ne 0) {
+        throw "Meta-implementation rejection occurred after task creation."
+    }
+}
+finally {
+    if (Test-Path $metaRoot) {
+        Remove-Item $metaRoot -Recurse -Force
+    }
+}
+
 Write-Host "PASS: engineering backlog materializer test" -ForegroundColor Green
