@@ -419,6 +419,7 @@ try {
     New-Item -ItemType Directory -Force -Path (Join-Path $tempRoot ".codex\state") | Out-Null
     New-Item -ItemType Directory -Force -Path (Join-Path $tempRoot "tasks") | Out-Null
     New-Item -ItemType Directory -Force -Path (Join-Path $tempRoot "docs\engineering\dispatch") | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Path $tempRoot "docs\engineering\work-requests") | Out-Null
     New-Item -ItemType Directory -Force -Path (Join-Path $tempRoot "docs\product") | Out-Null
     New-Item -ItemType Directory -Force -Path (Join-Path $tempRoot "docs\architecture") | Out-Null
     New-Item -ItemType Directory -Force -Path (Join-Path $tempRoot "docs\operations") | Out-Null
@@ -426,7 +427,14 @@ try {
 
     Set-Content (Join-Path $tempRoot "AGENTS.md") "runtime contract fixture"
     Set-Content (Join-Path $tempRoot ".codex\agents\pm.md") "PM fixture"
-    Set-Content (Join-Path $tempRoot "tasks\AICO-TEST.md") "ID: AICO-TEST"
+    Set-Content (Join-Path $tempRoot "tasks\AICO-TEST.md") @(
+        "ID: AICO-TEST",
+        "Work request: WR-TEST"
+    )
+    Set-Content (Join-Path $tempRoot "docs\engineering\work-requests\WR-TEST.md") @(
+        "ID: WR-TEST",
+        "Objective: CONTEXT_WORK_REQUEST_SENTINEL"
+    )
     Set-Content (Join-Path $tempRoot "docs\engineering\dispatch\AICO-TEST.md") "dispatch fixture"
     Set-Content (Join-Path $tempRoot "docs\engineering\project-intake.md") "engineering intake"
     Set-Content (Join-Path $tempRoot "docs\product\product-intake.md") "product intake"
@@ -439,6 +447,9 @@ try {
 
     if ($context -notmatch 'src\\product-controller\.ts') {
         throw "Context builder did not include relevant source evidence"
+    }
+    if ($context -notmatch 'CONTEXT_WORK_REQUEST_SENTINEL') {
+        throw "Context builder did not prioritize the active task work request"
     }
     if ($context.Length -gt 20000) {
         throw "Context builder exceeded requested MaxChars"
