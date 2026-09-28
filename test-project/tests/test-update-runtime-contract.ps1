@@ -122,6 +122,9 @@ try {
     if ([string]$config.analysis_models_by_role."engineering-manager".Gemini -ne "gemini-3.5-flash-lite") {
         throw "Runtime upgrade must add Engineering Manager Gemini planning model."
     }
+    if (@($config.analysis_skip_local_profiles_by_role."engineering-manager") -notcontains "LOCAL_CPU_LOW") {
+        throw "Runtime upgrade must add Engineering Manager low-CPU local skip policy."
+    }
     if ([int]$config.provider_timeout_seconds.OpenRouter -ne 333) {
         throw "Runtime upgrade must preserve existing provider timeout overrides."
     }
