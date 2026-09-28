@@ -237,3 +237,72 @@ Work request: WR-200
         tmp_path,
         ["WR-200"],
     ) == []
+
+
+
+def test_feature_backlog_waits_for_all_initial_planning_tasks(
+    tmp_path,
+):
+    write_work_request(
+        tmp_path,
+        "WR-300",
+        "FEATURE",
+    )
+
+    write(
+        tmp_path / "tasks" / "AICO-300.md",
+        """# AICO-300 - Engineering plan
+
+ID: AICO-300
+Status: DONE
+Owner: engineering-manager
+Work request: WR-300
+""",
+    )
+
+    write(
+        tmp_path / "tasks" / "AICO-301.md",
+        """# AICO-301 - QA planning
+
+ID: AICO-301
+Status: BACKLOG
+Owner: qa
+Work request: WR-300
+""",
+    )
+
+    write(
+        tmp_path
+        / "docs"
+        / "engineering"
+        / "agent-reports"
+        / "AICO-300.md",
+        "# Engineering Manager plan\n",
+    )
+
+    service = EngineeringBacklogService()
+
+    assert service.ready_sources(
+        tmp_path,
+        ["WR-300"],
+    ) == []
+
+    write(
+        tmp_path / "tasks" / "AICO-301.md",
+        """# AICO-301 - QA planning
+
+ID: AICO-301
+Status: DONE
+Owner: qa
+Work request: WR-300
+""",
+    )
+
+    sources = service.ready_sources(
+        tmp_path,
+        ["WR-300"],
+    )
+
+    assert [source.task_id for source in sources] == [
+        "AICO-300"
+    ]
