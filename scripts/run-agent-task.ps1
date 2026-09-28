@@ -23,6 +23,68 @@ function Write-Utf8NoBom {
     [System.IO.File]::WriteAllText($Path,$Value,(New-Object System.Text.UTF8Encoding($false)))
 }
 
+function Test-RequiresConcreteEngineeringPlan {
+    param(
+        [string]$Owner,
+        [string]$TaskContent
+    )
+
+    if ($Owner -ne "engineering-manager") { return $false }
+
+    return (
+        $TaskContent -match '(?i)engineering execution plan|engineering plan|execution plan|decompos.*engineering|executable engineering'
+    )
+}
+
+function Assert-ConcreteEngineeringPlanResult {
+    param(
+        [object]$Result,
+        [string]$TaskId
+    )
+
+    if ([string]$Result.outcome -ne "COMPLETED") { return }
+
+    $reportText = [string]$Result.report_markdown
+
+    if ($reportText -notmatch '(?mi)^##\s+Executable Work\s*$') {
+        throw "$TaskId: Engineering Manager COMPLETED result is not an executable plan. Missing '## Executable Work'."
+    }
+
+    $workLines = @(
+        $reportText -split "\r?\n" |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { $_ -match '^-\s*Kind:\s*(DECISION|IMPLEMENTATION|VALIDATION|OPERATIONS)\s*\|' }
+    )
+
+    if ($workLines.Count -lt 1) {
+        throw "$TaskId: Engineering Manager executable plan contains no structured work items."
+    }
+
+    $implementationCount = 0
+
+    foreach ($line in $workLines) {
+        if ($line -notmatch '^[-]\s*Kind:\s*(DECISION|IMPLEMENTATION|VALIDATION|OPERATIONS)\s*\|\s*Change:\s*.+?\s*\|\s*Owner:\s*(ceo|pm|cto|engineering-manager|backend|frontend|devops|qa|security)\s*\|\s*Areas:\s*.+?\s*\|\s*Depends on:\s*.+?\s*\|\s*Verify:\s*.+$') {
+            throw "$TaskId: malformed Engineering Manager executable work item: $line"
+        }
+
+        if ($Matches[1] -eq "IMPLEMENTATION") {
+            $implementationCount++
+
+            if ($line -match '(?i)\b(create|refine|materialize|generate|prepare|update)\b.{0,80}\b(executable tasks?|engineering tasks?|task set|backlog|work requests?|dispatch packets?|lifecycle state|gate evidence)\b') {
+                throw "$TaskId: Engineering Manager plan contains recursive meta-implementation work: $line"
+            }
+
+            if ($line -match '(?i)\|\s*Areas:\s*(tasks?|backlog|planning|lifecycle)\s*\|') {
+                throw "$TaskId: Engineering Manager implementation must target real product/repository areas: $line"
+            }
+        }
+    }
+
+    if ($implementationCount -lt 1) {
+        throw "$TaskId: Engineering Manager executable plan contains no real IMPLEMENTATION work."
+    }
+}
+
 if ($PSBoundParameters.ContainsKey("AuthMode") -and -not $PSBoundParameters.ContainsKey("Provider")) {
     if ($AuthMode -eq "ChatGPT") {
         $Provider = "Codex"
@@ -42,6 +104,7 @@ $status = Read-Field $task "Status"
 $owner = Read-Field $task "Owner"
 if ($status -ne "ACTIVE") { throw "Task $Id must be ACTIVE. Current status: $status" }
 if ([string]::IsNullOrWhiteSpace($owner)) { throw "Task $Id has no owner." }
+$requiresConcreteEngineeringPlan = Test-RequiresConcreteEngineeringPlan -Owner $owner -TaskContent $task
 
 $lockHelperPath = Join-Path $PSScriptRoot "task-execution-lock.ps1"
 if (-not (Test-Path $lockHelperPath -PathType Leaf)) {
@@ -104,6 +167,18 @@ $promptLines = @(
     "summary must stay within 800 characters.",
     "report_markdown must stay within 8000 characters and should prefer concise evidence-backed bullets.",
     "verification and decisions must each stay within 2000 characters.",
+    $(if ($requiresConcreteEngineeringPlan) {
+        "For Engineering Manager execution planning, report_markdown MUST contain a '## Executable Work' section."
+    } else { "" }),
+    $(if ($requiresConcreteEngineeringPlan) {
+        "Every executable item MUST be one line using exactly: - Kind: <DECISION|IMPLEMENTATION|VALIDATION|OPERATIONS> | Change: <concrete work> | Owner: <role> | Areas: <real paths/components> | Depends on: <item or NONE> | Verify: <concrete verification>"
+    } else { "" }),
+    $(if ($requiresConcreteEngineeringPlan) {
+        "The plan MUST contain at least one real IMPLEMENTATION item that changes product/repository code, configuration, tests or deployable behavior. Never use task/backlog/lifecycle authoring as IMPLEMENTATION."
+    } else { "" }),
+    $(if ($requiresConcreteEngineeringPlan) {
+        "Do not claim work was decomposed, assigned or completed unless the structured executable items in the report actually show that decomposition."
+    } else { "" }),
     "Return only the structured result required by the supplied JSON schema."
 )
 $prompt = $promptLines -join [Environment]::NewLine
@@ -225,6 +300,10 @@ foreach ($field in @("outcome","summary","report_markdown","verification","decis
     if ($null -eq $result.PSObject.Properties[$field]) {
         throw "Structured agent result is missing field: $field"
     }
+}
+
+if ($requiresConcreteEngineeringPlan) {
+    Assert-ConcreteEngineeringPlanResult -Result $result -TaskId $Id
 }
 
 $providerUsed = [string]$execution.Provider
