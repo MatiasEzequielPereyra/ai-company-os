@@ -67,7 +67,7 @@ class WritableWorkspaceService:
         if ready_ids:
             self.control.activate_ready(
                 root,
-                allowed_task_ids,
+                ready_ids,
             )
 
             tasks = self.control.get_tasks(
