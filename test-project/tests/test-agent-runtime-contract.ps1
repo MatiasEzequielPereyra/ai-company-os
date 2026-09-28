@@ -146,6 +146,15 @@ if ($runner -notmatch 'analysis_context_max_chars') {
 if ($runner -notmatch 'structured result concise|Keep the structured result concise') {
     throw "Agent runner must instruct schema-critical analysis results to stay concise"
 }
+if ($runner -notmatch 'Assert-ConcreteEngineeringPlanResult') {
+    throw "Agent runner must deterministically validate Engineering Manager planning output"
+}
+if ($runner -notmatch '## Executable Work') {
+    throw "Engineering Manager planning prompt must require the executable work section"
+}
+if ($runner -notmatch 'contains no real IMPLEMENTATION work') {
+    throw "Engineering Manager planning validation must require actual implementation work"
+}
 $writableRunner = Get-Content (Join-Path $repoRoot "scripts\run-writable-agent.ps1") -Raw
 if ($writableRunner -notmatch 'ValidateSet\("Auto","OpenRouter","Gemini","Ollama","DeepSeek","Grok"\)') {
     throw "Writable runner must expose adaptive local and explicit cloud provider selection"
@@ -204,6 +213,9 @@ if ($backlogGenerator -notmatch 'Assert-NoMetaImplementationItems') {
 $engineeringManagerInstructions = Get-Content (Join-Path $repoRoot ".codex\agents\engineering-manager.md") -Raw
 if ($engineeringManagerInstructions -notmatch 'runtime performs that materialization') {
     throw "Engineering Manager instructions must prevent recursive task-materialization tickets"
+}
+if ($engineeringManagerInstructions -notmatch '## Executable Work') {
+    throw "Engineering Manager instructions must define the structured executable work contract"
 }
 
 $writableSchema = Get-Content (Join-Path $repoRoot "schemas\writable-change-set.schema.json") -Raw -Encoding UTF8 | ConvertFrom-Json
