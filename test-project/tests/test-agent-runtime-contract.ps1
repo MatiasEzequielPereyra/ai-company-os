@@ -197,6 +197,9 @@ if ($backlogGenerator -notmatch 'docs\\engineering\\work-requests') {
 if ($backlogGenerator -notmatch 'must not merely create, refine, materialize or update AI Company OS tasks') {
     throw "Engineering backlog generation must reject recursive meta-implementation semantics"
 }
+if ($backlogGenerator -notmatch 'Assert-NoMetaImplementationItems') {
+    throw "Engineering backlog generation must deterministically reject recursive meta-implementation items"
+}
 
 $engineeringManagerInstructions = Get-Content (Join-Path $repoRoot ".codex\agents\engineering-manager.md") -Raw
 if ($engineeringManagerInstructions -notmatch 'runtime performs that materialization') {
@@ -457,6 +460,9 @@ if ($materializerScript -notmatch 'dependency cycle') {
 }
 if ($materializerScript -notmatch 'Test-DependsOnKey') {
     throw "Engineering backlog materializer must enforce authorization dependency reachability"
+}
+if ($materializerScript -notmatch 'Assert-NoMetaImplementationItems') {
+    throw "Engineering backlog materializer must reject recursive meta-implementation plans before task creation"
 }
 
 Write-Host "PASS: multi-provider agent runtime contract test" -ForegroundColor Green
