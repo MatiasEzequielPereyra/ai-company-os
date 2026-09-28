@@ -268,6 +268,7 @@ $promptLines = @(
     "Create small, independently verifiable tasks rather than giant work-stream tickets.",
     "Each item must have exactly one primary owner from the allowed roles.",
     "Encode dependencies only by logical item key; the materializer will translate them to AICO IDs.",
+    "Do not copy AICO task IDs from the approved planning workflow into item dependencies; completed upstream planning tasks are already satisfied.",
     "Preserve the plan's priorities and critical path.",
     "Create explicit DECISION items for unresolved PM/CTO/CEO decisions before dependent implementation work.",
     "If implementation authorization is required, include an explicit DECISION task near the root of the graph and set implementation_authorization_key to that item key.",
@@ -356,14 +357,76 @@ foreach ($item in @($backlog.items)) {
 }
 
 foreach ($item in @($backlog.items)) {
-    foreach ($dependency in @($item.dependencies)) {
-        if (-not $keys.ContainsKey([string]$dependency)) {
-            throw "Unknown dependency key '$dependency' referenced by item $($item.key)"
+    $repairedDependencies = @()
+
+    foreach ($dependencyValue in @($item.dependencies)) {
+        $dependency = [string]$dependencyValue
+
+        if ($keys.ContainsKey($dependency)) {
+            if ($dependency -eq [string]$item.key) {
+                throw "Backlog item $($item.key) cannot depend on itself."
+            }
+
+            $repairedDependencies += $dependency
+            continue
         }
-        if ([string]$dependency -eq [string]$item.key) {
-            throw "Backlog item $($item.key) cannot depend on itself."
+
+        if ($dependency -match '^AICO-[0-9]+
+if ($authorizationKey -ne "NONE" -and -not $keys.ContainsKey($authorizationKey)) {
+    throw "Resolved implementation authorization key '$authorizationKey' does not reference a backlog item."
+}
+
+$normalizedJson = $backlog | ConvertTo-Json -Depth 100
+Write-Utf8NoBom $planPath $normalizedJson
+
+Write-Host "Structured engineering backlog generated:" -ForegroundColor Green
+Write-Host $planPath
+Write-Host ("Items: " + @($backlog.items).Count)
+if ($null -ne $execution) {
+    Write-Host ("Provider: " + $execution.Provider)
+    Write-Host ("Model: " + $execution.Model)
+}
+else {
+    Write-Host "Provider: REUSED_EXISTING_OUTPUT"
+    Write-Host "Model: N/A"
+}
+) {
+            $upstreamTaskPath = Join-Path $root ("tasks\" + $dependency + ".md")
+
+            if (-not (Test-Path $upstreamTaskPath -PathType Leaf)) {
+                throw "Unknown dependency key '$dependency' referenced by item $($item.key)"
+            }
+
+            $upstreamTask = Get-Content $upstreamTaskPath -Raw -Encoding UTF8
+            $upstreamStatus = Read-Field $upstreamTask "Status"
+            $upstreamWorkRequestId = Read-Field $upstreamTask "Work request"
+
+            if (
+                $upstreamStatus -eq "DONE" -and
+                -not [string]::IsNullOrWhiteSpace($workRequestId) -and
+                $upstreamWorkRequestId -eq $workRequestId
+            ) {
+                Write-Host (
+                    "Repaired satisfied upstream planning dependency for " +
+                    [string]$item.key + ": removed " + $dependency
+                ) -ForegroundColor Yellow
+                continue
+            }
+
+            throw (
+                "External AICO dependency '$dependency' referenced by item " +
+                [string]$item.key +
+                " is not a satisfied DONE task from work request " +
+                $workRequestId +
+                ". Current status: " + $upstreamStatus +
+                "; work request: " + $upstreamWorkRequestId
+            )
         }
+
+        throw "Unknown dependency key '$dependency' referenced by item $($item.key)"
     }
+
+    $item.dependencies = @($repairedDependencies | Select-Object -Unique)
 }
 
 if ($authorizationKey -ne "NONE" -and -not $keys.ContainsKey($authorizationKey)) {
