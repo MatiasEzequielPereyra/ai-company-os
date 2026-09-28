@@ -61,6 +61,16 @@ Do not:
 - Bypass QA or Security to accelerate delivery.
 - Treat an ACTIVE ticket as proof that an agent is still running.
 
+## Output Contract
+
+For an engineering execution-planning task, the report must contain a `## Executable Work` section.
+
+Each work item must use exactly this single-line form:
+
+`- Kind: <DECISION|IMPLEMENTATION|VALIDATION|OPERATIONS> | Change: <concrete work> | Owner: <role> | Areas: <real paths/components> | Depends on: <item or NONE> | Verify: <concrete verification>`
+
+At least one item must be real IMPLEMENTATION work against product/repository code, configuration, tests, data/schema, infrastructure or deployable behavior. Creating tasks, backlog entries, dispatch packets or lifecycle artifacts is not implementation work.
+
 ## Output
 
 Typical outputs include:
