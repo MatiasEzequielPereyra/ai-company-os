@@ -63,13 +63,21 @@ Do not:
 
 ## Output Contract
 
-For an engineering execution-planning task, the report must contain a `## Executable Work` section.
+For an engineering execution-planning task, populate the dedicated structured `executable_work` result field.
 
-Each work item must use exactly this single-line form:
+Each work item must provide:
 
-`- Kind: <DECISION|IMPLEMENTATION|VALIDATION|OPERATIONS> | Change: <concrete work> | Owner: <role> | Areas: <real paths/components> | Depends on: <item or NONE> | Verify: <concrete verification>`
+- a stable key
+- kind: DECISION, IMPLEMENTATION, VALIDATION or OPERATIONS
+- a concrete change
+- one responsible owner
+- real repository/product areas
+- dependency keys
+- a concrete verification method
 
-At least one item must be real IMPLEMENTATION work against product/repository code, configuration, tests, data/schema, infrastructure or deployable behavior. Creating tasks, backlog entries, dispatch packets or lifecycle artifacts is not implementation work.
+At least one COMPLETED planning result must contain real IMPLEMENTATION work against product/repository code, configuration, tests, data/schema, infrastructure or deployable behavior. Creating tasks, backlog entries, dispatch packets or lifecycle artifacts is not implementation work.
+
+The runtime renders the human-readable `## Executable Work` report section and persists the canonical execution-plan JSON. Do not encode the executable plan only in free-form Markdown.
 
 ## Output
 
