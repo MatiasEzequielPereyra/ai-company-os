@@ -60,6 +60,7 @@ try {
         "scripts\run-writable-agent.ps1",
         "scripts\update-runtime.ps1",
         "scripts\task-execution-lock.ps1",
+        "scripts\validate-engineering-plan-result.ps1",
         "scripts\local-runtime\resolve-local-runtime.ps1",
         "scripts\local-runtime\detect-hardware.ps1",
         "scripts\providers\invoke-ollama.ps1",
@@ -112,6 +113,15 @@ try {
     if ([int]$config.analysis_context_max_chars_by_role.cto -ne 110000) {
         throw "Runtime upgrade must add missing role-specific analysis budgets."
     }
+    if (@($config.analysis_auto_order_by_role."engineering-manager") -join "," -ne "OpenRouter,Gemini,Ollama,Codex,DeepSeek,Grok") {
+        throw "Runtime upgrade must add Engineering Manager analysis provider order."
+    }
+    if ([string]$config.analysis_models_by_role."engineering-manager".OpenRouter -ne "qwen/qwen3.8-27b:free") {
+        throw "Runtime upgrade must add Engineering Manager OpenRouter planning model."
+    }
+    if ([string]$config.analysis_models_by_role."engineering-manager".Gemini -ne "gemini-3.5-flash-lite") {
+        throw "Runtime upgrade must add Engineering Manager Gemini planning model."
+    }
     if ([int]$config.provider_timeout_seconds.OpenRouter -ne 333) {
         throw "Runtime upgrade must preserve existing provider timeout overrides."
     }
@@ -128,6 +138,7 @@ try {
     foreach ($relative in @(
         "scripts/provider-router.ps1",
         "scripts/task-execution-lock.ps1",
+        "scripts/validate-engineering-plan-result.ps1",
         "scripts/local-runtime/resolve-local-runtime.ps1",
         ".codex/provider-config.json",
         ".codex/local-runtime-config.json"
