@@ -47,7 +47,7 @@ function Assert-ConcreteEngineeringPlanResult {
     $reportText = [string]$Result.report_markdown
 
     if ($reportText -notmatch '(?mi)^##\s+Executable Work\s*$') {
-        throw "$TaskId: Engineering Manager COMPLETED result is not an executable plan. Missing '## Executable Work'."
+        throw "${TaskId}: Engineering Manager COMPLETED result is not an executable plan. Missing '## Executable Work'."
     }
 
     $workLines = @(
@@ -57,31 +57,31 @@ function Assert-ConcreteEngineeringPlanResult {
     )
 
     if ($workLines.Count -lt 1) {
-        throw "$TaskId: Engineering Manager executable plan contains no structured work items."
+        throw "${TaskId}: Engineering Manager executable plan contains no structured work items."
     }
 
     $implementationCount = 0
 
     foreach ($line in $workLines) {
         if ($line -notmatch '^[-]\s*Kind:\s*(DECISION|IMPLEMENTATION|VALIDATION|OPERATIONS)\s*\|\s*Change:\s*.+?\s*\|\s*Owner:\s*(ceo|pm|cto|engineering-manager|backend|frontend|devops|qa|security)\s*\|\s*Areas:\s*.+?\s*\|\s*Depends on:\s*.+?\s*\|\s*Verify:\s*.+$') {
-            throw "$TaskId: malformed Engineering Manager executable work item: $line"
+            throw "${TaskId}: malformed Engineering Manager executable work item: $line"
         }
 
         if ($Matches[1] -eq "IMPLEMENTATION") {
             $implementationCount++
 
             if ($line -match '(?i)\b(create|refine|materialize|generate|prepare|update)\b.{0,80}\b(executable tasks?|engineering tasks?|task set|backlog|work requests?|dispatch packets?|lifecycle state|gate evidence)\b') {
-                throw "$TaskId: Engineering Manager plan contains recursive meta-implementation work: $line"
+                throw "${TaskId}: Engineering Manager plan contains recursive meta-implementation work: $line"
             }
 
             if ($line -match '(?i)\|\s*Areas:\s*(tasks?|backlog|planning|lifecycle)\s*\|') {
-                throw "$TaskId: Engineering Manager implementation must target real product/repository areas: $line"
+                throw "${TaskId}: Engineering Manager implementation must target real product/repository areas: $line"
             }
         }
     }
 
     if ($implementationCount -lt 1) {
-        throw "$TaskId: Engineering Manager executable plan contains no real IMPLEMENTATION work."
+        throw "${TaskId}: Engineering Manager executable plan contains no real IMPLEMENTATION work."
     }
 }
 
