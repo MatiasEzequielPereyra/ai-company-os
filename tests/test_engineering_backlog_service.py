@@ -306,3 +306,80 @@ Work request: WR-300
     assert [source.task_id for source in sources] == [
         "AICO-300"
     ]
+
+
+
+def test_downstream_engineering_manager_task_is_not_a_backlog_source(
+    tmp_path,
+):
+    write_work_request(
+        tmp_path,
+        "WR-400",
+        "FEATURE",
+    )
+
+    write(
+        tmp_path / "tasks" / "AICO-400.md",
+        """# AICO-400 - Engineering plan
+
+ID: AICO-400
+Status: DONE
+Owner: engineering-manager
+Work request: WR-400
+""",
+    )
+
+    write(
+        tmp_path / "tasks" / "AICO-401.md",
+        """# AICO-401 - Implementation authorization
+
+ID: AICO-401
+Status: DONE
+Owner: engineering-manager
+Work request: WR-400
+Source plan: AICO-400
+Work kind: DECISION
+""",
+    )
+
+    write(
+        tmp_path
+        / "docs"
+        / "engineering"
+        / "agent-reports"
+        / "AICO-400.md",
+        "# Engineering Manager plan\n",
+    )
+
+    write(
+        tmp_path
+        / "docs"
+        / "engineering"
+        / "agent-reports"
+        / "AICO-401.md",
+        "# Downstream decision report\n",
+    )
+
+    write(
+        tmp_path
+        / "docs"
+        / "engineering"
+        / "plans"
+        / "AICO-400-engineering-backlog-tasks.md",
+        "# mapping\n",
+    )
+
+    service = EngineeringBacklogService()
+
+    sources = service.ready_sources(
+        tmp_path,
+        ["WR-400"],
+    )
+
+    assert [source.task_id for source in sources] == [
+        "AICO-400"
+    ]
+    assert service.pending_sources(
+        tmp_path,
+        ["WR-400"],
+    ) == []
