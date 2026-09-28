@@ -84,7 +84,8 @@ Flujo recomendado:
 9. Realiza la aprobacion final cuando corresponda.
 
 F1 abre esta guia desde cualquier lugar.
-F2 cambia la interfaz entre Espanol e English.""",
+F2 cambia la interfaz entre Espanol e English.
+F3 cambia entre los temas Default y Hacker.""",
         ),
         "workflow": (
             "Flujo de trabajo",
@@ -317,6 +318,7 @@ Usa C cuando este disponible para copiar el detalle completo.""",
 
 F1   Ayuda / Help
 F2   Espanol <-> English
+F3   Tema Default <-> Hacker
 R    Refresh cuando corresponde
 Q    Salir desde la pantalla principal
 Esc  Volver
@@ -384,7 +386,8 @@ Recommended flow:
 9. Perform final approval when applicable.
 
 F1 opens this guide from anywhere.
-F2 switches between English and Spanish.""",
+F2 switches between English and Spanish.
+F3 switches between the Default and Hacker themes.""",
         ),
         "workflow": (
             "Workflow",
@@ -513,6 +516,7 @@ Use C where available to copy complete execution details.""",
 
 F1    Help
 F2    English <-> Spanish
+F3    Default <-> Hacker theme
 R     Refresh where applicable
 Q     Quit from main screen
 Esc   Back
@@ -1385,10 +1389,15 @@ PREFS_TEXT = {
     "es": {
         "settings_title": "Configuracion de interfaz",
         "settings_language": "Idioma",
+        "settings_theme": "Tema",
         "settings_file": "Archivo de configuracion",
         "settings_change_language": (
             "F2 cambia el idioma y guarda la preferencia "
             "automaticamente."
+        ),
+        "settings_change_theme": (
+            "F3 cambia entre el tema Default y Hacker "
+            "y guarda la preferencia automaticamente."
         ),
         "settings_scope": (
             "Estas preferencias pertenecen solamente a la interfaz. "
@@ -1418,10 +1427,15 @@ PREFS_TEXT = {
     "en": {
         "settings_title": "Interface settings",
         "settings_language": "Language",
+        "settings_theme": "Theme",
         "settings_file": "Settings file",
         "settings_change_language": (
             "F2 changes language and automatically saves "
             "the preference."
+        ),
+        "settings_change_theme": (
+            "F3 switches between the Default and Hacker themes "
+            "and automatically saves the preference."
         ),
         "settings_scope": (
             "These preferences belong only to the interface. "

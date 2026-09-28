@@ -25,6 +25,9 @@ from company_os.application.status_service import StatusService
 from company_os.application.task_service import TaskService
 from company_os.application.workflow_service import WorkflowService
 from company_os.cli.i18n import ui_text
+from company_os.cli.theme import (
+    sync_hacker_screen_class,
+)
 
 
 def _t(widget, key: str) -> str:
@@ -75,6 +78,9 @@ class ProjectManagerScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
+        sync_hacker_screen_class(
+            self
+        )
         self._refresh_projects()
 
     def action_back(self) -> None:

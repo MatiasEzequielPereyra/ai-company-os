@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from rich import box
 from rich.console import Group
 from rich.panel import Panel
 from rich.table import Table
@@ -21,6 +22,23 @@ from company_os.cli.screens.work_requests import WorkRequestsScreen
 from company_os.cli.screens.help import HelpScreen
 from company_os.cli.i18n import navigation_label, ui_text
 from company_os.cli.interface_settings import InterfaceSettingsService
+from company_os.cli.theme import (
+    HACKER_ERROR,
+    HACKER_INTERFACE_THEME,
+    HACKER_NEON,
+    HACKER_NEON_DIM,
+    HACKER_TEXTUAL_THEME_NAME,
+    HACKER_THEME,
+    interface_theme_label,
+    is_hacker_interface,
+    next_interface_theme,
+    terminal_content_title,
+    terminal_header_title,
+    terminal_navigation_label,
+    terminal_section_title,
+    terminal_sub_title,
+    sync_hacker_screen_class,
+)
 from company_os.cli.screens.command_center import CommandCenterScreen
 from company_os.application.project_service import ProjectService
 from company_os.application.provider_service import ProviderService
@@ -85,6 +103,59 @@ def _t(widget, key: str) -> str:
     )
 
 
+def _is_hacker(widget) -> bool:
+    return is_hacker_interface(
+        getattr(
+            widget.app,
+            "interface_theme",
+            "default",
+        )
+    )
+
+
+def _section_title(
+    widget,
+    title: str,
+) -> str:
+    if _is_hacker(widget):
+        return terminal_section_title(
+            title
+        )
+
+    return title
+
+
+def _panel(
+    widget,
+    content,
+    *,
+    title: str,
+) -> Panel:
+    options = {}
+
+    if _is_hacker(widget):
+        options = {
+            "box": box.ASCII,
+            "border_style": HACKER_NEON,
+        }
+
+    return Panel(
+        content,
+        title=_section_title(
+            widget,
+            title,
+        ),
+        **options,
+    )
+
+
+def _table_box(widget):
+    if _is_hacker(widget):
+        return box.ASCII
+
+    return None
+
+
 class TaskDetailScreen(Screen):
     BINDINGS = [
         Binding("escape", "back", "Back"),
@@ -106,6 +177,11 @@ class TaskDetailScreen(Screen):
 
         yield Footer()
 
+    def on_mount(self) -> None:
+        sync_hacker_screen_class(
+            self
+        )
+
     def action_back(self) -> None:
         self.app.pop_screen()
 
@@ -113,8 +189,16 @@ class TaskDetailScreen(Screen):
         task = self.task_data
 
         metadata = Table(
+            title=(
+                _section_title(
+                    self,
+                    "Task",
+                )
+                if _is_hacker(self)
+                else None
+            ),
             show_header=False,
-            box=None,
+            box=_table_box(self),
             padding=(0, 2),
         )
 
@@ -178,17 +262,49 @@ class TaskDetailScreen(Screen):
         )
 
         return Group(
-            Panel(metadata, title="Task"),
+            (
+                metadata
+                if _is_hacker(self)
+                else Panel(
+                    metadata,
+                    title="Task",
+                )
+            ),
             Text(""),
-            Panel(objective, title=_t(self, "objective")),
+            _panel(
+                self,
+                objective,
+                title=_t(
+                    self,
+                    "objective",
+                ),
+            ),
             Text(""),
-            Panel(dependencies, title=_t(self, "dependencies")),
+            _panel(
+                self,
+                dependencies,
+                title=_t(
+                    self,
+                    "dependencies",
+                ),
+            ),
             Text(""),
-            Panel(evidence, title=_t(self, "evidence")),
+            _panel(
+                self,
+                evidence,
+                title=_t(
+                    self,
+                    "evidence",
+                ),
+            ),
             Text(""),
-            Panel(
+            _panel(
+                self,
                 str(task.source_path),
-                title=_t(self, "source"),
+                title=_t(
+                    self,
+                    "source",
+                ),
             ),
         )
 
@@ -230,6 +346,10 @@ class TasksScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
+        sync_hacker_screen_class(
+            self
+        )
+
         task_list = self.query_one(
             "#task-list",
             ListView,
@@ -295,6 +415,11 @@ class AgentDetailScreen(Screen):
 
         yield Footer()
 
+    def on_mount(self) -> None:
+        sync_hacker_screen_class(
+            self
+        )
+
     def action_back(self) -> None:
         self.app.pop_screen()
 
@@ -310,9 +435,12 @@ class AgentDetailScreen(Screen):
         agent = self.agent_data
 
         metadata = Table(
-            title=agent.display_name,
+            title=_section_title(
+                self,
+                agent.display_name,
+            ),
             show_header=False,
-            box=None,
+            box=_table_box(self),
             padding=(0, 2),
         )
 
@@ -368,11 +496,19 @@ class AgentDetailScreen(Screen):
         ]
 
         tasks_table = Table(
-            title=_t(
+            title=_section_title(
                 self,
-                "agent_repository_tasks",
+                _t(
+                    self,
+                    "agent_repository_tasks",
+                ),
             ),
             show_lines=True,
+            **(
+                {"box": box.ASCII}
+                if _is_hacker(self)
+                else {}
+            ),
         )
 
         tasks_table.add_column("ID")
@@ -425,7 +561,8 @@ class AgentDetailScreen(Screen):
             Text(""),
             assigned_content,
             Text(""),
-            Panel(
+            _panel(
+                self,
                 runtime_note,
                 title=_t(
                     self,
@@ -475,6 +612,10 @@ class AgentsScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
+        sync_hacker_screen_class(
+            self
+        )
+
         agent_list = self.query_one(
             "#agent-list",
             ListView,
@@ -578,6 +719,10 @@ class LegacyCommandCenterScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
+        sync_hacker_screen_class(
+            self
+        )
+
         self.query_one(
             "#command-input",
             Input,
@@ -726,6 +871,9 @@ class ProvidersScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
+        sync_hacker_screen_class(
+            self
+        )
         self._refresh()
 
     def action_back(self) -> None:
@@ -815,12 +963,22 @@ class ProvidersScreen(Screen):
             .get_statuses()
         )
 
+        providers_title = _t(
+            self,
+            "providers_title",
+        )
+
         table = Table(
-            title=_t(
+            title=_section_title(
                 self,
-                "providers_title",
+                providers_title,
             ),
             show_lines=True,
+            **(
+                {"box": box.ASCII}
+                if _is_hacker(self)
+                else {}
+            ),
         )
 
         table.add_column(
@@ -959,7 +1117,8 @@ class ProvidersScreen(Screen):
             "#providers-readiness",
             Static,
         ).update(
-            Panel(
+            _panel(
+                self,
                 readiness,
                 title=_t(
                     self,
@@ -1195,6 +1354,111 @@ class AICompanyTUI(App):
     #agent-detail {
         width: 100%;
     }
+
+    Screen.hacker-mode {
+        background: $background;
+        color: $foreground;
+    }
+
+    Screen.hacker-mode Header {
+        background: $background;
+        color: $accent;
+        text-style: bold;
+    }
+
+    Screen.hacker-mode Footer {
+        background: $background;
+        color: $foreground;
+    }
+
+    Screen.hacker-mode #nav {
+        width: 31;
+        min-width: 27;
+        border: solid $accent;
+        background: $background;
+    }
+
+    Screen.hacker-mode #content-scroll {
+        border: solid $accent;
+        background: $background;
+        padding: 0 1;
+    }
+
+    Screen.hacker-mode #content-title {
+        color: $accent;
+        background: $background;
+        text-style: bold;
+        margin-bottom: 0;
+        padding: 0 1;
+    }
+
+    Screen.hacker-mode ListView,
+    Screen.hacker-mode ListItem,
+    Screen.hacker-mode Static {
+        background: $background;
+    }
+
+    Screen.hacker-mode ListView > ListItem {
+        height: auto;
+        padding: 0 1;
+        color: $foreground;
+        background: $background;
+    }
+
+    Screen.hacker-mode ListView > ListItem Label {
+        color: $foreground;
+        background: $background;
+    }
+
+    Screen.hacker-mode ListView > ListItem.-hovered,
+    Screen.hacker-mode ListView > ListItem.-hovered Label {
+        color: white;
+        background: $secondary;
+        text-style: bold;
+    }
+
+    Screen.hacker-mode ListView > ListItem.-highlight,
+    Screen.hacker-mode ListView:focus > ListItem.-highlight,
+    Screen.hacker-mode ListView > ListItem.-highlight Label,
+    Screen.hacker-mode ListView:focus > ListItem.-highlight Label {
+        color: white;
+        background: $secondary;
+        text-style: bold;
+    }
+
+    Screen.hacker-mode Input {
+        color: $foreground;
+        background: $background;
+        border: solid $secondary;
+    }
+
+    Screen.hacker-mode Input:focus {
+        color: $accent;
+        background: $background;
+        border: solid $accent;
+    }
+
+    Screen.hacker-mode #task-list,
+    Screen.hacker-mode #agent-list,
+    Screen.hacker-mode #projects-list,
+    Screen.hacker-mode #work-requests-list,
+    Screen.hacker-mode #proposal-list,
+    Screen.hacker-mode #help-sections,
+    Screen.hacker-mode #help-content-scroll {
+        border: solid $accent;
+        background: $background;
+    }
+
+    Screen.hacker-mode #tasks-heading,
+    Screen.hacker-mode #agents-heading,
+    Screen.hacker-mode #projects-heading,
+    Screen.hacker-mode #project-path-heading,
+    Screen.hacker-mode #work-requests-heading,
+    Screen.hacker-mode #proposal-heading {
+        color: $accent;
+        background: $background;
+        text-style: bold;
+    }
     """
 
     BINDINGS = [
@@ -1217,6 +1481,12 @@ class AICompanyTUI(App):
             "f2",
             "toggle_language",
             "ES / EN",
+        ),
+
+        Binding(
+            "f3",
+            "toggle_theme",
+            "Tema / Theme",
         ),
 
         Binding(
@@ -1245,6 +1515,15 @@ class AICompanyTUI(App):
             .load_language()
         )
 
+        self.interface_theme = (
+            self.interface_settings
+            .load_theme()
+        )
+
+        self._default_textual_theme = (
+            self.theme
+        )
+
         self.current_view = "overview"
 
         self.project = project
@@ -1263,7 +1542,11 @@ class AICompanyTUI(App):
             yield CircularListView(
                 *[
                     ListItem(
-                        Label(self._nav_label(view)),
+                        Label(
+                            self._nav_display_label(
+                                view
+                            )
+                        ),
                         id=f"nav-{view}",
                     )
                     for label, view in NAVIGATION
@@ -1284,6 +1567,11 @@ class AICompanyTUI(App):
         yield Footer()
 
     def on_mount(self) -> None:
+        self.register_theme(
+            HACKER_THEME
+        )
+        self._apply_interface_theme()
+
         self._load_data()
 
         nav = self.query_one(
@@ -1318,7 +1606,7 @@ class AICompanyTUI(App):
         self.handoff_records = HandoffService().get_handoffs(self.project)
         self.runtime_source = RuntimeService().get_runtime_source(self.project)
 
-        self.sub_title = self.project.name
+        self._refresh_terminal_chrome()
 
     def on_list_view_selected(
         self,
@@ -1389,16 +1677,13 @@ class AICompanyTUI(App):
     ) -> None:
         self.current_view = view
 
-        titles = {
-            key: self._nav_label(key)
-            for _label, key in NAVIGATION
-        }
-
         self.query_one(
             "#content-title",
             Static,
         ).update(
-            titles.get(view, view)
+            self._content_display_title(
+                view
+            )
         )
 
         renderers = {
@@ -1431,9 +1716,24 @@ class AICompanyTUI(App):
         snapshot = self.snapshot
 
         project = Table(
+            title=(
+                terminal_section_title(
+                    "Node status"
+                )
+                if self._hacker_mode()
+                else None
+            ),
             show_header=False,
-            box=None,
-            padding=(0, 2),
+            box=(
+                box.ASCII
+                if self._hacker_mode()
+                else None
+            ),
+            padding=(
+                (0, 1)
+                if self._hacker_mode()
+                else (0, 2)
+            ),
         )
 
         project.add_column()
@@ -1451,7 +1751,13 @@ class AICompanyTUI(App):
 
         project.add_row(
             _t(self, "overview_phase"),
-            phase,
+            (
+                self._status_display(
+                    phase
+                )
+                if self._hacker_mode()
+                else phase
+            ),
         )
 
         project.add_row(
@@ -1464,8 +1770,26 @@ class AICompanyTUI(App):
             snapshot.project.root,
         )
 
+        counts_title = _t(
+            self,
+            "overview_task_summary",
+        )
+
+        counts_options = {
+            "title": (
+                terminal_section_title(
+                    "Task matrix"
+                )
+                if self._hacker_mode()
+                else counts_title
+            )
+        }
+
+        if self._hacker_mode():
+            counts_options["box"] = box.ASCII
+
         counts = Table(
-            title=_t(self, "overview_task_summary")
+            **counts_options
         )
 
         counts.add_column(_t(self, "status"))
@@ -1489,8 +1813,16 @@ class AICompanyTUI(App):
 
         for name, value in values:
             counts.add_row(
-                name,
+                self._status_display(
+                    name
+                ),
                 str(value),
+            )
+
+        if self._hacker_mode():
+            return Group(
+                project,
+                counts,
             )
 
         return Group(
@@ -1504,12 +1836,25 @@ class AICompanyTUI(App):
             self.snapshot.agents
         )
 
+        agents_title = _t(
+            self,
+            "agents_view_title",
+        )
+
         table = Table(
-            title=_t(
-                self,
-                "agents_view_title",
+            title=(
+                terminal_section_title(
+                    agents_title
+                )
+                if self._hacker_mode()
+                else agents_title
             ),
             show_lines=True,
+            **(
+                {"box": box.ASCII}
+                if self._hacker_mode()
+                else {}
+            ),
         )
 
         table.add_column(
@@ -1554,20 +1899,36 @@ class AICompanyTUI(App):
 
             table.add_row(
                 agent.display_name,
-                agent.work_state.value,
-                runtime_value,
+                self._status_display(
+                    agent.work_state.value
+                ),
+                self._status_display(
+                    runtime_value
+                ),
                 ", ".join(
                     agent.current_task_ids
                 ) or "-",
             )
 
+        agents_summary_title = _t(
+            self,
+            "agents_summary",
+        )
+
         summary = Table(
-            title=_t(
-                self,
-                "agents_summary",
+            title=(
+                terminal_section_title(
+                    agents_summary_title
+                )
+                if self._hacker_mode()
+                else agents_summary_title
             ),
             show_header=False,
-            box=None,
+            box=(
+                box.ASCII
+                if self._hacker_mode()
+                else None
+            ),
         )
 
         summary.add_column()
@@ -1607,10 +1968,20 @@ class AICompanyTUI(App):
             Text(""),
             Panel(
                 runtime_distribution,
-                title=_t(
-                    self,
-                    "agents_runtime_distribution",
+                title=(
+                    terminal_section_title(
+                        _t(
+                            self,
+                            "agents_runtime_distribution",
+                        )
+                    )
+                    if self._hacker_mode()
+                    else _t(
+                        self,
+                        "agents_runtime_distribution",
+                    )
                 ),
+                **self._hacker_panel_options(),
             ),
             Text(""),
             table,
@@ -1629,12 +2000,25 @@ class AICompanyTUI(App):
 
         nodes = list(workflow.nodes)
 
+        workflow_title = _t(
+            self,
+            "workflow_map_title",
+        )
+
         table = Table(
-            title=_t(
-                self,
-                "workflow_map_title",
+            title=(
+                terminal_section_title(
+                    workflow_title
+                )
+                if self._hacker_mode()
+                else workflow_title
             ),
             show_lines=True,
+            **(
+                {"box": box.ASCII}
+                if self._hacker_mode()
+                else {}
+            ),
         )
 
         table.add_column(
@@ -1656,8 +2040,12 @@ class AICompanyTUI(App):
         for node in nodes:
             table.add_row(
                 node.task_id,
-                node.status,
-                node.execution_state,
+                self._status_display(
+                    node.status
+                ),
+                self._status_display(
+                    node.execution_state
+                ),
                 node.owner,
                 (
                     ", ".join(
@@ -1697,13 +2085,25 @@ class AICompanyTUI(App):
                 )
             )
 
+        workflow_summary_title = _t(
+            self,
+            "workflow_summary_title",
+        )
+
         summary = Table(
-            title=_t(
-                self,
-                "workflow_summary_title",
+            title=(
+                terminal_section_title(
+                    workflow_summary_title
+                )
+                if self._hacker_mode()
+                else workflow_summary_title
             ),
             show_header=False,
-            box=None,
+            box=(
+                box.ASCII
+                if self._hacker_mode()
+                else None
+            ),
         )
 
         summary.add_column()
@@ -1761,42 +2161,92 @@ class AICompanyTUI(App):
             Text(""),
             Panel(
                 display(runnable),
-                title=_t(
-                    self,
-                    "workflow_runnable",
+                title=(
+                    terminal_section_title(
+                        _t(
+                            self,
+                            "workflow_runnable",
+                        )
+                    )
+                    if self._hacker_mode()
+                    else _t(
+                        self,
+                        "workflow_runnable",
+                    )
                 ),
+                **self._hacker_panel_options(),
             ),
             Text(""),
             Panel(
                 display(waiting),
-                title=_t(
-                    self,
-                    "workflow_waiting_tasks",
+                title=(
+                    terminal_section_title(
+                        _t(
+                            self,
+                            "workflow_waiting_tasks",
+                        )
+                    )
+                    if self._hacker_mode()
+                    else _t(
+                        self,
+                        "workflow_waiting_tasks",
+                    )
                 ),
+                **self._hacker_panel_options(),
             ),
             Text(""),
             Panel(
                 display(blocked),
-                title=_t(
-                    self,
-                    "workflow_blocked_tasks",
+                title=(
+                    terminal_section_title(
+                        _t(
+                            self,
+                            "workflow_blocked_tasks",
+                        )
+                    )
+                    if self._hacker_mode()
+                    else _t(
+                        self,
+                        "workflow_blocked_tasks",
+                    )
                 ),
+                **self._hacker_panel_options(),
             ),
             Text(""),
             Panel(
                 display(completed),
-                title=_t(
-                    self,
-                    "workflow_done_tasks",
+                title=(
+                    terminal_section_title(
+                        _t(
+                            self,
+                            "workflow_done_tasks",
+                        )
+                    )
+                    if self._hacker_mode()
+                    else _t(
+                        self,
+                        "workflow_done_tasks",
+                    )
                 ),
+                **self._hacker_panel_options(),
             ),
             Text(""),
             Panel(
                 edges,
-                title=_t(
-                    self,
-                    "dependency_dag",
+                title=(
+                    terminal_section_title(
+                        _t(
+                            self,
+                            "dependency_dag",
+                        )
+                    )
+                    if self._hacker_mode()
+                    else _t(
+                        self,
+                        "dependency_dag",
+                    )
                 ),
+                **self._hacker_panel_options(),
             ),
         )
 
@@ -1808,7 +2258,13 @@ class AICompanyTUI(App):
                 _t(self, "no_activity")
             )
 
-        table = Table()
+        table = Table(
+            **(
+                {"box": box.ASCII}
+                if self._hacker_mode()
+                else {}
+            )
+        )
 
         table.add_column(
             "Time",
@@ -1860,7 +2316,13 @@ class AICompanyTUI(App):
                 _t(self, "no_handoffs")
             )
 
-        table = Table()
+        table = Table(
+            **(
+                {"box": box.ASCII}
+                if self._hacker_mode()
+                else {}
+            )
+        )
 
         table.add_column("Task")
         table.add_column(_t(self, "kind"))
@@ -1875,7 +2337,11 @@ class AICompanyTUI(App):
                 record.kind,
                 record.from_actor or "-",
                 record.to_actor,
-                "STALE" if record.stale else "OK",
+                self._status_display(
+                    "STALE"
+                    if record.stale
+                    else "OK"
+                ),
                 record.message,
             )
 
@@ -1892,13 +2358,25 @@ class AICompanyTUI(App):
                 )
             )
 
+        runtime_title = _t(
+            self,
+            "runtime_overview",
+        )
+
         table = Table(
-            title=_t(
-                self,
-                "runtime_overview",
+            title=(
+                terminal_section_title(
+                    runtime_title
+                )
+                if self._hacker_mode()
+                else runtime_title
             ),
             show_header=False,
-            box=None,
+            box=(
+                box.ASCII
+                if self._hacker_mode()
+                else None
+            ),
             padding=(0, 2),
         )
 
@@ -1966,18 +2444,38 @@ class AICompanyTUI(App):
             Text(""),
             Panel(
                 authority_message,
-                title=_t(
-                    self,
-                    "runtime_authority",
+                title=(
+                    terminal_section_title(
+                        _t(
+                            self,
+                            "runtime_authority",
+                        )
+                    )
+                    if self._hacker_mode()
+                    else _t(
+                        self,
+                        "runtime_authority",
+                    )
                 ),
+                **self._hacker_panel_options(),
             ),
             Text(""),
             Panel(
                 runtime.message,
-                title=_t(
-                    self,
-                    "runtime_adapter_message",
+                title=(
+                    terminal_section_title(
+                        _t(
+                            self,
+                            "runtime_adapter_message",
+                        )
+                    )
+                    if self._hacker_mode()
+                    else _t(
+                        self,
+                        "runtime_adapter_message",
+                    )
                 ),
+                **self._hacker_panel_options(),
             ),
         )
 
@@ -1989,7 +2487,13 @@ class AICompanyTUI(App):
                 _t(self, "no_blockers")
             )
 
-        table = Table()
+        table = Table(
+            **(
+                {"box": box.ASCII}
+                if self._hacker_mode()
+                else {}
+            )
+        )
 
         table.add_column("Task")
         table.add_column(_t(self, "reason"))
@@ -2007,12 +2511,25 @@ class AICompanyTUI(App):
             self.snapshot.gates
         )
 
+        gates_title = _t(
+            self,
+            "gates_title",
+        )
+
         table = Table(
-            title=_t(
-                self,
-                "gates_title",
+            title=(
+                terminal_section_title(
+                    gates_title
+                )
+                if self._hacker_mode()
+                else gates_title
             ),
             show_lines=True,
+            **(
+                {"box": box.ASCII}
+                if self._hacker_mode()
+                else {}
+            ),
         )
 
         table.add_column(
@@ -2055,8 +2572,12 @@ class AICompanyTUI(App):
 
             table.add_row(
                 gate.name,
-                gate.state.value,
-                evidence,
+                self._status_display(
+                    gate.state.value
+                ),
+                self._status_display(
+                    evidence
+                ),
             )
 
         if stale_gates:
@@ -2082,10 +2603,20 @@ class AICompanyTUI(App):
             Text(""),
             Panel(
                 attention,
-                title=_t(
-                    self,
-                    "gates_attention",
+                title=(
+                    terminal_section_title(
+                        _t(
+                            self,
+                            "gates_attention",
+                        )
+                    )
+                    if self._hacker_mode()
+                    else _t(
+                        self,
+                        "gates_attention",
+                    )
                 ),
+                **self._hacker_panel_options(),
             ),
             Text(""),
             Panel(
@@ -2093,10 +2624,20 @@ class AICompanyTUI(App):
                     self,
                     "gates_interpretation_body",
                 ),
-                title=_t(
-                    self,
-                    "gates_interpretation",
+                title=(
+                    terminal_section_title(
+                        _t(
+                            self,
+                            "gates_interpretation",
+                        )
+                    )
+                    if self._hacker_mode()
+                    else _t(
+                        self,
+                        "gates_interpretation",
+                    )
                 ),
+                **self._hacker_panel_options(),
             ),
         )
 
@@ -2108,7 +2649,13 @@ class AICompanyTUI(App):
                 _t(self, "no_doctor_findings")
             )
 
-        table = Table()
+        table = Table(
+            **(
+                {"box": box.ASCII}
+                if self._hacker_mode()
+                else {}
+            )
+        )
 
         table.add_column(_t(self, "severity"))
         table.add_column(_t(self, "code"))
@@ -2116,7 +2663,9 @@ class AICompanyTUI(App):
 
         for finding in findings:
             table.add_row(
-                finding.severity.value,
+                self._status_display(
+                    finding.severity.value
+                ),
                 finding.code,
                 finding.message,
             )
@@ -2130,7 +2679,13 @@ class AICompanyTUI(App):
                 _t(self, "no_diagnostics")
             )
 
-        table = Table()
+        table = Table(
+            **(
+                {"box": box.ASCII}
+                if self._hacker_mode()
+                else {}
+            )
+        )
 
         table.add_column(_t(self, "severity"))
         table.add_column(_t(self, "code"))
@@ -2138,7 +2693,9 @@ class AICompanyTUI(App):
 
         for diagnostic in diagnostics:
             table.add_row(
-                diagnostic.severity.value,
+                self._status_display(
+                    diagnostic.severity.value
+                ),
                 diagnostic.code,
                 diagnostic.message,
             )
@@ -2152,13 +2709,31 @@ class AICompanyTUI(App):
             else "English"
         )
 
+        theme_name = (
+            interface_theme_label(
+                self.interface_theme
+            )
+        )
+
+        settings_title = _t(
+            self,
+            "settings_title",
+        )
+
         table = Table(
-            title=_t(
-                self,
-                "settings_title",
+            title=(
+                terminal_section_title(
+                    settings_title
+                )
+                if self._hacker_mode()
+                else settings_title
             ),
             show_header=False,
-            box=None,
+            box=(
+                box.ASCII
+                if self._hacker_mode()
+                else None
+            ),
         )
 
         table.add_column()
@@ -2170,6 +2745,14 @@ class AICompanyTUI(App):
                 "settings_language",
             ),
             language_name,
+        )
+
+        table.add_row(
+            _t(
+                self,
+                "settings_theme",
+            ),
+            theme_name,
         )
 
         table.add_row(
@@ -2191,6 +2774,16 @@ class AICompanyTUI(App):
                     "settings_change_language",
                 ),
                 title="F2",
+                **self._hacker_panel_options(),
+            ),
+            Text(""),
+            Panel(
+                _t(
+                    self,
+                    "settings_change_theme",
+                ),
+                title="F3",
+                **self._hacker_panel_options(),
             ),
             Text(""),
             Panel(
@@ -2198,10 +2791,20 @@ class AICompanyTUI(App):
                     self,
                     "settings_scope",
                 ),
-                title=_t(
-                    self,
-                    "settings_title",
+                title=(
+                    terminal_section_title(
+                        _t(
+                            self,
+                            "settings_title",
+                        )
+                    )
+                    if self._hacker_mode()
+                    else _t(
+                        self,
+                        "settings_title",
+                    )
                 ),
+                **self._hacker_panel_options(),
             ),
         )
 
@@ -2213,6 +2816,141 @@ class AICompanyTUI(App):
             self.language,
             view,
         )
+
+    def _hacker_mode(self) -> bool:
+        return is_hacker_interface(
+            self.interface_theme
+        )
+
+    def _nav_display_label(
+        self,
+        view: str,
+    ) -> str:
+        label = self._nav_label(view)
+
+        if not self._hacker_mode():
+            return label
+
+        index = next(
+            (
+                position
+                for position, (_label, key)
+                in enumerate(
+                    NAVIGATION,
+                    start=1,
+                )
+                if key == view
+            ),
+            0,
+        )
+
+        return terminal_navigation_label(
+            index,
+            label,
+        )
+
+    def _status_display(
+        self,
+        value: str,
+    ):
+        if not self._hacker_mode():
+            return value
+
+        normalized = value.upper()
+
+        if any(
+            marker in normalized
+            for marker in (
+                "BLOCKED",
+                "FAIL",
+                "ERROR",
+                "CHANGES_REQUIRED",
+            )
+        ):
+            style = (
+                f"bold {HACKER_ERROR}"
+            )
+        elif any(
+            marker in normalized
+            for marker in (
+                "BACKLOG",
+                "WAIT",
+                "UNKNOWN",
+                "STALE",
+            )
+        ):
+            style = HACKER_NEON_DIM
+        else:
+            style = (
+                f"bold {HACKER_NEON}"
+            )
+
+        return Text(
+            value,
+            style=style,
+        )
+
+    def _hacker_panel_options(
+        self,
+    ) -> dict:
+        if not self._hacker_mode():
+            return {}
+
+        return {
+            "box": box.ASCII,
+            "border_style": HACKER_NEON,
+        }
+
+    def _content_display_title(
+        self,
+        view: str,
+    ) -> str:
+        label = self._nav_label(view)
+
+        if self._hacker_mode():
+            return terminal_content_title(
+                label
+            )
+
+        return label
+
+    def _refresh_terminal_chrome(
+        self,
+    ) -> None:
+        screens = list(
+            getattr(
+                self,
+                "screen_stack",
+                [],
+            )
+        )
+
+        if not screens:
+            screens = [self.screen]
+
+        if self._hacker_mode():
+            for screen in screens:
+                screen.add_class(
+                    "hacker-mode"
+                )
+
+            self.title = (
+                terminal_header_title()
+            )
+            self.sub_title = (
+                terminal_sub_title(
+                    self.project.name
+                )
+            )
+            return
+
+        for screen in screens:
+            screen.remove_class(
+                "hacker-mode"
+            )
+
+        self.title = "AI Company OS"
+        self.sub_title = self.project.name
 
     def action_open_help(self) -> None:
         current = self.screen
@@ -2274,6 +3012,58 @@ class AICompanyTUI(App):
             )
         )
 
+    def _apply_interface_theme(
+        self,
+    ) -> None:
+        if (
+            self.interface_theme
+            == HACKER_INTERFACE_THEME
+        ):
+            self.theme = (
+                HACKER_TEXTUAL_THEME_NAME
+            )
+        elif (
+            self.theme
+            == HACKER_TEXTUAL_THEME_NAME
+        ):
+            self.theme = (
+                self._default_textual_theme
+            )
+
+        self._refresh_terminal_chrome()
+
+    def action_toggle_theme(self) -> None:
+        self.interface_theme = (
+            next_interface_theme(
+                self.interface_theme
+            )
+        )
+
+        try:
+            self.interface_settings.save_theme(
+                self.interface_theme
+            )
+        except Exception as exc:
+            self.notify(
+                f"Theme save failed: {exc}",
+                severity="warning",
+            )
+
+        self._apply_interface_theme()
+        self._refresh_navigation_language()
+
+        if self.current_view == "settings":
+            self._show_view(
+                "settings"
+            )
+
+        self.notify(
+            "Theme: "
+            + interface_theme_label(
+                self.interface_theme
+            )
+        )
+
     def action_toggle_language(self) -> None:
         self.language = (
             "en"
@@ -2326,7 +3116,9 @@ class AICompanyTUI(App):
 
             if matches:
                 matches[0].update(
-                    self._nav_label(view)
+                    self._nav_display_label(
+                        view
+                    )
                 )
 
         titles = list(
@@ -2337,7 +3129,7 @@ class AICompanyTUI(App):
 
         if titles:
             titles[0].update(
-                self._nav_label(
+                self._content_display_title(
                     self.current_view
                 )
             )

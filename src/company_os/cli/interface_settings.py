@@ -8,6 +8,10 @@ from company_os.cli.i18n import (
     DEFAULT_LANGUAGE,
     SUPPORTED_LANGUAGES,
 )
+from company_os.cli.theme import (
+    DEFAULT_INTERFACE_THEME,
+    normalize_interface_theme,
+)
 
 
 class InterfaceSettingsService:
@@ -40,6 +44,7 @@ class InterfaceSettingsService:
         if not self.path.exists():
             return {
                 "language": DEFAULT_LANGUAGE,
+                "theme": DEFAULT_INTERFACE_THEME,
             }
 
         try:
@@ -56,6 +61,8 @@ class InterfaceSettingsService:
                 return {
                     "language":
                     DEFAULT_LANGUAGE,
+                    "theme":
+                    DEFAULT_INTERFACE_THEME,
                 }
 
             language = data.get(
@@ -70,6 +77,14 @@ class InterfaceSettingsService:
                 language = DEFAULT_LANGUAGE
 
             data["language"] = language
+            data["theme"] = (
+                normalize_interface_theme(
+                    data.get(
+                        "theme",
+                        DEFAULT_INTERFACE_THEME,
+                    )
+                )
+            )
 
             return data
 
@@ -79,10 +94,14 @@ class InterfaceSettingsService:
         ):
             return {
                 "language": DEFAULT_LANGUAGE,
+                "theme": DEFAULT_INTERFACE_THEME,
             }
 
     def load_language(self) -> str:
         return self.load()["language"]
+
+    def load_theme(self) -> str:
+        return self.load()["theme"]
 
     def save_language(
         self,
@@ -99,6 +118,48 @@ class InterfaceSettingsService:
 
         data = self.load()
         data["language"] = language
+
+        self.path.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        temporary = self.path.with_suffix(
+            ".tmp"
+        )
+
+        temporary.write_text(
+            json.dumps(
+                data,
+                indent=2,
+                ensure_ascii=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        temporary.replace(
+            self.path
+        )
+
+
+    def save_theme(
+        self,
+        theme: str,
+    ) -> None:
+        normalized = (
+            normalize_interface_theme(
+                theme
+            )
+        )
+
+        if normalized != theme:
+            raise ValueError(
+                f"Unsupported theme: {theme}"
+            )
+
+        data = self.load()
+        data["theme"] = normalized
 
         self.path.parent.mkdir(
             parents=True,

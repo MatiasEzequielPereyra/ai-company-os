@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from rich import box
 from rich.panel import Panel
 
 from textual.app import ComposeResult
@@ -20,6 +21,12 @@ from company_os.application.work_request_service import (
     WorkRequestService,
 )
 from company_os.cli.i18n import ui_text
+from company_os.cli.theme import (
+    HACKER_NEON,
+    is_hacker_interface,
+    sync_hacker_screen_class,
+    terminal_section_title,
+)
 from company_os.cli.screens.plan_control import (
     PlanControlScreen,
 )
@@ -72,6 +79,11 @@ class DeleteWorkRequestScreen(Screen):
 
         yield Footer()
 
+    def on_mount(self) -> None:
+        sync_hacker_screen_class(
+            self
+        )
+
     def _render_content(self):
         allowed, reason = (
             self.service.can_delete(
@@ -86,14 +98,38 @@ class DeleteWorkRequestScreen(Screen):
             else _t(self, "wr_delete_denied")
         )
 
+        hacker = is_hacker_interface(
+            getattr(
+                self.app,
+                "interface_theme",
+                "default",
+            )
+        )
+
+        title = _t(
+            self,
+            "wr_delete_title",
+        )
+
         return Panel(
             f"Work Request: {self.request.id}\n\n"
             f"{self.request.objective}\n\n"
             f"{reason}\n\n"
             f"{instructions}",
-            title=_t(
-                self,
-                "wr_delete_title",
+            title=(
+                terminal_section_title(
+                    title
+                )
+                if hacker
+                else title
+            ),
+            **(
+                {
+                    "box": box.ASCII,
+                    "border_style": HACKER_NEON,
+                }
+                if hacker
+                else {}
             ),
         )
 
@@ -191,6 +227,9 @@ class WorkRequestsScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
+        sync_hacker_screen_class(
+            self
+        )
         self._refresh()
 
     def refresh_language(self) -> None:

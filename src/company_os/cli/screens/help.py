@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from rich import box
 from rich.panel import Panel
 
 from textual.app import ComposeResult
@@ -19,6 +20,12 @@ from textual.widgets import (
 )
 
 from company_os.cli.widgets import CircularListView
+from company_os.cli.theme import (
+    HACKER_NEON,
+    is_hacker_interface,
+    sync_hacker_screen_class,
+    terminal_section_title,
+)
 from company_os.cli.i18n import (
     HELP_SECTION_IDS,
     help_section_content,
@@ -109,6 +116,10 @@ class HelpScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
+        sync_hacker_screen_class(
+            self
+        )
+
         section_list = self.query_one(
             "#help-sections",
             ListView,
@@ -218,13 +229,35 @@ class HelpScreen(Screen):
             section_id,
         )
 
+        hacker = is_hacker_interface(
+            getattr(
+                self.app,
+                "interface_theme",
+                "default",
+            )
+        )
+
         self.query_one(
             "#help-content",
             Static,
         ).update(
             Panel(
                 body,
-                title=title,
+                title=(
+                    terminal_section_title(
+                        title
+                    )
+                    if hacker
+                    else title
+                ),
+                **(
+                    {
+                        "box": box.ASCII,
+                        "border_style": HACKER_NEON,
+                    }
+                    if hacker
+                    else {}
+                ),
             )
         )
 

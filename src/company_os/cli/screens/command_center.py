@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from rich import box
 from rich.console import Group
 from rich.panel import Panel
 from rich.table import Table
@@ -28,6 +29,12 @@ from company_os.application.ceo_planning_service import (
 from company_os.cli.screens.prepare_plan import PreparePlanScreen
 
 from company_os.cli.i18n import ui_text
+from company_os.cli.theme import (
+    HACKER_NEON,
+    is_hacker_interface,
+    sync_hacker_screen_class,
+    terminal_section_title,
+)
 from company_os.application.command_service import (
     CommandService,
 )
@@ -41,6 +48,42 @@ def _t(widget, key: str) -> str:
             "es",
         ),
         key,
+    )
+
+
+def _hacker(widget) -> bool:
+    return is_hacker_interface(
+        getattr(
+            widget.app,
+            "interface_theme",
+            "default",
+        )
+    )
+
+
+def _panel(
+    widget,
+    content,
+    *,
+    title: str,
+) -> Panel:
+    return Panel(
+        content,
+        title=(
+            terminal_section_title(
+                title
+            )
+            if _hacker(widget)
+            else title
+        ),
+        **(
+            {
+                "box": box.ASCII,
+                "border_style": HACKER_NEON,
+            }
+            if _hacker(widget)
+            else {}
+        ),
     )
 
 
@@ -73,6 +116,10 @@ class PlanPreviewScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
+        sync_hacker_screen_class(
+            self
+        )
+
         try:
             project = Path(
                 self.app.project
@@ -138,7 +185,11 @@ class PlanPreviewScreen(Screen):
 
         summary = Table(
             show_header=False,
-            box=None,
+            box=(
+                box.ASCII
+                if _hacker(self)
+                else None
+            ),
             padding=(0, 2),
         )
 
@@ -185,8 +236,25 @@ class PlanPreviewScreen(Screen):
         )
 
         task_table = Table(
-            title=_t(self, "plan_proposed_tasks"),
+            title=(
+                terminal_section_title(
+                    _t(
+                        self,
+                        "plan_proposed_tasks",
+                    )
+                )
+                if _hacker(self)
+                else _t(
+                    self,
+                    "plan_proposed_tasks",
+                )
+            ),
             show_lines=True,
+            **(
+                {"box": box.ASCII}
+                if _hacker(self)
+                else {}
+            ),
         )
 
         task_table.add_column(_t(self, "plan_key"))
@@ -216,26 +284,38 @@ class PlanPreviewScreen(Screen):
             start=1,
         ):
             wave_renderables.append(
-                Panel(
+                _panel(
+                    self,
                     "\n".join(
                         f"{task.key}  {task.owner}  {task.title}"
                         for task in wave
                     ),
-                    title=(f"{_t(self, 'plan_execution_wave')} {number}"),
+                    title=(
+                        f"{_t(self, 'plan_execution_wave')} "
+                        f"{number}"
+                    ),
                 )
             )
 
         renderables = [
-            Panel(
+            _panel(
+                self,
                 plan.request,
-                title=_t(self, "plan_your_request"),
+                title=_t(
+                    self,
+                    "plan_your_request",
+                ),
             ),
             Text(""),
             summary,
             Text(""),
-            Panel(
+            _panel(
+                self,
                 facts,
-                title=_t(self, "plan_repo_inspection"),
+                title=_t(
+                    self,
+                    "plan_repo_inspection",
+                ),
             ),
             Text(""),
             task_table,
@@ -250,12 +330,16 @@ class PlanPreviewScreen(Screen):
             renderables.extend(
                 [
                     Text(""),
-                    Panel(
+                    _panel(
+                        self,
                         "\n".join(
                             f"- {warning}"
                             for warning in plan.warnings
                         ),
-                        title=_t(self, "plan_warnings"),
+                        title=_t(
+                            self,
+                            "plan_warnings",
+                        ),
                     ),
                 ]
             )
@@ -263,7 +347,8 @@ class PlanPreviewScreen(Screen):
         renderables.extend(
             [
                 Text(""),
-                Panel(
+                _panel(
+                    self,
                     _t(
                         self,
                         "plan_safe_preview_body",
@@ -299,7 +384,8 @@ class CommandProposalScreen(Screen):
         yield Header()
 
         yield Static(
-            Panel(
+            _panel(
+                self,
                 self.proposal_data.request,
                 title=(
                     f"{_t(self, 'proposal_request')} / "
@@ -338,6 +424,10 @@ class CommandProposalScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
+        sync_hacker_screen_class(
+            self
+        )
+
         proposal_list = self.query_one(
             "#proposal-list",
             ListView,
@@ -409,18 +499,23 @@ class CommandCenterScreen(Screen):
         ).name
 
         yield Static(
-            Panel(
+            _panel(
+                self,
                 (
                     f"{_t(self, 'command_current_project')}: "
                     f"{project_name}\n\n"
                     f"{_t(self, 'command_intro')}"
                 ),
-                title=_t(self, "command_title"),
+                title=_t(
+                    self,
+                    "command_title",
+                ),
             )
         )
 
         yield Static(
-            Panel(
+            _panel(
+                self,
                 _t(
                     self,
                     "command_examples",
@@ -442,6 +537,10 @@ class CommandCenterScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
+        sync_hacker_screen_class(
+            self
+        )
+
         self.query_one(
             "#command-input",
             Input,

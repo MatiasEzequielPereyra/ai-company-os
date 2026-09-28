@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from rich import box
 from rich.console import Group
 from rich.panel import Panel
 from rich.table import Table
@@ -20,10 +21,52 @@ from company_os.application.agent_control_service import (
     AgentControlService,
 )
 from company_os.cli.screens.plan_control import PlanControlScreen
+from company_os.cli.theme import (
+    HACKER_NEON,
+    is_hacker_interface,
+    sync_hacker_screen_class,
+    terminal_section_title,
+)
 
 from company_os.application.execution_service import (
     ExecutionService,
 )
+
+
+def _hacker(widget) -> bool:
+    return is_hacker_interface(
+        getattr(
+            widget.app,
+            "interface_theme",
+            "default",
+        )
+    )
+
+
+def _panel(
+    widget,
+    content,
+    *,
+    title: str,
+) -> Panel:
+    return Panel(
+        content,
+        title=(
+            terminal_section_title(
+                title
+            )
+            if _hacker(widget)
+            else title
+        ),
+        **(
+            {
+                "box": box.ASCII,
+                "border_style": HACKER_NEON,
+            }
+            if _hacker(widget)
+            else {}
+        ),
+    )
 
 
 class PreparedPlanScreen(Screen):
@@ -57,6 +100,9 @@ class PreparedPlanScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
+        sync_hacker_screen_class(
+            self
+        )
         self._refresh_view()
 
     def action_back(self) -> None:
@@ -277,8 +323,19 @@ class PreparedPlanScreen(Screen):
         tasks = self._tasks()
 
         table = Table(
-            title="Prepared Plan Tasks",
+            title=(
+                terminal_section_title(
+                    "Prepared Plan Tasks"
+                )
+                if _hacker(self)
+                else "Prepared Plan Tasks"
+            ),
             show_lines=True,
+            **(
+                {"box": box.ASCII}
+                if _hacker(self)
+                else {}
+            ),
         )
 
         table.add_column("ID")
@@ -326,7 +383,11 @@ class PreparedPlanScreen(Screen):
 
         summary = Table(
             show_header=False,
-            box=None,
+            box=(
+                box.ASCII
+                if _hacker(self)
+                else None
+            ),
         )
 
         summary.add_column("State")
@@ -392,7 +453,8 @@ class PreparedPlanScreen(Screen):
             Static,
         ).update(
             Group(
-                Panel(
+                _panel(
+                    self,
                     f"Project: {self.plan_data.project_name}\n"
                     f"Work Request: "
                     + (
@@ -408,12 +470,14 @@ class PreparedPlanScreen(Screen):
                 Text(""),
                 table,
                 Text(""),
-                Panel(
+                _panel(
+                    self,
                     "\n".join(controls),
                     title="Controls",
                 ),
                 Text(""),
-                Panel(
+                _panel(
+                    self,
                     "Safety model:\n\n"
                     "PREPARE creates planning artifacts.\n"
                     "ACTIVATE moves eligible tasks through "
@@ -452,6 +516,11 @@ class PreparePlanScreen(Screen):
 
         yield Footer()
 
+    def on_mount(self) -> None:
+        sync_hacker_screen_class(
+            self
+        )
+
     def action_back(self) -> None:
         if self.busy:
             return
@@ -468,7 +537,11 @@ class PreparePlanScreen(Screen):
 
         table = Table(
             show_header=False,
-            box=None,
+            box=(
+                box.ASCII
+                if _hacker(self)
+                else None
+            ),
         )
 
         table.add_column("Property")
@@ -511,7 +584,8 @@ class PreparePlanScreen(Screen):
         )
 
         return Group(
-            Panel(
+            _panel(
+                self,
                 "PREPARE writes planning artifacts and "
                 "BACKLOG tasks to the selected repository.\n\n"
                 "It does NOT start agents.\n"
@@ -522,12 +596,14 @@ class PreparePlanScreen(Screen):
             Text(""),
             table,
             Text(""),
-            Panel(
+            _panel(
+                self,
                 reason,
                 title="Engine compatibility",
             ),
             Text(""),
-            Panel(
+            _panel(
+                self,
                 controls,
                 title="Confirmation",
             ),
