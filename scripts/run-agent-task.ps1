@@ -42,40 +42,73 @@ function Assert-ConcreteEngineeringPlanResult {
         [string]$TaskId
     )
 
-    if ([string]$Result.outcome -ne "COMPLETED") { return }
+    $items = @($Result.executable_work)
 
-    $reportText = [string]$Result.report_markdown
-
-    if ($reportText -notmatch '(?mi)^##\s+Executable Work\s*$') {
-        throw "${TaskId}: Engineering Manager COMPLETED result is not an executable plan. Missing '## Executable Work'."
+    if ([string]$Result.outcome -eq "BLOCKED") {
+        if ($items.Count -ne 0) {
+            throw "${TaskId}: BLOCKED Engineering Manager result must not contain executable work."
+        }
+        return
     }
 
-    $workLines = @(
-        $reportText -split "\r?\n" |
-            ForEach-Object { $_.Trim() } |
-            Where-Object { $_ -match '^-\s*Kind:\s*(DECISION|IMPLEMENTATION|VALIDATION|OPERATIONS)\s*\|' }
-    )
-
-    if ($workLines.Count -lt 1) {
-        throw "${TaskId}: Engineering Manager executable plan contains no structured work items."
+    if ([string]$Result.outcome -ne "COMPLETED") {
+        throw "${TaskId}: unsupported Engineering Manager outcome: $($Result.outcome)"
     }
 
+    if ($items.Count -lt 1) {
+        throw "${TaskId}: Engineering Manager COMPLETED result contains no executable_work items."
+    }
+
+    $keys = @{}
     $implementationCount = 0
 
-    foreach ($line in $workLines) {
-        if ($line -notmatch '^[-]\s*Kind:\s*(DECISION|IMPLEMENTATION|VALIDATION|OPERATIONS)\s*\|\s*Change:\s*.+?\s*\|\s*Owner:\s*(ceo|pm|cto|engineering-manager|backend|frontend|devops|qa|security)\s*\|\s*Areas:\s*.+?\s*\|\s*Depends on:\s*.+?\s*\|\s*Verify:\s*.+$') {
-            throw "${TaskId}: malformed Engineering Manager executable work item: $line"
+    foreach ($item in $items) {
+        $key = ([string]$item.key).Trim()
+        $kind = ([string]$item.kind).Trim()
+        $change = ([string]$item.change).Trim()
+        $areas = @($item.areas | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
+        $dependsOn = @($item.depends_on | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
+
+        if ([string]::IsNullOrWhiteSpace($key)) {
+            throw "${TaskId}: Engineering Manager executable_work item key cannot be empty."
         }
 
-        if ($Matches[1] -eq "IMPLEMENTATION") {
+        if ($keys.ContainsKey($key)) {
+            throw "${TaskId}: duplicate Engineering Manager executable_work key: $key"
+        }
+
+        $keys[$key] = $true
+
+        if ($kind -eq "IMPLEMENTATION") {
             $implementationCount++
 
-            if ($line -match '(?i)\b(create|refine|materialize|generate|prepare|update)\b.{0,80}\b(executable tasks?|engineering tasks?|task set|backlog|work requests?|dispatch packets?|lifecycle state|gate evidence)\b') {
-                throw "${TaskId}: Engineering Manager plan contains recursive meta-implementation work: $line"
+            $semanticText = @(
+                $change,
+                ($areas -join " ")
+            ) -join " "
+
+            if ($semanticText -match '(?i)\b(create|refine|materialize|generate|prepare|update)\b.{0,100}\b(executable tasks?|engineering tasks?|task set|backlog|work requests?|dispatch packets?|lifecycle state|gate evidence)\b') {
+                throw "${TaskId}: Engineering Manager plan contains recursive meta-implementation work: $change"
             }
 
-            if ($line -match '(?i)\|\s*Areas:\s*(tasks?|backlog|planning|lifecycle)\s*\|') {
-                throw "${TaskId}: Engineering Manager implementation must target real product/repository areas: $line"
+            foreach ($area in $areas) {
+                if ($area -match '(?i)^(tasks?|backlog|planning|lifecycle|docs[\\/]engineering[\\/](dispatch|results|reviews|qa|security|final-approvals))([\\/]|$)') {
+                    throw "${TaskId}: Engineering Manager implementation targets control-plane area: $area"
+                }
+            }
+        }
+
+        if ($dependsOn -contains $key) {
+            throw "${TaskId}: Engineering Manager work item $key cannot depend on itself."
+        }
+    }
+
+    foreach ($item in $items) {
+        foreach ($dependency in @($item.depends_on)) {
+            $dependencyKey = ([string]$dependency).Trim()
+            if ([string]::IsNullOrWhiteSpace($dependencyKey)) { continue }
+            if (-not $keys.ContainsKey($dependencyKey)) {
+                throw "${TaskId}: Engineering Manager work item $($item.key) references unknown dependency: $dependencyKey"
             }
         }
     }
@@ -117,7 +150,13 @@ try {
 
 $dispatchPath = Join-Path $root ("docs\engineering\dispatch\" + $Id + ".md")
 $rolePath = Join-Path $root (".codex\agents\" + $owner + ".md")
-$schemaPath = Join-Path $root "schemas\agent-result.schema.json"
+$schemaName = if ($requiresConcreteEngineeringPlan) {
+    "engineering-plan-result.schema.json"
+}
+else {
+    "agent-result.schema.json"
+}
+$schemaPath = Join-Path $root ("schemas\" + $schemaName)
 $routerPath = Join-Path $PSScriptRoot "provider-router.ps1"
 $contextBuilderPath = Join-Path $PSScriptRoot "build-agent-context.ps1"
 $localResolverPath = Join-Path $PSScriptRoot "local-runtime\resolve-local-runtime.ps1"
@@ -168,16 +207,16 @@ $promptLines = @(
     "report_markdown must stay within 8000 characters and should prefer concise evidence-backed bullets.",
     "verification and decisions must each stay within 2000 characters.",
     $(if ($requiresConcreteEngineeringPlan) {
-        "For Engineering Manager execution planning, report_markdown MUST contain a '## Executable Work' section."
+        "For Engineering Manager execution planning, populate executable_work using the dedicated JSON schema. report_markdown is narrative context only; the runtime renders the canonical executable work section."
     } else { "" }),
     $(if ($requiresConcreteEngineeringPlan) {
-        "Every executable item MUST be one line using exactly: - Kind: <DECISION|IMPLEMENTATION|VALIDATION|OPERATIONS> | Change: <concrete work> | Owner: <role> | Areas: <real paths/components> | Depends on: <item or NONE> | Verify: <concrete verification>"
+        "Each executable_work item must name a stable key, kind, concrete change, responsible owner, real repository/product areas, dependency keys and a concrete verification."
     } else { "" }),
     $(if ($requiresConcreteEngineeringPlan) {
-        "The plan MUST contain at least one real IMPLEMENTATION item that changes product/repository code, configuration, tests or deployable behavior. Never use task/backlog/lifecycle authoring as IMPLEMENTATION."
+        "A COMPLETED plan MUST contain at least one real IMPLEMENTATION item against product/repository code, configuration, tests, data/schema, infrastructure or deployable behavior. Task/backlog/lifecycle authoring is never IMPLEMENTATION."
     } else { "" }),
     $(if ($requiresConcreteEngineeringPlan) {
-        "Do not claim work was decomposed, assigned or completed unless the structured executable items in the report actually show that decomposition."
+        "Use BLOCKED with executable_work=[] only when evidence or an authoritative prerequisite is materially insufficient to produce a safe implementation plan."
     } else { "" }),
     "Return only the structured result required by the supplied JSON schema."
 )
@@ -303,12 +342,58 @@ foreach ($field in @("outcome","summary","report_markdown","verification","decis
 }
 
 if ($requiresConcreteEngineeringPlan) {
+    if ($null -eq $result.PSObject.Properties["executable_work"]) {
+        throw "Structured Engineering Manager result is missing field: executable_work"
+    }
     Assert-ConcreteEngineeringPlanResult -Result $result -TaskId $Id
 }
 
 $providerUsed = [string]$execution.Provider
 $modelUsed = [string]$execution.Model
 $now = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+
+$reportBody = [string]$result.report_markdown
+$executionPlanRelative = ""
+
+if ($requiresConcreteEngineeringPlan -and [string]$result.outcome -eq "COMPLETED") {
+    $plansDir = Join-Path $root "docs\engineering\plans"
+    New-Item -ItemType Directory -Force -Path $plansDir | Out-Null
+
+    $workRequestId = Read-Field $task "Work request"
+    $executionPlanPath = Join-Path $plansDir ($Id + "-execution-plan.json")
+
+    $canonicalPlan = [ordered]@{
+        source_task_id = $Id
+        work_request_id = $workRequestId
+        generated = $now
+        provider = $providerUsed
+        model = $modelUsed
+        summary = [string]$result.summary
+        executable_work = @($result.executable_work)
+    }
+
+    Write-Utf8NoBom $executionPlanPath ($canonicalPlan | ConvertTo-Json -Depth 100)
+    $executionPlanRelative = "docs/engineering/plans/" + (Split-Path $executionPlanPath -Leaf)
+
+    $workLines = @(
+        foreach ($item in @($result.executable_work)) {
+            $areasText = (@($item.areas) -join ", ")
+            $dependsText = if (@($item.depends_on).Count -eq 0) { "NONE" } else { @($item.depends_on) -join ", " }
+
+            "- Kind: $($item.kind) | Key: $($item.key) | Change: $($item.change) | Owner: $($item.owner) | Areas: $areasText | Depends on: $dependsText | Verify: $($item.verify)"
+        }
+    )
+
+    $reportBody = @(
+        [string]$result.report_markdown,
+        "",
+        "## Executable Work",
+        "",
+        ($workLines -join [Environment]::NewLine),
+        "",
+        "Canonical plan: $executionPlanRelative"
+    ) -join [Environment]::NewLine
+}
 
 $report = @(
     "# Agent Report - $Id",
@@ -319,7 +404,7 @@ $report = @(
     "Model: $modelUsed",
     "Outcome: $($result.outcome)",
     "",
-    $result.report_markdown
+    $reportBody
 ) -join [Environment]::NewLine
 
 Write-Utf8NoBom $reportPath $report
@@ -327,7 +412,11 @@ Write-Utf8NoBom $reportPath $report
 $submit = Join-Path $PSScriptRoot "submit-task-result.ps1"
 if (-not (Test-Path $submit)) { throw "submit-task-result.ps1 not found: $submit" }
 
-$changed = "docs/engineering/agent-reports/" + (Split-Path $reportPath -Leaf)
+$changedParts = @("docs/engineering/agent-reports/" + (Split-Path $reportPath -Leaf))
+if (-not [string]::IsNullOrWhiteSpace($executionPlanRelative)) {
+    $changedParts += $executionPlanRelative
+}
+$changed = $changedParts -join "; "
 & $submit -ProjectPath $root -Id $Id -Outcome $result.outcome -Summary $result.summary -ChangedArtifacts $changed -Verification $result.verification -Decisions $result.decisions -Blockers $result.blockers -RecommendedNext $result.recommended_next
 
 Write-Host ""
