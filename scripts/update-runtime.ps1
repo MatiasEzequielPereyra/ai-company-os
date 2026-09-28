@@ -194,6 +194,9 @@ if (Test-Path $providerSourcePath -PathType Leaf) {
     Ensure-Property -Object $targetConfig -Name "analysis_models_by_role" -Value ([PSCustomObject]@{})
     Merge-MissingObjectProperties -Target $targetConfig.analysis_models_by_role -Source $sourceConfig.analysis_models_by_role
 
+    Ensure-Property -Object $targetConfig -Name "analysis_skip_local_profiles_by_role" -Value ([PSCustomObject]@{})
+    Merge-MissingObjectProperties -Target $targetConfig.analysis_skip_local_profiles_by_role -Source $sourceConfig.analysis_skip_local_profiles_by_role
+
     Ensure-Property -Object $targetConfig -Name "provider_timeout_seconds" -Value ([PSCustomObject]@{})
     Merge-MissingObjectProperties -Target $targetConfig.provider_timeout_seconds -Source $sourceConfig.provider_timeout_seconds
 
