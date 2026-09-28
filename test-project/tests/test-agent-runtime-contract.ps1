@@ -229,8 +229,11 @@ $engineeringManagerInstructions = Get-Content (Join-Path $repoRoot ".codex\agent
 if ($engineeringManagerInstructions -notmatch 'runtime performs that materialization') {
     throw "Engineering Manager instructions must prevent recursive task-materialization tickets"
 }
-if ($engineeringManagerInstructions -notmatch '## Executable Work') {
-    throw "Engineering Manager instructions must define the structured executable work contract"
+if ($engineeringManagerInstructions -notmatch 'executable_work') {
+    throw "Engineering Manager instructions must define the structured executable_work contract"
+}
+if ($engineeringManagerInstructions -notmatch 'runtime renders the human-readable') {
+    throw "Engineering Manager instructions must delegate report rendering to the runtime"
 }
 
 $engineeringPlanSchema = Get-Content (Join-Path $repoRoot "schemas\engineering-plan-result.schema.json") -Raw -Encoding UTF8 | ConvertFrom-Json
