@@ -213,10 +213,22 @@ $name = [System.IO.Path]::GetFileName($SchemaPath)
 
 switch ($name) {
     "agent-result.schema.json" {
+        $reportMarkdown = "# Deterministic analysis report`nCompleted the assigned planning or analysis work without modifying production files."
+
+        if ($Role -eq "engineering-manager") {
+            $reportMarkdown = @(
+                "# Deterministic engineering execution plan",
+                "",
+                "## Executable Work",
+                "- Kind: IMPLEMENTATION | Change: Modify sample.txt to satisfy the requested objective | Owner: frontend | Areas: sample.txt | Depends on: NONE | Verify: git diff --check",
+                "- Kind: VALIDATION | Change: Validate the sample.txt implementation evidence | Owner: qa | Areas: sample.txt | Depends on: IMPLEMENTATION | Verify: review implementation evidence"
+            ) -join "`n"
+        }
+
         $result = [ordered]@{
             outcome = "COMPLETED"
             summary = "Completed deterministic analysis/planning task."
-            report_markdown = "# Deterministic analysis report`nCompleted the assigned planning or analysis work without modifying production files."
+            report_markdown = $reportMarkdown
             verification = "E2E deterministic analysis pass."
             decisions = "NONE"
             blockers = "NONE"
