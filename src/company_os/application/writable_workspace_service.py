@@ -58,6 +58,38 @@ class WritableWorkspaceService:
                 "available for writable workspace preparation."
             )
 
+        ready_ids = [
+            task.id
+            for task in writable_tasks
+            if task.status == "READY"
+        ]
+
+        if ready_ids:
+            self.control.activate_ready(
+                root,
+                allowed_task_ids,
+            )
+
+            tasks = self.control.get_tasks(
+                root,
+                allowed_task_ids,
+            )
+
+            writable_tasks = [
+                task
+                for task in tasks
+                if (
+                    task.work_kind == "IMPLEMENTATION"
+                    and task.status == "ACTIVE"
+                )
+            ]
+
+            if not writable_tasks:
+                raise RuntimeError(
+                    "Writable activation completed without "
+                    "an ACTIVE IMPLEMENTATION task."
+                )
+
         script = (
             root
             / "scripts"
