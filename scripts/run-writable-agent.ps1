@@ -556,6 +556,8 @@ else {
 Write-Host "Building writable repository context from isolated worktree..." -ForegroundColor DarkGray
 $context = & $contextBuilderPath -ProjectPath $workspace -Id $Id -Owner $owner -MaxChars $maxChars -RequiredFiles $requiredFiles
 
+$protectedWritablePaths = @($policy.protected_path_prefixes) -join ", "
+
 $prompt = @(
     "You are executing an AUTHORIZED IMPLEMENTATION task for AI Company OS.",
     "",
@@ -571,6 +573,9 @@ $prompt = @(
     "DELETE is allowed only when the task explicitly requires removing that file.",
     "Use repository-relative paths only.",
     "Never target absolute paths, '..', .git, .env, credentials, private keys, service accounts or lifecycle/control-plane artifacts.",
+    "Protected writable path prefixes: $protectedWritablePaths",
+    "If the requested implementation would require changing a protected path, return BLOCKED with no changes instead of proposing that path.",
+    "Task/backlog/work-request lifecycle authoring is owned by the AI Company OS runtime, not by writable implementation agents.",
     "Do not propose merge, push, deploy, rebase, git reset, package publication or secret access.",
     "",
     "Verification commands are suggestions only. They are never executed unless the local writable policy explicitly allows them.",
