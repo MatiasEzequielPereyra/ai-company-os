@@ -34,6 +34,36 @@
       "type": "string",
       "description": "Recommended next workflow or engineering action after this completed analysis. Do not write BLOCKED merely because the product is not release-ready.",
       "maxLength": 1500
+    },
+    "completion_check": {
+      "type": "object",
+      "description": "Structured self-check of whether the original role-owned deliverable was actually produced. This is not a length check and task restatement does not count as substantive delivery.",
+      "properties": {
+        "substantive_role_deliverable_produced": {
+          "type": "boolean",
+          "description": "True only when report_markdown contains the substantive work required by the original role and task."
+        },
+        "missing_required_outputs": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "maxItems": 30
+        },
+        "evidence": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      },
+      "required": [
+        "substantive_role_deliverable_produced",
+        "missing_required_outputs",
+        "evidence"
+      ],
+      "additionalProperties": false
     }
   },
   "required": [
@@ -43,7 +73,8 @@
     "verification",
     "decisions",
     "blockers",
-    "recommended_next"
+    "recommended_next",
+    "completion_check"
   ],
   "additionalProperties": false
 }

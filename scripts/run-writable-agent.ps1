@@ -891,7 +891,65 @@ try {
 
     Write-Utf8NoBom -Path $evidencePath -Value $evidence
 
-    $changedArtifacts = (($changedAfter + @("docs/engineering/writable-evidence/" + (Split-Path $evidencePath -Leaf))) -join "; ")
+    # Publish the canonical primary agent report expected by independent gates.
+    # Writable evidence remains the implementation/runtime evidence artifact;
+    # this report is the role-owned deliverable that Review / QA / Security inspect.
+    $reportDir = Join-Path $root "docs\engineering\agent-reports"
+    New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
+
+    $reportPath = Join-Path $reportDir ($Id + ".md")
+
+    $primaryReport = @(
+        "# Agent Report - $Id",
+        "",
+        "Generated: $now",
+        "Owner: $owner",
+        "Outcome: COMPLETED",
+        "Work kind: IMPLEMENTATION",
+        "Provider: $($execution.Provider)",
+        "Model: $($execution.Model)",
+        "",
+        "## Summary",
+        "",
+        [string]$result.summary,
+        "",
+        "## Role-Owned Deliverable",
+        "",
+        [string]$result.report_markdown,
+        "",
+        "## Changed Paths",
+        "",
+        (($changedAfter | ForEach-Object { "- " + $_ }) -join [Environment]::NewLine),
+        "",
+        "## Verification",
+        "",
+        $verificationText,
+        "",
+        "## Agent Verification Notes",
+        "",
+        [string]$result.verification,
+        "",
+        "## Decisions",
+        "",
+        [string]$result.decisions,
+        "",
+        "## Writable Evidence",
+        "",
+        ("docs/engineering/writable-evidence/" + (Split-Path $evidencePath -Leaf))
+    ) -join [Environment]::NewLine
+
+    Write-Utf8NoBom -Path $reportPath -Value $primaryReport
+
+    $changedArtifacts = (
+        (
+            $changedAfter +
+            @(
+                "docs/engineering/writable-evidence/" + (Split-Path $evidencePath -Leaf),
+                "docs/engineering/agent-reports/" + (Split-Path $reportPath -Leaf)
+            )
+        ) -join "; "
+    )
+
     $verificationSummary = "git diff --check PASS. " + (($verificationCommands | ForEach-Object { $_ + " PASS" }) -join "; ")
 
     & $submitPath -ProjectPath $root -Id $Id -Outcome COMPLETED -Summary ([string]$result.summary) -ChangedArtifacts $changedArtifacts -Verification $verificationSummary -Decisions ([string]$result.decisions) -Blockers "NONE" -RecommendedNext "REVIEW"

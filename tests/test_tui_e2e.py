@@ -262,6 +262,8 @@ switch ($name) {
             recommendation = "APPROVE"
             findings = "NONE"
             verification = "Deterministic E2E review pass."
+            missing_required_outputs = @()
+            deliverable_defects = @()
         }
     }
 
@@ -270,6 +272,13 @@ switch ($name) {
             outcome = "PASS"
             evidence = "Deterministic E2E QA evidence."
             findings = "NONE"
+            criteria_assessment = @(
+                [ordered]@{
+                    criterion = "The implementation satisfies the deterministic TUI E2E acceptance criteria."
+                    status = "SATISFIED"
+                    evidence = "The isolated writable worktree contains the expected sample.txt change and verification evidence."
+                }
+            )
         }
     }
 
@@ -278,6 +287,8 @@ switch ($name) {
             outcome = "PASS"
             evidence = "Deterministic E2E security evidence."
             findings = "NONE"
+            security_relevant = $true
+            deliverable_security_defects = @()
         }
     }
 

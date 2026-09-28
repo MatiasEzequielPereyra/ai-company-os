@@ -38,6 +38,11 @@ $payload = @{
     decisions = "NONE"
     blockers = "NONE"
     recommended_next = "REVIEW"
+    completion_check = @{
+        substantive_role_deliverable_produced = $true
+        missing_required_outputs = @()
+        evidence = "Completion self-check is valid so this fixture isolates the intentionally missing summary."
+    }
 } | ConvertTo-Json -Depth 10
 [System.IO.File]::WriteAllText($OutputPath,$payload,(New-Object System.Text.UTF8Encoding($false)))
 [PSCustomObject]@{ Provider = "OpenRouter"; Model = $Model }
@@ -74,6 +79,11 @@ $payload = @{
     decisions = "NONE"
     blockers = "NONE"
     recommended_next = "REVIEW"
+    completion_check = @{
+        substantive_role_deliverable_produced = $true
+        missing_required_outputs = @()
+        evidence = "Valid provider fixture produced the expected substantive role-owned deliverable."
+    }
 } | ConvertTo-Json -Depth 10
 [System.IO.File]::WriteAllText($OutputPath,$payload,(New-Object System.Text.UTF8Encoding($false)))
 [PSCustomObject]@{ Provider = "OpenRouter"; Model = $Model }

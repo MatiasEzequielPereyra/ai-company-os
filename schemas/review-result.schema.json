@@ -14,12 +14,34 @@
     },
     "verification": {
       "type": "string"
+    },
+    "missing_required_outputs": {
+      "type": "array",
+      "description": "Material outputs required by the original owner role/task that are absent from the delivered report.",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      },
+      "maxItems": 30
+    },
+    "deliverable_defects": {
+      "type": "array",
+      "description": "Concrete defects of the deliverable itself. Product defects merely documented by a valid audit/planning deliverable do not belong here.",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 800
+      },
+      "maxItems": 30
     }
   },
   "required": [
     "recommendation",
     "findings",
-    "verification"
+    "verification",
+    "missing_required_outputs",
+    "deliverable_defects"
   ],
   "additionalProperties": false
 }

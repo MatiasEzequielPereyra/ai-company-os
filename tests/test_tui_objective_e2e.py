@@ -213,14 +213,43 @@ $name = [System.IO.Path]::GetFileName($SchemaPath)
 
 switch ($name) {
     "agent-result.schema.json" {
+        $roleDeliverable = switch ($Role) {
+            "pm" {
+                "Produced deterministic product planning covering scope, requirements, acceptance criteria, sequencing, dependencies, and handoff."
+            }
+            "cto" {
+                "Produced deterministic technical architecture covering implementation approach, component boundaries, data/API contracts, technical risks, and migration strategy."
+            }
+            "qa" {
+                "Produced deterministic QA analysis covering acceptance validation, test strategy, expected evidence, failure conditions, and quality risks."
+            }
+            "security" {
+                "Produced deterministic security analysis covering security relevance, trust boundaries, deliverable risks, controls, and required evidence."
+            }
+            "devops" {
+                "Produced deterministic operational analysis covering deployment readiness, rollback, observability, operational risks, and verification."
+            }
+            "engineering-manager" {
+                "Produced deterministic engineering execution planning covering sequencing, dependencies, implementation boundaries, verification, and handoff."
+            }
+            default {
+                "Produced deterministic substantive role-owned analysis with concrete decisions, verification, risks, and handoff."
+            }
+        }
+
         $result = [ordered]@{
             outcome = "COMPLETED"
-            summary = "Completed deterministic analysis/planning task."
-            report_markdown = "# Deterministic analysis report`nCompleted the assigned planning or analysis work without modifying production files."
-            verification = "E2E deterministic analysis pass."
-            decisions = "NONE"
+            summary = "Completed deterministic role-owned analysis/planning task."
+            report_markdown = "# Deterministic role deliverable`n`nRole: $Role`n`n$roleDeliverable"
+            verification = "E2E deterministic role deliverable verification passed."
+            decisions = "Deterministic E2E role-owned decisions recorded."
             blockers = "NONE"
             recommended_next = "REVIEW"
+            completion_check = [ordered]@{
+                substantive_role_deliverable_produced = $true
+                missing_required_outputs = @()
+                evidence = "The deterministic fixture produced substantive role-owned output for $Role rather than merely restating task metadata."
+            }
         }
     }
 
@@ -352,6 +381,8 @@ switch ($name) {
             recommendation = "APPROVE"
             findings = "NONE"
             verification = "Full TUI E2E review pass."
+            missing_required_outputs = @()
+            deliverable_defects = @()
         }
     }
 
@@ -360,6 +391,13 @@ switch ($name) {
             outcome = "PASS"
             evidence = "Full TUI E2E QA pass."
             findings = "NONE"
+            criteria_assessment = @(
+                [ordered]@{
+                    criterion = "The deterministic role-owned deliverable satisfies the assigned task acceptance criteria."
+                    status = "SATISFIED"
+                    evidence = "The E2E fixture produced the expected role-owned artifact and workflow evidence."
+                }
+            )
         }
     }
 
@@ -368,6 +406,8 @@ switch ($name) {
             outcome = "PASS"
             evidence = "Full TUI E2E security pass."
             findings = "NONE"
+            security_relevant = $true
+            deliverable_security_defects = @()
         }
     }
 

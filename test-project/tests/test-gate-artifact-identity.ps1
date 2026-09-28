@@ -119,7 +119,36 @@ try {
     $taskPath = Join-Path $tempRoot "tasks\AICO-001.md"
     Write-NoBom $taskPath $task
 
-    Write-NoBom (Join-Path $tempRoot ".codex\agents\engineering-manager.md") "Engineering manager fixture."
+    $dispatchContent = @(
+        "# Dispatch Packet - AICO-001",
+        "",
+        "Task: AICO-001",
+        "Owner: pm",
+        "Work request: WR-001",
+        "",
+        "Produce and verify the PM role-owned deliverable."
+    ) -join [Environment]::NewLine
+
+    Write-NoBom `
+        (Join-Path $tempRoot "docs\engineering\dispatch\AICO-001.md") `
+        $dispatchContent
+
+    $pmRoleContent = @(
+        "# PM",
+        "",
+        "## Responsibilities",
+        "",
+        "- Produce the requested planning deliverable.",
+        "- Provide concrete decisions and evidence.",
+        "",
+        "## Output",
+        "",
+        "- Concrete PM role-owned planning deliverable."
+    ) -join [Environment]::NewLine
+
+    Write-NoBom `
+        (Join-Path $tempRoot ".codex\agents\pm.md") `
+        $pmRoleContent
 
     $reportRelative = "docs/engineering/agent-reports/AICO-001.md"
     $reportContent = @(
@@ -206,15 +235,29 @@ $approved = (
 
 $payload = @{
     recommendation = $(if ($approved) { "APPROVE" } else { "CHANGES_REQUIRED" })
+
     findings = $(if ($approved) {
         "Explicit gate artifact identity verified from its canonical repository-relative path."
     } else {
         "Gate could not correlate the result reference with the explicit primary report artifact."
     })
+
     verification = $(if ($approved) {
         "Canonical explicit artifact path and referenced result agree."
     } else {
         "Canonical explicit artifact identity or authority instruction is missing."
+    })
+
+    missing_required_outputs = $(if ($approved) {
+        @()
+    } else {
+        @("Primary report artifact identity could not be verified.")
+    })
+
+    deliverable_defects = $(if ($approved) {
+        @()
+    } else {
+        @("Explicit primary report artifact could not be correlated with the task result.")
     })
 } | ConvertTo-Json -Depth 10
 
