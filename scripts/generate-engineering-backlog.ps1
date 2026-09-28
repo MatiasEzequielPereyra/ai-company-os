@@ -244,6 +244,14 @@ $task = Get-Content $taskPath -Raw -Encoding UTF8
 $status = Read-Field $task "Status"
 $workRequestId = Read-Field $task "Work request"
 
+$workRequestText = ""
+if (-not [string]::IsNullOrWhiteSpace($workRequestId)) {
+    $workRequestPath = Join-Path $root ("docs\engineering\work-requests\" + $workRequestId + ".md")
+    if (Test-Path $workRequestPath -PathType Leaf) {
+        $workRequestText = Get-Content $workRequestPath -Raw -Encoding UTF8
+    }
+}
+
 if ($status -ne "DONE") {
     throw "Source planning task $SourceTaskId must be DONE before executable backlog generation. Current status: $status"
 }
@@ -275,6 +283,10 @@ $promptLines = @(
     "Use implementation_authorization_key = NONE only when the approved source plan explicitly requires no implementation authorization.",
     "Do not silently resolve open product, architecture, security or operational decisions.",
     "IMPLEMENTATION items must be narrow enough for one specialist to execute and verify.",
+    "IMPLEMENTATION means an actual repository/product change that satisfies the original work request; it must not merely create, refine, materialize or update AI Company OS tasks, backlog items, work requests, dispatch packets, lifecycle state or gate evidence.",
+    "The AI Company OS runtime owns task/backlog/lifecycle artifacts. Never create a downstream IMPLEMENTATION ticket whose primary objective is to create executable tasks or another backlog.",
+    "Use affected_areas to identify concrete product/source/test/config paths or components that the implementation is expected to change.",
+    "If the approved evidence does not contain enough concrete scope for a real implementation, create an explicit DECISION item for the missing scope instead of inventing a meta-implementation task.",
     "VALIDATION items should depend on the implementation they validate.",
     "Acceptance criteria must be behavioral and testable.",
     "Do not duplicate findings that can be closed by the same tightly-scoped change.",
@@ -287,6 +299,9 @@ $promptLines = @(
 $prompt = $promptLines -join [Environment]::NewLine
 
 $context = @(
+    "===== ORIGINAL WORK REQUEST =====",
+    $workRequestText,
+    "",
     "===== SOURCE TASK =====",
     $task,
     "",
