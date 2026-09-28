@@ -173,8 +173,45 @@ Decision: APPROVE
     & $advance -Id AICO-001 -Status DONE -TasksPath (Join-Path $tempRoot "tasks")
 
     $finalTask = Get-Content (Join-Path $tempRoot "tasks\AICO-001.md") -Raw -Encoding UTF8
-    if ($finalTask -notmatch '(?m)^Status:\s*DONE\s*$') {
+    if ($finalTask -notmatch '(?m)^Status:\s*DONE\s*
+}
+finally {
+    if (Test-Path $tempRoot) {
+        Remove-Item $tempRoot -Recurse -Force
+    }
+}
+
+Write-Host "PASS: lifecycle transition guard test" -ForegroundColor Green
+) {
         throw "Legitimate guarded lifecycle did not reach DONE."
+    }
+
+    & $advance -Id AICO-001 -Status BACKLOG -Actor engineering-manager -Reason "Reopen planning fixture." -TasksPath (Join-Path $tempRoot "tasks")
+
+    $reopenedTask = Get-Content (Join-Path $tempRoot "tasks\AICO-001.md") -Raw -Encoding UTF8
+    if ($reopenedTask -notmatch '(?m)^Status:\s*BACKLOG\s*
+}
+finally {
+    if (Test-Path $tempRoot) {
+        Remove-Item $tempRoot -Recurse -Force
+    }
+}
+
+Write-Host "PASS: lifecycle transition guard test" -ForegroundColor Green
+) {
+        throw "DONE -> BACKLOG reopening did not update task status."
+    }
+    if ($reopenedTask -notmatch '(?m)^Workflow phase:\s*PLANNING\s*
+}
+finally {
+    if (Test-Path $tempRoot) {
+        Remove-Item $tempRoot -Recurse -Force
+    }
+}
+
+Write-Host "PASS: lifecycle transition guard test" -ForegroundColor Green
+) {
+        throw "DONE -> BACKLOG reopening did not reset Workflow phase to PLANNING."
     }
 }
 finally {
