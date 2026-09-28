@@ -236,6 +236,38 @@ switch ($name) {
         }
     }
 
+    "engineering-plan-result.schema.json" {
+        $result = [ordered]@{
+            outcome = "COMPLETED"
+            summary = "Prepared deterministic executable engineering plan."
+            report_markdown = "# Deterministic engineering execution plan"
+            executable_work = @(
+                [ordered]@{
+                    key = "IMPLEMENT-SAMPLE"
+                    kind = "IMPLEMENTATION"
+                    change = "Modify sample.txt so it contains changed by full TUI E2E."
+                    owner = "frontend"
+                    areas = @("sample.txt")
+                    depends_on = @()
+                    verify = "git diff --check"
+                },
+                [ordered]@{
+                    key = "VALIDATE-SAMPLE"
+                    kind = "VALIDATION"
+                    change = "Validate the completed sample.txt implementation."
+                    owner = "qa"
+                    areas = @("sample.txt")
+                    depends_on = @("IMPLEMENT-SAMPLE")
+                    verify = "Review implementation evidence."
+                }
+            )
+            verification = "Structured engineering plan fixture."
+            decisions = "NONE"
+            blockers = "NONE"
+            recommended_next = "REVIEW"
+        }
+    }
+
     "engineering-backlog.schema.json" {
         if ($Prompt -notmatch '(?m)^Source task:\s*(AICO-\d+)\s*$') {
             throw "Engineering backlog stub could not resolve source task."
