@@ -1,5 +1,7 @@
 # AI Company OS — First Run Checklist
 
+> **Windows PowerShell 5.1:** este repositorio usa UTF-8 sin BOM para documentación. Si `Get-Content` muestra caracteres como `Ã¡` o `â€”`, el archivo no está necesariamente corrupto: usá `Get-Content -Encoding UTF8`. PowerShell 7 no necesita este ajuste para UTF-8 sin BOM.
+
 > Prueba controlada para aprender el lifecycle sin tocar primero un proyecto importante.
 
 Esta prueba usa un **proyecto descartable** y un Work Request `RESEARCH` con dos planning tasks dependientes:
