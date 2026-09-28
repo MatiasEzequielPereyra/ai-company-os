@@ -112,6 +112,7 @@ $scriptNames = @(
     "reconcile-engineering-backlog.ps1",
     "repair-artifact-encoding.ps1",
     "validate-json-contract.ps1",
+    "validate-engineering-plan-result.ps1",
     "validate-artifacts.ps1",
     "write-operational-event.ps1",
     "summarize-metrics.ps1",
@@ -186,6 +187,12 @@ if (Test-Path $providerSourcePath -PathType Leaf) {
     Ensure-Property -Object $targetConfig -Name "analysis_context_max_chars" -Value $sourceConfig.analysis_context_max_chars
     Ensure-Property -Object $targetConfig -Name "analysis_context_max_chars_by_role" -Value ([PSCustomObject]@{})
     Merge-MissingObjectProperties -Target $targetConfig.analysis_context_max_chars_by_role -Source $sourceConfig.analysis_context_max_chars_by_role
+
+    Ensure-Property -Object $targetConfig -Name "analysis_auto_order_by_role" -Value ([PSCustomObject]@{})
+    Merge-MissingObjectProperties -Target $targetConfig.analysis_auto_order_by_role -Source $sourceConfig.analysis_auto_order_by_role
+
+    Ensure-Property -Object $targetConfig -Name "analysis_models_by_role" -Value ([PSCustomObject]@{})
+    Merge-MissingObjectProperties -Target $targetConfig.analysis_models_by_role -Source $sourceConfig.analysis_models_by_role
 
     Ensure-Property -Object $targetConfig -Name "provider_timeout_seconds" -Value ([PSCustomObject]@{})
     Merge-MissingObjectProperties -Target $targetConfig.provider_timeout_seconds -Source $sourceConfig.provider_timeout_seconds
