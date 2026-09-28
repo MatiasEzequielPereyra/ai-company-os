@@ -33,11 +33,72 @@ function Test-TransientGeminiError {
     return $false
 }
 
+function ConvertTo-GeminiCompatibleSchema {
+    param([object]$Value)
+
+    if ($null -eq $Value) { return $null }
+
+    if ($Value -is [System.Array]) {
+        return @(
+            foreach ($item in $Value) {
+                ConvertTo-GeminiCompatibleSchema -Value $item
+            }
+        )
+    }
+
+    if ($Value -is [System.Management.Automation.PSCustomObject]) {
+        $result = [ordered]@{}
+        $unsupported = @(
+            "minLength",
+            "maxLength",
+            "pattern"
+        )
+
+        foreach ($property in $Value.PSObject.Properties) {
+            if ($unsupported -contains $property.Name) {
+                continue
+            }
+
+            $result[$property.Name] = ConvertTo-GeminiCompatibleSchema -Value $property.Value
+        }
+
+        return [PSCustomObject]$result
+    }
+
+    return $Value
+}
+
+function Get-GeminiErrorBody {
+    param([System.Management.Automation.ErrorRecord]$ErrorRecord)
+
+    try {
+        $response = $ErrorRecord.Exception.Response
+        if ($null -eq $response) { return "" }
+
+        $stream = $response.GetResponseStream()
+        if ($null -eq $stream) { return "" }
+
+        $reader = New-Object System.IO.StreamReader($stream)
+
+        try {
+            return $reader.ReadToEnd()
+        }
+        finally {
+            $reader.Dispose()
+            $stream.Dispose()
+        }
+    }
+    catch {
+        return ""
+    }
+}
+
 if ([string]::IsNullOrWhiteSpace($env:GEMINI_API_KEY)) {
     throw "GEMINI_API_KEY is not configured."
 }
 
 $schema = Get-Content $SchemaPath -Raw -Encoding UTF8 | ConvertFrom-Json
+$geminiSchema = ConvertTo-GeminiCompatibleSchema -Value $schema
 $fullPrompt = $Prompt + [Environment]::NewLine + [Environment]::NewLine + "# Repository Context Pack" + [Environment]::NewLine + $Context
 
 $body = @{
@@ -53,7 +114,7 @@ $body = @{
         temperature = 0.1
         maxOutputTokens = 12000
         responseMimeType = "application/json"
-        responseJsonSchema = $schema
+        responseJsonSchema = $geminiSchema
     }
 } | ConvertTo-Json -Depth 100 -Compress
 
@@ -75,7 +136,12 @@ for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
     catch {
         $statusCode = Get-HttpStatusCode -ErrorRecord $_
         $message = $_.Exception.Message
-        if ($null -ne $_.ErrorDetails -and -not [string]::IsNullOrWhiteSpace($_.ErrorDetails.Message)) {
+        $errorBody = Get-GeminiErrorBody -ErrorRecord $_
+
+        if (-not [string]::IsNullOrWhiteSpace($errorBody)) {
+            $message = $errorBody
+        }
+        elseif ($null -ne $_.ErrorDetails -and -not [string]::IsNullOrWhiteSpace($_.ErrorDetails.Message)) {
             $message = $_.ErrorDetails.Message
         }
 
