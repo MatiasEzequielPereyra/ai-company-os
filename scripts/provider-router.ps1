@@ -275,6 +275,33 @@ foreach ($candidate in $attempts) {
             continue
         }
 
+        if (
+            $Provider -eq "Auto" -and
+            $Workload -eq "analysis" -and
+            -not [string]::IsNullOrWhiteSpace($Role) -and
+            $null -ne $config -and
+            $null -ne $config.analysis_skip_local_profiles_by_role
+        ) {
+            $skipProperty = $config.analysis_skip_local_profiles_by_role.PSObject.Properties[$Role]
+
+            if (
+                $null -ne $skipProperty -and
+                @($skipProperty.Value) -contains [string]$localRuntime.Profile
+            ) {
+                $errors += (
+                    "Ollama: skipped for role " + $Role +
+                    " on local profile " + [string]$localRuntime.Profile
+                )
+                Write-Host (
+                    "Provider skipped: Ollama (" +
+                    [string]$localRuntime.Profile +
+                    " is not approved for " + $Role +
+                    " analysis)"
+                ) -ForegroundColor DarkYellow
+                continue
+            }
+        }
+
         Write-Host ("Local runtime profile: " + $localRuntime.Profile + "; model=" + $localRuntime.Model + "; num_ctx=" + $localRuntime.NumCtx + "; num_predict=" + $localRuntime.NumPredict) -ForegroundColor DarkGray
     }
 
