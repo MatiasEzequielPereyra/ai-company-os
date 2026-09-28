@@ -42,6 +42,24 @@ try {
         (New-Object System.Text.UTF8Encoding($false))
     )
 
+    $upstreamDoneTask = @(
+        "# AICO-002 - Product Scope",
+        "",
+        "ID: AICO-002",
+        "",
+        "Status: DONE",
+        "",
+        "Owner: pm",
+        "",
+        "Work request: WR-001"
+    ) -join [Environment]::NewLine
+
+    [System.IO.File]::WriteAllText(
+        (Join-Path $tempRoot "tasks\AICO-002.md"),
+        $upstreamDoneTask,
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+
     [System.IO.File]::WriteAllText(
         (Join-Path $tempRoot "docs\engineering\agent-reports\AICO-006.md"),
         "# Approved engineering plan",
@@ -77,7 +95,7 @@ try {
                 objective = "Define approved resolution semantics for permanently unresolvable sales."
                 context = "Implementation requires PM and Security approval before authorized discard behavior is introduced."
                 acceptance_criteria = @("Discard semantics are explicitly approved.")
-                dependencies = @()
+                dependencies = @("AICO-002")
                 affected_areas = @("offline")
                 testing_requirements = @("Record decision evidence.")
                 risks = @("Incorrect discard authorization.")
@@ -132,6 +150,18 @@ try {
 
     if (@($authorizationItem.dependencies | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) }).Count -ne 0) {
         throw "Empty authorization dependencies were not preserved as an empty dependency set."
+    }
+
+    $decisionItem = @(
+        $plan.items | Where-Object { [string]$_.key -eq "AICO-006-DISCARD-SEMANTICS" }
+    ) | Select-Object -First 1
+
+    if ($null -eq $decisionItem) {
+        throw "Decision item disappeared during repair."
+    }
+
+    if (@($decisionItem.dependencies).Count -ne 0) {
+        throw "DONE upstream planning task dependency was not removed during backlog repair."
     }
 }
 finally {

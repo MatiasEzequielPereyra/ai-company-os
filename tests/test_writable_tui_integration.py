@@ -50,16 +50,37 @@ def test_writable_workspace_accepts_ready_existing_workspace(
 
     service = WritableWorkspaceService()
 
+    task_reads = iter(
+        [
+            [
+                SimpleNamespace(
+                    id="AICO-001",
+                    status="READY",
+                    work_kind="IMPLEMENTATION",
+                )
+            ],
+            [
+                SimpleNamespace(
+                    id="AICO-001",
+                    status="ACTIVE",
+                    work_kind="IMPLEMENTATION",
+                )
+            ],
+        ]
+    )
+    activation_calls = []
+
     monkeypatch.setattr(
         service.control,
         "get_tasks",
-        lambda *_args, **_kwargs: [
-            SimpleNamespace(
-                id="AICO-001",
-                status="READY",
-                work_kind="IMPLEMENTATION",
-            )
-        ],
+        lambda *_args, **_kwargs: next(task_reads),
+    )
+    monkeypatch.setattr(
+        service.control,
+        "activate_ready",
+        lambda root_value, task_ids: activation_calls.append(
+            (root_value, list(task_ids))
+        ),
     )
 
     result = service.prepare(
@@ -67,6 +88,9 @@ def test_writable_workspace_accepts_ready_existing_workspace(
         ["AICO-001"],
     )
 
+    assert activation_calls == [
+        (root.resolve(), ["AICO-001"])
+    ]
     assert len(result.workspaces) == 1
     assert result.workspaces[0].path == str(workspace)
     assert result.workspaces[0].created is False
@@ -413,21 +437,47 @@ def test_planning_task_is_never_prepared_for_writable_execution(
 
     service = WritableWorkspaceService()
 
+    task_reads = iter(
+        [
+            [
+                SimpleNamespace(
+                    id="AICO-001",
+                    status="READY",
+                    work_kind="",
+                ),
+                SimpleNamespace(
+                    id="AICO-002",
+                    status="READY",
+                    work_kind="IMPLEMENTATION",
+                ),
+            ],
+            [
+                SimpleNamespace(
+                    id="AICO-001",
+                    status="READY",
+                    work_kind="",
+                ),
+                SimpleNamespace(
+                    id="AICO-002",
+                    status="ACTIVE",
+                    work_kind="IMPLEMENTATION",
+                ),
+            ],
+        ]
+    )
+    activation_calls = []
+
     monkeypatch.setattr(
         service.control,
         "get_tasks",
-        lambda *_args, **_kwargs: [
-            SimpleNamespace(
-                id="AICO-001",
-                status="READY",
-                work_kind="",
-            ),
-            SimpleNamespace(
-                id="AICO-002",
-                status="READY",
-                work_kind="IMPLEMENTATION",
-            ),
-        ],
+        lambda *_args, **_kwargs: next(task_reads),
+    )
+    monkeypatch.setattr(
+        service.control,
+        "activate_ready",
+        lambda root_value, task_ids: activation_calls.append(
+            (root_value, list(task_ids))
+        ),
     )
 
     result = service.prepare(
@@ -435,6 +485,9 @@ def test_planning_task_is_never_prepared_for_writable_execution(
         ["AICO-001", "AICO-002"],
     )
 
+    assert activation_calls == [
+        (root.resolve(), ["AICO-002"])
+    ]
     assert [
         workspace.task_id
         for workspace in result.workspaces

@@ -51,10 +51,30 @@ class EngineeringBacklogService:
             ):
                 continue
 
-            for task in self.work_requests.tasks_for_request(
+            request_tasks = self.work_requests.tasks_for_request(
                 root,
                 request_id,
+            )
+
+            initial_planning_tasks = [
+                task
+                for task in request_tasks
+                if not task.source_plan
+            ]
+
+            if (
+                not initial_planning_tasks
+                or any(
+                    task.status != "DONE"
+                    for task in initial_planning_tasks
+                )
             ):
+                continue
+
+            for task in request_tasks:
+                if task.source_plan:
+                    continue
+
                 if task.owner != "engineering-manager":
                     continue
 

@@ -444,3 +444,50 @@ def test_streamed_process_isolates_child_stdin(
         calls[0][1]["stdin"]
         is subprocess.DEVNULL
     )
+
+
+
+def test_run_tui_disables_mouse_reporting(
+    monkeypatch,
+    tmp_path,
+):
+    from company_os.cli import tui as tui_module
+
+    calls = []
+
+    class FakeConfigService:
+        def get_current_project(self):
+            return tmp_path
+
+    class FakeApp:
+        def __init__(self, project):
+            calls.append(
+                ("init", project)
+            )
+
+        def run(self, **kwargs):
+            calls.append(
+                ("run", kwargs)
+            )
+
+    monkeypatch.setattr(
+        tui_module,
+        "ConfigService",
+        FakeConfigService,
+    )
+    monkeypatch.setattr(
+        tui_module,
+        "AICompanyTUI",
+        FakeApp,
+    )
+
+    tui_module.run_tui()
+
+    assert calls[0] == (
+        "init",
+        tmp_path,
+    )
+    assert calls[1] == (
+        "run",
+        {"mouse": False},
+    )

@@ -185,38 +185,6 @@ This is an isolated deterministic TUI integration test.
         task,
     )
 
-    dispatch = f"""# Execution Request - {TASK_ID}
-
-Task: {TASK_ID}
-Owner: frontend
-
-## Objective
-
-Update sample.txt to contain changed by TUI E2E.
-
-## Context
-
-Use the isolated task worktree only.
-
-## Acceptance Criteria
-
-- Update sample.txt to contain changed by TUI E2E.
-- Run git diff --check.
-
-## Testing Requirements
-
-- git diff --check
-"""
-
-    write(
-        root
-        / "docs"
-        / "engineering"
-        / "dispatch"
-        / f"{TASK_ID}.md",
-        dispatch,
-    )
-
     fake_router = r'''param(
     [string]$Provider,
     [string]$ProjectPath,
@@ -452,6 +420,16 @@ def test_tui_drives_real_worktree_change_to_done(
 
             assert task_status(root) == "READY"
 
+            dispatch_path = (
+                root
+                / "docs"
+                / "engineering"
+                / "dispatch"
+                / f"{TASK_ID}.md"
+            )
+
+            assert not dispatch_path.exists()
+
             await pilot.press("w")
             await wait_until_idle(
                 pilot,
@@ -459,6 +437,7 @@ def test_tui_drives_real_worktree_change_to_done(
             )
 
             assert task_status(root) == "REVIEW"
+            assert dispatch_path.exists()
 
             workspace = (
                 root.parent
