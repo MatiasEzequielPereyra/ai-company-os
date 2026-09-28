@@ -183,6 +183,25 @@ if ($writableRunner -notmatch 'resolve-writable-required-files\.ps1') {
 if ($writableRunner -notmatch '-RequiredFiles') {
     throw "Writable runner must pass resolved required files into the context builder"
 }
+if ($writableRunner -notmatch 'Protected writable path prefixes') {
+    throw "Writable runner must disclose protected path prefixes to the provider prompt"
+}
+if ($writableRunner -notmatch 'return BLOCKED with no changes') {
+    throw "Writable runner must tell providers to block rather than propose protected-path changes"
+}
+
+$backlogGenerator = Get-Content (Join-Path $repoRoot "scripts\generate-engineering-backlog.ps1") -Raw
+if ($backlogGenerator -notmatch 'docs\\engineering\\work-requests') {
+    throw "Engineering backlog generation must include the original work request context"
+}
+if ($backlogGenerator -notmatch 'must not merely create, refine, materialize or update AI Company OS tasks') {
+    throw "Engineering backlog generation must reject recursive meta-implementation semantics"
+}
+
+$engineeringManagerInstructions = Get-Content (Join-Path $repoRoot ".codex\agents\engineering-manager.md") -Raw
+if ($engineeringManagerInstructions -notmatch 'runtime performs that materialization') {
+    throw "Engineering Manager instructions must prevent recursive task-materialization tickets"
+}
 
 $writableSchema = Get-Content (Join-Path $repoRoot "schemas\writable-change-set.schema.json") -Raw -Encoding UTF8 | ConvertFrom-Json
 foreach ($field in @("outcome","summary","report_markdown","changes","verification_commands","verification","decisions","blockers","recommended_next")) {
