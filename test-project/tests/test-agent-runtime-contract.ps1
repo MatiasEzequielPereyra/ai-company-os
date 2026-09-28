@@ -78,6 +78,12 @@ if ([string]$config.models.OpenRouter -ne "openrouter/free") { throw "OpenRouter
 if ([string]$config.models.Gemini -ne "gemini-3.5-flash-lite") { throw "Gemini must default to gemini-3.5-flash-lite" }
 if ([string]$config.models.DeepSeek -ne "deepseek-flash") { throw "DeepSeek model default is missing" }
 if ([string]$config.models.Grok -ne "grok-4.7") { throw "Grok model default is missing" }
+if (@($config.analysis_auto_order_by_role."engineering-manager") -join "," -ne "OpenRouter,Gemini,Ollama,Codex,DeepSeek,Grok") {
+    throw "Engineering Manager analysis order must prefer structured cloud fallbacks before low-resource local planning"
+}
+if ([string]$config.analysis_models_by_role."engineering-manager".OpenRouter -ne "qwen/qwen3.8-27b:free") {
+    throw "Engineering Manager OpenRouter analysis must use the pinned free structured planning model"
+}
 if (@($config.writable_auto_order) -join "," -ne "Ollama,OpenRouter,Gemini,DeepSeek,Grok") { throw "Writable Auto order must include local/free providers before guarded paid fallbacks" }
 if ([bool]$config.writable_allow_paid_fallback -ne $false) { throw "Writable paid fallback must default to disabled" }
 if ([string]$config.writable_models.OpenRouter -ne "qwen/qwen3.8-27b:free") { throw "Writable OpenRouter must default to the pinned free structured coding model" }
@@ -350,6 +356,17 @@ if ($gemini -notmatch 'GEMINI_API_KEY') {
 if ($gemini -notmatch 'responseJsonSchema') {
     throw "Gemini adapter must request structured JSON output"
 }
+if ($gemini -notmatch 'ConvertTo-GeminiCompatibleSchema') {
+    throw "Gemini adapter must sanitize unsupported JSON Schema keywords"
+}
+foreach ($unsupportedKeyword in @("minLength","maxLength","pattern")) {
+    if ($gemini -notmatch [regex]::Escape($unsupportedKeyword)) {
+        throw "Gemini schema compatibility layer must strip $unsupportedKeyword"
+    }
+}
+if ($gemini -notmatch 'Get-GeminiErrorBody') {
+    throw "Gemini adapter must surface HTTP error response bodies"
+}
 if ($gemini -notmatch 'TimeoutSeconds') {
     throw "Gemini adapter must honor configured HTTP timeout bounds"
 }
@@ -379,6 +396,12 @@ if ($router -notmatch 'Get-ConfiguredTimeoutSeconds') {
 }
 if ($router -notmatch 'SemanticValidatorPath') {
     throw "Provider router must support semantic validators inside the provider attempt loop"
+}
+if ($router -notmatch 'analysis_auto_order_by_role') {
+    throw "Provider router must support role-specific analysis provider order"
+}
+if ($router -notmatch 'analysis_models_by_role') {
+    throw "Provider router must support role-specific analysis models"
 }
 
 foreach ($runnerName in @("run-agent-task.ps1","run-gate-agent.ps1","run-writable-agent.ps1")) {
