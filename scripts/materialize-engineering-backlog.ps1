@@ -62,6 +62,32 @@ function Format-Checks {
     return ($items | ForEach-Object { "- [ ] " + $_ }) -join [Environment]::NewLine
 }
 
+function Assert-NoMetaImplementationItems {
+    param([object]$Backlog)
+
+    $metaPattern = '(?i)\b(create|refine|materialize|generate|prepare|update)\b.{0,80}\b(executable tasks?|engineering tasks?|task set|backlog|work requests?|dispatch packets?|lifecycle state|gate evidence)\b'
+
+    foreach ($item in @($Backlog.items)) {
+        if ([string]$item.kind -ne "IMPLEMENTATION") { continue }
+
+        $semanticText = @(
+            [string]$item.title,
+            [string]$item.objective,
+            [string]$item.context
+        ) -join " "
+
+        if ($semanticText -match $metaPattern) {
+            throw (
+                "Invalid meta-implementation backlog item '" +
+                [string]$item.key +
+                "': IMPLEMENTATION must describe a real repository/product change, not AI Company OS task/backlog/lifecycle authoring. Title: " +
+                [string]$item.title
+            )
+        }
+    }
+}
+
+
 $root = (Resolve-Path $ProjectPath).Path
 $tasksPath = Join-Path $root "tasks"
 $planPath = Join-Path $root ("docs\engineering\plans\" + $SourceTaskId + "-engineering-backlog.json")
@@ -79,6 +105,8 @@ if ($sourceTask -notmatch '(?m)^Status:\s*DONE\s*$') {
 }
 
 $backlog = Get-Content $planPath -Raw -Encoding UTF8 | ConvertFrom-Json
+
+Assert-NoMetaImplementationItems -Backlog $backlog
 
 # Canonicalize dependency arrays. Empty/null/whitespace entries mean no dependency.
 foreach ($item in @($backlog.items)) {
