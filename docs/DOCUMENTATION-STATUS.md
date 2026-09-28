@@ -115,3 +115,8 @@ Therefore, when the original task owner is also `engineering-manager`, independe
 The documentation does not treat this case as a fully independent review. The First Run demo intentionally uses PM and CTO tasks so the review role differs from the original owner.
 
 Resolving the runtime policy itself requires an explicit architecture/product decision about who should review Engineering Manager-owned work.
+
+
+## Windows PowerShell 5.1 / UTF-8
+
+Documentación revisada para el caso real de lectura desde Windows PowerShell 5.1. Los Markdown UTF-8 sin BOM pueden verse con caracteres corruptos si se usa `Get-Content` sin `-Encoding UTF8`. La guía de First Run y Quick Start incluyen la instrucción explícita.
