@@ -67,5 +67,10 @@
       "OpenRouter": "qwen/qwen3.8-27b:free",
       "Gemini": "gemini-3.5-flash-lite"
     }
+  },
+  "analysis_skip_local_profiles_by_role": {
+    "engineering-manager": [
+      "LOCAL_CPU_LOW"
+    ]
   }
 }
