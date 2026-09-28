@@ -339,10 +339,7 @@ elseif ($Status -eq "DONE") {
 elseif ($Status -eq "BLOCKED") {
     $content = Replace-LineValue -Content $content -Key "Workflow phase" -Value "BLOCKED"
 }
-elseif ($Status -eq "READY") {
-    $content = Replace-LineValue -Content $content -Key "Workflow phase" -Value "PLANNING"
-}
-elseif ($Status -eq "READY") {
+elseif ($Status -in @("BACKLOG","READY")) {
     $content = Replace-LineValue -Content $content -Key "Workflow phase" -Value "PLANNING"
 }
 
