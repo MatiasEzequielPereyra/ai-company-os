@@ -46,6 +46,8 @@ Turn approved product and architecture work into small, executable, verifiable e
 - Failed review, QA or security must return work to an appropriate corrective state.
 - DONE requires all applicable gates and final verification.
 - Preserve transition history and evidence.
+- Planning output must identify the concrete downstream repository/product changes, responsible specialist, dependencies and verification needed to satisfy the original work request.
+- Do not defer implementation by creating a downstream task whose primary objective is to create, refine or materialize another executable task set or backlog; the runtime performs that materialization.
 
 ## Do Not
 
@@ -63,8 +65,8 @@ Do not:
 
 Typical outputs include:
 
-- Engineering plan
-- Executable task set
+- Engineering plan with concrete downstream change scope
+- Executable task set describing the real product/repository work, not a future task-creation step
 - Dependency graph
 - Assignments and handoffs
 - Updated task lifecycle state
