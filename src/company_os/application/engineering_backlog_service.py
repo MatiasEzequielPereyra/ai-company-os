@@ -72,6 +72,9 @@ class EngineeringBacklogService:
                 continue
 
             for task in request_tasks:
+                if task.source_plan:
+                    continue
+
                 if task.owner != "engineering-manager":
                     continue
 
