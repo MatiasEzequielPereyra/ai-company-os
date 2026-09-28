@@ -102,6 +102,9 @@ if (@($config.analysis_auto_order_by_role."engineering-manager") -join "," -ne "
 if ([string]$config.analysis_models_by_role."engineering-manager".OpenRouter -ne "qwen/qwen3.8-27b:free") {
     throw "Engineering Manager OpenRouter analysis must use the pinned free structured planning model"
 }
+if (@($config.analysis_skip_local_profiles_by_role."engineering-manager") -notcontains "LOCAL_CPU_LOW") {
+    throw "Engineering Manager must skip weak LOCAL_CPU_LOW Ollama analysis fallback"
+}
 if (@($config.writable_auto_order) -join "," -ne "Ollama") {
     throw "Writable Auto must be local-only Ollama by default"
 }
@@ -147,6 +150,12 @@ if ($providerRouter -notmatch 'analysis_auto_order_by_role') {
 }
 if ($providerRouter -notmatch 'analysis_models_by_role') {
     throw "Provider router must support role-specific analysis models"
+}
+if ($providerRouter -notmatch 'analysis_skip_local_profiles_by_role') {
+    throw "Provider router must support role-specific local analysis skip policy"
+}
+if ($providerRouter -notmatch 'Provider skipped: Ollama') {
+    throw "Provider router must surface local profile skips"
 }
 if ($runner -notmatch 'build-agent-context\.ps1') {
     throw "Agent runner must build repository context for external providers"
