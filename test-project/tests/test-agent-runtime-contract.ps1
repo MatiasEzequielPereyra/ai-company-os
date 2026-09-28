@@ -31,6 +31,7 @@ $required = @(
     ".codex\provider-config.json",
     ".codex\local-runtime-config.json",
     "schemas\agent-result.schema.json",
+    "schemas\engineering-plan-result.schema.json",
     "schemas\writable-change-set.schema.json",
     ".codex\writable-policy.json",
     "schemas\review-result.schema.json",
@@ -149,8 +150,11 @@ if ($runner -notmatch 'structured result concise|Keep the structured result conc
 if ($runner -notmatch 'Assert-ConcreteEngineeringPlanResult') {
     throw "Agent runner must deterministically validate Engineering Manager planning output"
 }
-if ($runner -notmatch '## Executable Work') {
-    throw "Engineering Manager planning prompt must require the executable work section"
+if ($runner -notmatch 'engineering-plan-result\.schema\.json') {
+    throw "Engineering Manager planning must use the dedicated structured result schema"
+}
+if ($runner -notmatch 'execution-plan\.json') {
+    throw "Engineering Manager planning must persist a canonical structured execution plan"
 }
 if ($runner -notmatch 'contains no real IMPLEMENTATION work') {
     throw "Engineering Manager planning validation must require actual implementation work"
@@ -209,6 +213,9 @@ if ($backlogGenerator -notmatch 'must not merely create, refine, materialize or 
 if ($backlogGenerator -notmatch 'Assert-NoMetaImplementationItems') {
     throw "Engineering backlog generation must deterministically reject recursive meta-implementation items"
 }
+if ($backlogGenerator -notmatch 'execution-plan\.json') {
+    throw "Engineering backlog generation must consume the canonical structured execution plan"
+}
 
 $engineeringManagerInstructions = Get-Content (Join-Path $repoRoot ".codex\agents\engineering-manager.md") -Raw
 if ($engineeringManagerInstructions -notmatch 'runtime performs that materialization') {
@@ -216,6 +223,14 @@ if ($engineeringManagerInstructions -notmatch 'runtime performs that materializa
 }
 if ($engineeringManagerInstructions -notmatch '## Executable Work') {
     throw "Engineering Manager instructions must define the structured executable work contract"
+}
+
+$engineeringPlanSchema = Get-Content (Join-Path $repoRoot "schemas\engineering-plan-result.schema.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+if (@($engineeringPlanSchema.required) -notcontains "executable_work") {
+    throw "Engineering plan result schema must require executable_work"
+}
+if ([int]$engineeringPlanSchema.properties.executable_work.maxItems -lt 1) {
+    throw "Engineering plan result schema must bound executable_work"
 }
 
 $writableSchema = Get-Content (Join-Path $repoRoot "schemas\writable-change-set.schema.json") -Raw -Encoding UTF8 | ConvertFrom-Json
