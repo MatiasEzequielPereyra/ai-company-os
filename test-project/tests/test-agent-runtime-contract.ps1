@@ -84,6 +84,9 @@ if (@($config.analysis_auto_order_by_role."engineering-manager") -join "," -ne "
 if ([string]$config.analysis_models_by_role."engineering-manager".OpenRouter -ne "qwen/qwen3.8-27b:free") {
     throw "Engineering Manager OpenRouter analysis must use the pinned free structured planning model"
 }
+if (@($config.analysis_skip_local_profiles_by_role."engineering-manager") -notcontains "LOCAL_CPU_LOW") {
+    throw "Engineering Manager must skip weak LOCAL_CPU_LOW Ollama analysis fallback"
+}
 if (@($config.writable_auto_order) -join "," -ne "Ollama,OpenRouter,Gemini,DeepSeek,Grok") { throw "Writable Auto order must include local/free providers before guarded paid fallbacks" }
 if ([bool]$config.writable_allow_paid_fallback -ne $false) { throw "Writable paid fallback must default to disabled" }
 if ([string]$config.writable_models.OpenRouter -ne "qwen/qwen3.8-27b:free") { throw "Writable OpenRouter must default to the pinned free structured coding model" }
@@ -402,6 +405,12 @@ if ($router -notmatch 'analysis_auto_order_by_role') {
 }
 if ($router -notmatch 'analysis_models_by_role') {
     throw "Provider router must support role-specific analysis models"
+}
+if ($router -notmatch 'analysis_skip_local_profiles_by_role') {
+    throw "Provider router must support role-specific local analysis skip policy"
+}
+if ($router -notmatch 'Provider skipped: Ollama') {
+    throw "Provider router must surface local profile skips"
 }
 
 foreach ($runnerName in @("run-agent-task.ps1","run-gate-agent.ps1","run-writable-agent.ps1")) {
