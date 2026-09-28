@@ -150,7 +150,25 @@ $taskContextPath = Join-Path $root ("tasks\" + $Id + ".md")
 if (Test-Path $taskContextPath -PathType Leaf) {
     try {
         $taskContextText = Get-Content $taskContextPath -Raw -Encoding UTF8
-        if ($taskContextText -match '(?m)^Work request:\s*(.+?)\s*
+
+        if ($taskContextText -match '(?m)^Work request:\s*(.+?)\s*$') {
+            $taskWorkRequestId = $Matches[1].Trim()
+
+            if (-not [string]::IsNullOrWhiteSpace($taskWorkRequestId)) {
+                $candidateWorkRequestPath = "docs\engineering\work-requests\" + $taskWorkRequestId + ".md"
+
+                if (Test-Path (Join-Path $root $candidateWorkRequestPath) -PathType Leaf) {
+                    $taskWorkRequestPath = $candidateWorkRequestPath
+                }
+            }
+        }
+    }
+    catch {
+        throw "Unable to resolve task work-request context from: $taskContextPath"
+    }
+}
+
+$builder = New-Object System.Text.StringBuilder
 
 [void]$builder.AppendLine("# AI Company OS Repository Context Pack")
 [void]$builder.AppendLine("")
@@ -205,177 +223,6 @@ foreach ($relative in @($RequiredFiles)) {
 foreach ($relative in $required) {
     if ($used -ge $MaxChars) { break }
     if ([string]::IsNullOrWhiteSpace([string]$relative)) { continue }
-
-    $added = Add-ContextFile -Builder $builder -Root $root -RelativePath $relative -Remaining ($MaxChars - $used)
-    if ($added -gt 0) {
-        $included[$relative.ToLowerInvariant()] = $true
-        $used += $added
-    }
-}
-
-$allowedExtensions = @(
-    ".md",".txt",".json",".toml",".yml",".yaml",
-    ".ts",".tsx",".js",".jsx",".mjs",".cjs",
-    ".html",".css",".scss",".sql",".ps1",".sh"
-)
-
-$allFiles = @(
-    foreach ($relativeName in @(Get-ChildItem $root -File -Recurse -Force -Name -ErrorAction SilentlyContinue)) {
-        $relative = ([string]$relativeName).Replace("/","\")
-        $fullPath = Join-Path $root $relative
-
-        try {
-            $fileInfo = Get-Item $fullPath -Force -ErrorAction Stop
-        }
-        catch {
-            continue
-        }
-
-        $lower = $relative.ToLowerInvariant()
-        $name = $fileInfo.Name.ToLowerInvariant()
-        $ext = $fileInfo.Extension.ToLowerInvariant()
-        $allowed = $false
-
-        if ($lower -match '(^|\\)(node_modules|\.git|dist|dist-refactor-modular|build|coverage|\.next|vendor)(\\|$)') {
-            $allowed = $false
-        }
-        elseif ($managedFiles.ContainsKey($lower)) {
-            $allowed = $false
-        }
-        elseif ($lower -match '^\.codex\\runtime\\|^docs\\engineering\\agent-reports\\') {
-            $allowed = $false
-        }
-        elseif ($name -like ".env*") {
-            $allowed = $false
-        }
-        elseif ($name -match 'secret|credential|private[-_]?key|service[-_]?account') {
-            $allowed = $false
-        }
-        elseif ($name -in @("package-lock.json","pnpm-lock.yaml","yarn.lock")) {
-            $allowed = $false
-        }
-        elseif ($ext -in @(".pem",".key",".p12",".pfx",".crt",".cer")) {
-            $allowed = $false
-        }
-        elseif ($fileInfo.Length -gt 500000) {
-            $allowed = $false
-        }
-        elseif ($allowedExtensions -contains $ext) {
-            $allowed = $true
-        }
-        elseif ($fileInfo.Name -in @("Dockerfile",".gitignore",".npmrc")) {
-            $allowed = $true
-        }
-
-        if ($allowed) {
-            [PSCustomObject]@{
-                Relative = $relative
-                Score = Get-RoleScore -RelativePath $relative -Role $Owner
-            }
-        }
-    }
-)
-
-$inventoryReserve = [Math]::Min(30000,[Math]::Max(2000,[int]($MaxChars * 0.15)))
-$contentBudget = [Math]::Max(0,$MaxChars - $inventoryReserve)
-$used = $builder.Length
-
-foreach ($entry in ($allFiles | Sort-Object @{Expression="Score";Descending=$true}, @{Expression="Relative";Descending=$false})) {
-    if ($used -ge $contentBudget) { break }
-
-    $key = $entry.Relative.ToLowerInvariant()
-    if ($included.ContainsKey($key)) { continue }
-
-    $added = Add-ContextFile -Builder $builder -Root $root -RelativePath $entry.Relative -Remaining ($contentBudget - $used)
-    if ($added -gt 0) {
-        $included[$key] = $true
-        $used += $added
-    }
-}
-
-[void]$builder.AppendLine("")
-[void]$builder.AppendLine("")
-[void]$builder.AppendLine("===== REPOSITORY INVENTORY =====")
-
-foreach ($entry in ($allFiles | Sort-Object Relative | Select-Object -First 1600)) {
-    $line = $entry.Relative
-    if (($builder.Length + $line.Length + 2) -ge $MaxChars) { break }
-    [void]$builder.AppendLine($line)
-}
-
-if ($builder.Length -gt $MaxChars) {
-    return $builder.ToString().Substring(0,$MaxChars)
-}
-
-$builder.ToString()
-) {
-            $taskWorkRequestId = $Matches[1].Trim()
-            if (-not [string]::IsNullOrWhiteSpace($taskWorkRequestId)) {
-                $candidateWorkRequestPath = "docs\engineering\work-requests\" + $taskWorkRequestId + ".md"
-                if (Test-Path (Join-Path $root $candidateWorkRequestPath) -PathType Leaf) {
-                    $taskWorkRequestPath = $candidateWorkRequestPath
-                }
-            }
-        }
-    }
-    catch {
-        throw "Unable to resolve task work-request context from: $taskContextPath"
-    }
-}
-
-$builder = New-Object System.Text.StringBuilder
-
-[void]$builder.AppendLine("# AI Company OS Repository Context Pack")
-[void]$builder.AppendLine("")
-[void]$builder.AppendLine("Task: $Id")
-[void]$builder.AppendLine("Owner: $Owner")
-[void]$builder.AppendLine("Generated: " + (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"))
-[void]$builder.AppendLine("")
-[void]$builder.AppendLine("This is a bounded repository snapshot. Do not claim to have inspected omitted files.")
-
-$required = @(
-    "AGENTS.md",
-    "docs\PROJECT-BRIEF.md",
-    "docs\product\product-context.md",
-    "docs\architecture\architecture-context.md",
-    "docs\engineering\engineering-context.md",
-    "docs\operations\operations-context.md",
-    ".codex\agents\$Owner.md",
-    "tasks\$Id.md",
-    "docs\engineering\dispatch\$Id.md",
-    ".codex\state\company-state.md",
-    ".codex\state\current-sprint.md",
-    "docs\engineering\project-intake.md",
-    "docs\product\product-intake.md",
-    "docs\architecture\architecture-intake.md",
-    "docs\operations\operations-intake.md",
-    "README.md",
-    "package.json"
-)
-
-$included = @{}
-$used = $builder.Length
-
-foreach ($relative in @($RequiredFiles)) {
-    if ([string]::IsNullOrWhiteSpace($relative)) { continue }
-    if ($used -ge $MaxChars) {
-        throw "Required context files exhausted the configured context budget."
-    }
-
-    $key = $relative.ToLowerInvariant().Replace("/","\")
-    if ($included.ContainsKey($key)) { continue }
-
-    $added = Add-ContextFile -Builder $builder -Root $root -RelativePath $relative -Remaining ($MaxChars - $used) -RequireComplete
-    if ($added -le 0) {
-        throw "Required context file was resolved but could not be included: $relative"
-    }
-
-    $included[$key] = $true
-    $used += $added
-}
-
-foreach ($relative in $required) {
-    if ($used -ge $MaxChars) { break }
 
     $added = Add-ContextFile -Builder $builder -Root $root -RelativePath $relative -Remaining ($MaxChars - $used)
     if ($added -gt 0) {
