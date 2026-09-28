@@ -1,0 +1,106 @@
+{
+  "type": "object",
+  "properties": {
+    "outcome": {
+      "type": "string",
+      "enum": ["COMPLETED", "BLOCKED"]
+    },
+    "summary": {
+      "type": "string",
+      "maxLength": 800
+    },
+    "report_markdown": {
+      "type": "string",
+      "maxLength": 5000
+    },
+    "executable_work": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "kind": {
+            "type": "string",
+            "enum": ["DECISION", "IMPLEMENTATION", "VALIDATION", "OPERATIONS"]
+          },
+          "change": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 800
+          },
+          "owner": {
+            "type": "string",
+            "enum": ["ceo", "pm", "cto", "engineering-manager", "backend", "frontend", "devops", "qa", "security"]
+          },
+          "areas": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 12,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 300
+            }
+          },
+          "depends_on": {
+            "type": "array",
+            "maxItems": 12,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            }
+          },
+          "verify": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 800
+          }
+        },
+        "required": [
+          "key",
+          "kind",
+          "change",
+          "owner",
+          "areas",
+          "depends_on",
+          "verify"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "verification": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "decisions": {
+      "type": "string",
+      "maxLength": 2000
+    },
+    "blockers": {
+      "type": "string",
+      "maxLength": 1500
+    },
+    "recommended_next": {
+      "type": "string",
+      "maxLength": 1500
+    }
+  },
+  "required": [
+    "outcome",
+    "summary",
+    "report_markdown",
+    "executable_work",
+    "verification",
+    "decisions",
+    "blockers",
+    "recommended_next"
+  ],
+  "additionalProperties": false
+}
