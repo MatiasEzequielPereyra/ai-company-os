@@ -5,6 +5,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $tempRoot = Join-Path $env:TEMP ("aico-provider-contract-" + [Guid]::NewGuid().ToString("N"))
 $savedKey = $env:OPENROUTER_API_KEY
+$savedGeminiKey = $env:GEMINI_API_KEY
 
 try {
     foreach ($relative in @("scripts","scripts\providers","schemas",".codex",".codex\runtime")) {
@@ -17,8 +18,11 @@ try {
     Copy-Item (Join-Path $repoRoot "schemas\agent-result.schema.json") (Join-Path $tempRoot "schemas\agent-result.schema.json") -Force
 
     $config = @{
-        auto_order = @("OpenRouter")
-        models = @{ OpenRouter = "openrouter/fake" }
+        auto_order = @("OpenRouter","Gemini")
+        models = @{
+            OpenRouter = "openrouter/fake"
+            Gemini = "gemini/fake"
+        }
     } | ConvertTo-Json -Depth 10
     [System.IO.File]::WriteAllText((Join-Path $tempRoot ".codex\provider-config.json"),$config,(New-Object System.Text.UTF8Encoding($false)))
 
@@ -45,6 +49,7 @@ $payload = @{
     [System.IO.File]::WriteAllText($adapterPath,$invalidAdapter,(New-Object System.Text.UTF8Encoding($false)))
 
     $env:OPENROUTER_API_KEY = "provider-contract-secret"
+    $env:GEMINI_API_KEY = "provider-contract-gemini-secret"
     $router = Join-Path $tempRoot "scripts\provider-router.ps1"
     $schema = Join-Path $tempRoot "schemas\agent-result.schema.json"
     $output = Join-Path $tempRoot "result.json"
@@ -83,6 +88,78 @@ $payload = @{
     $result = & $router -Provider OpenRouter -ProjectPath $tempRoot -Prompt "fixture" -Context "fixture" -SchemaPath $schema -OutputPath $output
     if ([string]$result.Provider -ne "OpenRouter") { throw "Valid provider contract did not return successfully." }
 
+    $semanticOpenRouter = @'
+param(
+    [string]$Prompt,
+    [string]$Context,
+    [string]$SchemaPath,
+    [string]$OutputPath,
+    [string]$Model
+)
+$payload = @{
+    outcome = "COMPLETED"
+    summary = "SEMANTIC_BAD"
+    report_markdown = "# Valid JSON but bad semantics"
+    verification = "Fixture"
+    decisions = "NONE"
+    blockers = "NONE"
+    recommended_next = "REVIEW"
+} | ConvertTo-Json -Depth 10
+[System.IO.File]::WriteAllText($OutputPath,$payload,(New-Object System.Text.UTF8Encoding($false)))
+[PSCustomObject]@{ Provider = "OpenRouter"; Model = $Model }
+'@
+    [System.IO.File]::WriteAllText($adapterPath,$semanticOpenRouter,(New-Object System.Text.UTF8Encoding($false)))
+
+    $geminiAdapterPath = Join-Path $tempRoot "scripts\providers\invoke-gemini.ps1"
+    $semanticGemini = @'
+param(
+    [string]$Prompt,
+    [string]$Context,
+    [string]$SchemaPath,
+    [string]$OutputPath,
+    [string]$Model
+)
+$payload = @{
+    outcome = "COMPLETED"
+    summary = "SEMANTIC_GOOD"
+    report_markdown = "# Valid JSON and valid semantics"
+    verification = "Fixture"
+    decisions = "NONE"
+    blockers = "NONE"
+    recommended_next = "REVIEW"
+} | ConvertTo-Json -Depth 10
+[System.IO.File]::WriteAllText($OutputPath,$payload,(New-Object System.Text.UTF8Encoding($false)))
+[PSCustomObject]@{ Provider = "Gemini"; Model = $Model }
+'@
+    [System.IO.File]::WriteAllText($geminiAdapterPath,$semanticGemini,(New-Object System.Text.UTF8Encoding($false)))
+
+    $semanticValidator = Join-Path $tempRoot "scripts\validate-semantic-fixture.ps1"
+    [System.IO.File]::WriteAllText(
+        $semanticValidator,
+        @'
+param([Parameter(Mandatory = $true)][string]$JsonPath)
+$result = Get-Content $JsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
+if ([string]$result.summary -eq "SEMANTIC_BAD") {
+    throw "Semantic contract: fixture rejected provider output."
+}
+if ([string]$result.summary -ne "SEMANTIC_GOOD") {
+    throw "Semantic contract: unexpected fixture output."
+}
+'@,
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+
+    $semanticResult = & $router -Provider Auto -ProjectPath $tempRoot -Prompt "fixture" -Context "fixture" -SchemaPath $schema -OutputPath $output -SemanticValidatorPath $semanticValidator
+
+    if ([string]$semanticResult.Provider -ne "Gemini") {
+        throw "Provider router did not fall back after semantic validation rejected the first provider."
+    }
+
+    $semanticOutput = Get-Content $output -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ([string]$semanticOutput.summary -ne "SEMANTIC_GOOD") {
+        throw "Semantic fallback did not preserve the accepted provider output."
+    }
+
     $leakyAdapter = @'
 param(
     [string]$Prompt,
@@ -110,13 +187,14 @@ throw ("adapter leaked " + $env:OPENROUTER_API_KEY)
     if (-not (Test-Path $metricsPath)) { throw "Provider attempt metrics were not written." }
     $events = @(Get-Content $metricsPath -Encoding UTF8 | ForEach-Object { $_ | ConvertFrom-Json })
     $providerEvents = @($events | Where-Object { $_.event_type -eq "provider_attempt" })
-    if ($providerEvents.Count -lt 3) { throw "Expected provider metrics for invalid, valid, and redaction attempts." }
-    if (@($providerEvents | Where-Object { $_.success -eq $true }).Count -lt 1) { throw "Successful provider attempt metric missing." }
-    if (@($providerEvents | Where-Object { $_.success -ne $true }).Count -lt 2) { throw "Failed provider attempt metrics missing." }
+    if ($providerEvents.Count -lt 5) { throw "Expected provider metrics for schema, valid, semantic fallback, and redaction attempts." }
+    if (@($providerEvents | Where-Object { $_.success -eq $true }).Count -lt 2) { throw "Successful provider attempt metrics missing." }
+    if (@($providerEvents | Where-Object { $_.success -ne $true }).Count -lt 3) { throw "Failed provider attempt metrics missing." }
 
     Write-Host "PASS: provider router contract and error-handling test" -ForegroundColor Green
 }
 finally {
     $env:OPENROUTER_API_KEY = $savedKey
+    $env:GEMINI_API_KEY = $savedGeminiKey
     if (Test-Path $tempRoot) { Remove-Item $tempRoot -Recurse -Force }
 }
