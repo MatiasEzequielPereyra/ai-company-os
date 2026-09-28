@@ -36,88 +36,6 @@ function Test-RequiresConcreteEngineeringPlan {
     )
 }
 
-function Assert-ConcreteEngineeringPlanResult {
-    param(
-        [object]$Result,
-        [string]$TaskId
-    )
-
-    $items = @($Result.executable_work)
-
-    if ([string]$Result.outcome -eq "BLOCKED") {
-        if ($items.Count -ne 0) {
-            throw "${TaskId}: BLOCKED Engineering Manager result must not contain executable work."
-        }
-        return
-    }
-
-    if ([string]$Result.outcome -ne "COMPLETED") {
-        throw "${TaskId}: unsupported Engineering Manager outcome: $($Result.outcome)"
-    }
-
-    if ($items.Count -lt 1) {
-        throw "${TaskId}: Engineering Manager COMPLETED result contains no executable_work items."
-    }
-
-    $keys = @{}
-    $implementationCount = 0
-
-    foreach ($item in $items) {
-        $key = ([string]$item.key).Trim()
-        $kind = ([string]$item.kind).Trim()
-        $change = ([string]$item.change).Trim()
-        $areas = @($item.areas | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
-        $dependsOn = @($item.depends_on | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
-
-        if ([string]::IsNullOrWhiteSpace($key)) {
-            throw "${TaskId}: Engineering Manager executable_work item key cannot be empty."
-        }
-
-        if ($keys.ContainsKey($key)) {
-            throw "${TaskId}: duplicate Engineering Manager executable_work key: $key"
-        }
-
-        $keys[$key] = $true
-
-        if ($kind -eq "IMPLEMENTATION") {
-            $implementationCount++
-
-            $semanticText = @(
-                $change,
-                ($areas -join " ")
-            ) -join " "
-
-            if ($semanticText -match '(?i)\b(create|refine|materialize|generate|prepare|update)\b.{0,100}\b(executable tasks?|engineering tasks?|task set|backlog|work requests?|dispatch packets?|lifecycle state|gate evidence)\b') {
-                throw "${TaskId}: Engineering Manager plan contains recursive meta-implementation work: $change"
-            }
-
-            foreach ($area in $areas) {
-                if ($area -match '(?i)^(tasks?|backlog|planning|lifecycle|docs[\\/]engineering[\\/](dispatch|results|reviews|qa|security|final-approvals))([\\/]|$)') {
-                    throw "${TaskId}: Engineering Manager implementation targets control-plane area: $area"
-                }
-            }
-        }
-
-        if ($dependsOn -contains $key) {
-            throw "${TaskId}: Engineering Manager work item $key cannot depend on itself."
-        }
-    }
-
-    foreach ($item in $items) {
-        foreach ($dependency in @($item.depends_on)) {
-            $dependencyKey = ([string]$dependency).Trim()
-            if ([string]::IsNullOrWhiteSpace($dependencyKey)) { continue }
-            if (-not $keys.ContainsKey($dependencyKey)) {
-                throw "${TaskId}: Engineering Manager work item $($item.key) references unknown dependency: $dependencyKey"
-            }
-        }
-    }
-
-    if ($implementationCount -lt 1) {
-        throw "${TaskId}: Engineering Manager executable plan contains no real IMPLEMENTATION work."
-    }
-}
-
 if ($PSBoundParameters.ContainsKey("AuthMode") -and -not $PSBoundParameters.ContainsKey("Provider")) {
     if ($AuthMode -eq "ChatGPT") {
         $Provider = "Codex"
@@ -161,11 +79,15 @@ $routerPath = Join-Path $PSScriptRoot "provider-router.ps1"
 $contextBuilderPath = Join-Path $PSScriptRoot "build-agent-context.ps1"
 $localResolverPath = Join-Path $PSScriptRoot "local-runtime\resolve-local-runtime.ps1"
 $localRuntimeConfigPath = Join-Path $root ".codex\local-runtime-config.json"
+$engineeringPlanValidatorPath = Join-Path $PSScriptRoot "validate-engineering-plan-result.ps1"
 
 if (-not (Test-Path $dispatchPath)) { throw "Dispatch packet not found: $dispatchPath" }
 if (-not (Test-Path $rolePath)) { throw "Role instructions not found: $rolePath" }
 if (-not (Test-Path $schemaPath)) { throw "Agent result schema not found: $schemaPath" }
 if (-not (Test-Path $routerPath)) { throw "Provider router not found: $routerPath" }
+if ($requiresConcreteEngineeringPlan -and -not (Test-Path $engineeringPlanValidatorPath -PathType Leaf)) {
+    throw "Engineering plan semantic validator not found: $engineeringPlanValidatorPath"
+}
 
 $runtimeDir = Join-Path $root ".codex\runtime"
 $reportsDir = Join-Path $root "docs\engineering\agent-reports"
@@ -330,7 +252,23 @@ if ($needsExternalContext) {
 Write-Host "Running agent: $owner -> $Id" -ForegroundColor Cyan
 Write-Host "Provider mode: $Provider" -ForegroundColor DarkGray
 
-$execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $jsonPath -Model $Model -Role $owner -Workload "analysis"
+$routerArgs = @{
+    Provider = $Provider
+    ProjectPath = $root
+    Prompt = $prompt
+    Context = $context
+    SchemaPath = $schemaPath
+    OutputPath = $jsonPath
+    Model = $Model
+    Role = $owner
+    Workload = "analysis"
+}
+
+if ($requiresConcreteEngineeringPlan) {
+    $routerArgs.SemanticValidatorPath = $engineeringPlanValidatorPath
+}
+
+$execution = & $routerPath @routerArgs
 
 if (-not (Test-Path $jsonPath)) { throw "Provider runtime did not produce structured output: $jsonPath" }
 
@@ -341,11 +279,8 @@ foreach ($field in @("outcome","summary","report_markdown","verification","decis
     }
 }
 
-if ($requiresConcreteEngineeringPlan) {
-    if ($null -eq $result.PSObject.Properties["executable_work"]) {
-        throw "Structured Engineering Manager result is missing field: executable_work"
-    }
-    Assert-ConcreteEngineeringPlanResult -Result $result -TaskId $Id
+if ($requiresConcreteEngineeringPlan -and $null -eq $result.PSObject.Properties["executable_work"]) {
+    throw "Structured Engineering Manager result is missing field: executable_work"
 }
 
 $providerUsed = [string]$execution.Provider
