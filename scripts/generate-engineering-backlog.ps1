@@ -230,6 +230,32 @@ function Resolve-ImplementationAuthorizationKey {
 }
 
 
+function Assert-NoMetaImplementationItems {
+    param([object]$Backlog)
+
+    $metaPattern = '(?i)\b(create|refine|materialize|generate|prepare|update)\b.{0,80}\b(executable tasks?|engineering tasks?|task set|backlog|work requests?|dispatch packets?|lifecycle state|gate evidence)\b'
+
+    foreach ($item in @($Backlog.items)) {
+        if ([string]$item.kind -ne "IMPLEMENTATION") { continue }
+
+        $semanticText = @(
+            [string]$item.title,
+            [string]$item.objective,
+            [string]$item.context
+        ) -join " "
+
+        if ($semanticText -match $metaPattern) {
+            throw (
+                "Invalid meta-implementation backlog item '" +
+                [string]$item.key +
+                "': IMPLEMENTATION must describe a real repository/product change, not AI Company OS task/backlog/lifecycle authoring. Title: " +
+                [string]$item.title
+            )
+        }
+    }
+}
+
+
 $root = (Resolve-Path $ProjectPath).Path
 $taskPath = Join-Path $root ("tasks\" + $SourceTaskId + ".md")
 $reportPath = Join-Path $root ("docs\engineering\agent-reports\" + $SourceTaskId + ".md")
@@ -340,6 +366,8 @@ else {
 
 $backlog = Get-Content $outputPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $backlog = Repair-MojibakeObject -Value $backlog
+
+Assert-NoMetaImplementationItems -Backlog $backlog
 
 # Canonicalize dependency arrays. Empty/null/whitespace entries mean no dependency.
 # A model may occasionally echo an item's own key in its dependencies. That
