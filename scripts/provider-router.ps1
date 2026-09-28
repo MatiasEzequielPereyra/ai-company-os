@@ -8,7 +8,8 @@ param(
     [Parameter(Mandatory = $true)][string]$OutputPath,
     [string]$Model = "",
     [string]$Role = "",
-    [string]$Workload = "general"
+    [string]$Workload = "general",
+    [string]$SemanticValidatorPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -68,7 +69,7 @@ function Get-ProviderErrorCategory {
     if ($Message -match "(?i)429|rate.?limit|quota|credits") { return "rate_limit" }
     if ($Message -match "(?i)401|403|unauthor|forbidden|api.?key|not configured") { return "authentication" }
     if ($Message -match "(?i)timeout|timed out") { return "timeout" }
-    if ($Message -match "(?i)schema|structured|invalid json|contract") { return "contract" }
+    if ($Message -match "(?i)schema|structured|invalid json|contract|semantic") { return "contract" }
     if ($Message -match "(?i)connection|network|transport|5\d\d") { return "transport" }
     return "unknown"
 }
@@ -82,6 +83,14 @@ $localResolverPath = Join-Path $PSScriptRoot "local-runtime\resolve-local-runtim
 $localRuntimeConfigPath = Join-Path $root ".codex\local-runtime-config.json"
 
 if (-not (Test-Path $validatorPath)) { throw "Provider contract validator not found: $validatorPath" }
+
+if (-not [string]::IsNullOrWhiteSpace($SemanticValidatorPath)) {
+    $SemanticValidatorPath = [System.IO.Path]::GetFullPath($SemanticValidatorPath)
+
+    if (-not (Test-Path $SemanticValidatorPath -PathType Leaf)) {
+        throw "Provider semantic validator not found: $SemanticValidatorPath"
+    }
+}
 
 $config = $null
 if (Test-Path $configPath) {
@@ -282,6 +291,10 @@ foreach ($candidate in $attempts) {
         }
 
         & $validatorPath -JsonPath $OutputPath -SchemaPath $SchemaPath | Out-Null
+
+        if (-not [string]::IsNullOrWhiteSpace($SemanticValidatorPath)) {
+            & $SemanticValidatorPath -JsonPath $OutputPath | Out-Null
+        }
 
         $durationMs = [int][math]::Round(((Get-Date) - $attemptStarted).TotalMilliseconds)
         if (Test-Path $metricsWriterPath) {
