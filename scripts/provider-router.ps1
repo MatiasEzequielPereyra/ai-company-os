@@ -66,7 +66,7 @@ if (Test-Path $configPath) {
     $config = Get-Content $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
 }
 
-$autoOrder = @("Ollama","OpenRouter","Gemini","DeepSeek","Grok","Codex")
+$autoOrder = @("Ollama")
 if ($null -ne $config -and $null -ne $config.auto_order -and @($config.auto_order).Count -gt 0) {
     $autoOrder = @($config.auto_order | ForEach-Object { [string]$_ })
 }

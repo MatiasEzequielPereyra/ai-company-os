@@ -4,10 +4,15 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 
 $config = Get-Content (Join-Path $repoRoot ".codex\provider-config.json") -Raw -Encoding UTF8 | ConvertFrom-Json
 
-$expectedAnalysisProviders = @("Ollama","OpenRouter","Gemini","DeepSeek","Grok","Codex")
-foreach ($provider in $expectedAnalysisProviders) {
-    if (@($config.auto_order) -notcontains $provider) {
-        throw "Analysis Auto provider order must include $provider"
+$analysisAutoOrder = @($config.auto_order)
+
+if (($analysisAutoOrder -join ",") -ne "Ollama") {
+    throw "Analysis Auto must be local-only Ollama"
+}
+
+foreach ($remoteProvider in @("OpenRouter","Gemini","DeepSeek","Grok","Codex")) {
+    if ($analysisAutoOrder -contains $remoteProvider) {
+        throw "$remoteProvider must not be an automatic analysis fallback"
     }
 }
 
@@ -38,8 +43,8 @@ if ([int]$config.ollama_gate_artifact_max_chars -lt 1000 -or [int]$config.ollama
     throw "Ollama gate artifact budget must be explicitly bounded"
 }
 
-if (@($config.writable_auto_order) -join "," -ne "OpenRouter,Gemini") {
-    throw "Writable Auto must remain restricted to OpenRouter then Gemini"
+if (@($config.writable_auto_order) -join "," -ne "Ollama") {
+    throw "Writable Auto must be local-only Ollama"
 }
 if ($null -ne $config.writable_allow_paid_fallback -and [bool]$config.writable_allow_paid_fallback) {
     throw "Writable paid fallback must remain disabled"
@@ -112,11 +117,17 @@ if ($gateRunner -notmatch 'localRuntimeConfigured') {
 }
 
 $writableRunner = Get-Content (Join-Path $repoRoot "scripts\run-writable-agent.ps1") -Raw -Encoding UTF8
-if ($writableRunner -notmatch 'ValidateSet\("Auto","OpenRouter","Gemini"\)') {
-    throw "Writable runtime provider surface must remain unchanged"
+if ($writableRunner -notmatch 'ValidateSet\("Auto","Ollama","OpenRouter","Gemini"\)') {
+    throw "Writable runtime must expose Auto/Ollama/OpenRouter/Gemini"
 }
-if ($writableRunner -match 'ValidateSet\([^\r\n]*Ollama') {
-    throw "Ollama must not be enabled in writable execution by this reconciliation"
+if ($writableRunner -notmatch '\$order = @\("Ollama"\)') {
+    throw "Writable Auto fallback must default to local-only Ollama"
+}
+if ($writableRunner -notmatch '\$candidate -notin @\("Ollama","OpenRouter","Gemini"\)') {
+    throw "Writable provider filter must allow Ollama, OpenRouter and Gemini"
+}
+if ($writableRunner -notmatch '\$candidate -ne "Ollama"') {
+    throw "Writable local Ollama must bypass remote free-model validation"
 }
 
 $parseTargets = @(

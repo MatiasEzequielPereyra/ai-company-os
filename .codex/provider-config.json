@@ -1,16 +1,11 @@
 {
   "auto_order": [
-    "Ollama",
-    "OpenRouter",
-    "Gemini",
-    "DeepSeek",
-    "Grok",
-    "Codex"
+    "Ollama"
   ],
   "allow_paid_fallback": false,
   "context_max_chars": 120000,
   "models": {
-    "Ollama": "llama3.1:8b",
+    "Ollama": "qwen3:8b",
     "OpenRouter": "openrouter/free",
     "Gemini": "gemini-3.5-flash-lite",
     "DeepSeek": "deepseek-flash",
@@ -21,8 +16,7 @@
   "ollama_gate_context_max_chars": 7000,
   "ollama_gate_artifact_max_chars": 3000,
   "writable_auto_order": [
-    "OpenRouter",
-    "Gemini"
+    "Ollama"
   ],
   "writable_allow_paid_fallback": false,
   "writable_models": {

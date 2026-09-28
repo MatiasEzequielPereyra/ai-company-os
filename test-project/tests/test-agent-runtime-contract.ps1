@@ -76,16 +76,27 @@ foreach ($field in $maxLengths.Keys) {
 $configPath = Join-Path $repoRoot ".codex\provider-config.json"
 $config = Get-Content $configPath -Raw | ConvertFrom-Json
 
-if (@($config.auto_order) -notcontains "Codex") { throw "Provider config must include Codex" }
-if (@($config.auto_order) -notcontains "OpenRouter") { throw "Provider config must include OpenRouter" }
-if (@($config.auto_order) -notcontains "Gemini") { throw "Provider config must include Gemini" }
-if (@($config.auto_order) -notcontains "Ollama") { throw "Provider config must include Ollama" }
-if (@($config.auto_order) -notcontains "DeepSeek") { throw "Provider config must include DeepSeek" }
-if (@($config.auto_order) -notcontains "Grok") { throw "Provider config must include Grok" }
-if ([bool]$config.allow_paid_fallback) { throw "Paid analysis fallback must be disabled by default" }
-if ([string]$config.models.OpenRouter -ne "openrouter/free") { throw "OpenRouter must default to openrouter/free" }
-if ([string]$config.models.Gemini -ne "gemini-3.5-flash-lite") { throw "Gemini must default to gemini-3.5-flash-lite" }
-if (@($config.writable_auto_order) -join "," -ne "OpenRouter,Gemini") { throw "Writable Auto must be limited to OpenRouter then Gemini" }
+if (@($config.auto_order) -join "," -ne "Ollama") {
+    throw "Analysis Auto must be local-only Ollama by default"
+}
+if (@($config.auto_order) -contains "Codex") {
+    throw "Codex must never be an automatic analysis fallback"
+}
+if ([bool]$config.allow_paid_fallback) {
+    throw "Paid analysis fallback must be disabled by default"
+}
+if ([string]$config.models.Ollama -ne "qwen3:8b") {
+    throw "Ollama must default to the installed local qwen3:8b model"
+}
+if ([string]$config.models.OpenRouter -ne "openrouter/free") {
+    throw "OpenRouter must remain available with the free default model"
+}
+if ([string]$config.models.Gemini -ne "gemini-3.5-flash-lite") {
+    throw "Gemini must remain available with the configured model"
+}
+if (@($config.writable_auto_order) -join "," -ne "Ollama") {
+    throw "Writable Auto must be local-only Ollama by default"
+}
 if ([string]$config.writable_models.OpenRouter -ne "qwen/qwen3.8-27b:free") { throw "Writable OpenRouter must default to the pinned free structured coding model" }
 if ([string]$config.writable_models.Gemini -ne "gemini-3.5-flash-lite") { throw "Writable Gemini must default to gemini-3.5-flash-lite" }
 if ([int]$config.writable_context_max_chars -gt 160000 -or [int]$config.writable_context_max_chars -lt 60000) { throw "Writable context budget must remain bounded for free-tier execution" }
@@ -119,6 +130,10 @@ if ($runner -notmatch 'ValidateSet\("Auto","Codex","OpenRouter","Gemini","Ollama
 if ($runner -notmatch 'provider-router\.ps1') {
     throw "Agent runner must route through provider-router.ps1"
 }
+$providerRouter = Get-Content (Join-Path $repoRoot "scripts\provider-router.ps1") -Raw
+if ($providerRouter -notmatch '\$autoOrder = @\("Ollama"\)') {
+    throw "Provider router fallback Auto order must be local-only Ollama"
+}
 if ($runner -notmatch 'build-agent-context\.ps1') {
     throw "Agent runner must build repository context for external providers"
 }
@@ -141,8 +156,17 @@ if ($runner -notmatch 'structured result concise|Keep the structured result conc
     throw "Agent runner must instruct schema-critical analysis results to stay concise"
 }
 $writableRunner = Get-Content (Join-Path $repoRoot "scripts\run-writable-agent.ps1") -Raw
-if ($writableRunner -notmatch 'ValidateSet\("Auto","OpenRouter","Gemini"\)') {
-    throw "Writable runner must expose only Auto/OpenRouter/Gemini provider selection"
+if ($writableRunner -notmatch 'ValidateSet\("Auto","Ollama","OpenRouter","Gemini"\)') {
+    throw "Writable runner must expose Auto/Ollama/OpenRouter/Gemini provider selection"
+}
+if ($writableRunner -notmatch '\$order = @\("Ollama"\)') {
+    throw "Writable Auto fallback must default to local Ollama only"
+}
+if ($writableRunner -notmatch '\$candidate -notin @\("Ollama","OpenRouter","Gemini"\)') {
+    throw "Writable provider filter must allow Ollama, OpenRouter and Gemini"
+}
+if ($writableRunner -notmatch '\$candidate -ne "Ollama"') {
+    throw "Writable Ollama must bypass remote free-provider model validation"
 }
 if ($writableRunner -notmatch 'refuses to use the primary checkout') {
     throw "Writable runner must reject the primary checkout as a writable workspace"

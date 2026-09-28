@@ -6,7 +6,7 @@ param(
 
     [string]$WorkspacePath = "",
 
-    [ValidateSet("Auto","OpenRouter","Gemini")]
+    [ValidateSet("Auto","Ollama","OpenRouter","Gemini")]
     [string]$Provider = "Auto",
 
     [string]$Model = ""
@@ -568,7 +568,7 @@ $result = $null
 
 try {
     if ($Provider -eq "Auto") {
-        $order = @("OpenRouter","Gemini")
+        $order = @("Ollama")
 
         if ($null -ne $config -and $null -ne $config.writable_auto_order -and @($config.writable_auto_order).Count -gt 0) {
             $order = @($config.writable_auto_order | ForEach-Object { [string]$_ })
@@ -577,7 +577,7 @@ try {
         $providerErrors = @()
 
         foreach ($candidate in $order) {
-            if ($candidate -notin @("OpenRouter","Gemini")) { continue }
+            if ($candidate -notin @("Ollama","OpenRouter","Gemini")) { continue }
 
             if ($candidate -eq "OpenRouter" -and [string]::IsNullOrWhiteSpace($env:OPENROUTER_API_KEY)) {
                 $providerErrors += "OpenRouter: OPENROUTER_API_KEY not configured"
@@ -589,22 +589,36 @@ try {
                 continue
             }
 
-            $candidateModel = Get-ConfiguredModel -Config $config -ProviderName $candidate -CollectionName "writable_models"
-            if ([string]::IsNullOrWhiteSpace($candidateModel)) {
-                $candidateModel = Get-ConfiguredModel -Config $config -ProviderName $candidate -CollectionName "models"
-            }
+            $candidateModel = ""
 
-            $freeModelsProperty = $policy.free_provider_models.PSObject.Properties[$candidate]
-            $freeModels = @()
-            if ($null -ne $freeModelsProperty) {
-                $freeModels = @($freeModelsProperty.Value | ForEach-Object { [string]$_ })
-            }
+            if ($candidate -ne "Ollama") {
+                $candidateModel = Get-ConfiguredModel -Config $config -ProviderName $candidate -CollectionName "writable_models"
 
-            if ([string]::IsNullOrWhiteSpace($candidateModel) -or $freeModels -notcontains $candidateModel) {
-                $providerErrors += ($candidate + ": no free writable model is configured")
-                continue
-            }
+                if ([string]::IsNullOrWhiteSpace($candidateModel)) {
+                    $candidateModel = Get-ConfiguredModel -Config $config -ProviderName $candidate -CollectionName "models"
+                }
 
+                $freeModelsProperty = $policy.free_provider_models.PSObject.Properties[$candidate]
+                $freeModels = @()
+
+                if ($null -ne $freeModelsProperty) {
+                    $freeModels = @(
+                        $freeModelsProperty.Value |
+                        ForEach-Object { [string]$_ }
+                    )
+                }
+
+                if (
+                    [string]::IsNullOrWhiteSpace($candidateModel) -or
+                    $freeModels -notcontains $candidateModel
+                ) {
+                    $providerErrors += (
+                        $candidate +
+                        ": no free writable model is configured"
+                    )
+                    continue
+                }
+            }
             try {
                 $execution = & $routerPath -Provider $candidate -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $outputPath -Model $candidateModel
                 break
