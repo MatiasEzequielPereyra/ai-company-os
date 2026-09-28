@@ -371,26 +371,7 @@ foreach ($item in @($backlog.items)) {
             continue
         }
 
-        if ($dependency -match '^AICO-[0-9]+
-if ($authorizationKey -ne "NONE" -and -not $keys.ContainsKey($authorizationKey)) {
-    throw "Resolved implementation authorization key '$authorizationKey' does not reference a backlog item."
-}
-
-$normalizedJson = $backlog | ConvertTo-Json -Depth 100
-Write-Utf8NoBom $planPath $normalizedJson
-
-Write-Host "Structured engineering backlog generated:" -ForegroundColor Green
-Write-Host $planPath
-Write-Host ("Items: " + @($backlog.items).Count)
-if ($null -ne $execution) {
-    Write-Host ("Provider: " + $execution.Provider)
-    Write-Host ("Model: " + $execution.Model)
-}
-else {
-    Write-Host "Provider: REUSED_EXISTING_OUTPUT"
-    Write-Host "Model: N/A"
-}
-) {
+        if ($dependency -match '^AICO-[0-9]+$') {
             $upstreamTaskPath = Join-Path $root ("tasks\" + $dependency + ".md")
 
             if (-not (Test-Path $upstreamTaskPath -PathType Leaf)) {
@@ -414,7 +395,7 @@ else {
             }
 
             throw (
-                "External AICO dependency '$dependency' referenced by item " +
+                "External AICO dependency '" + $dependency + "' referenced by item " +
                 [string]$item.key +
                 " is not a satisfied DONE task from work request " +
                 $workRequestId +
