@@ -366,6 +366,12 @@ if ($contextBuilder -notmatch 'RequiredFiles') { throw "Context builder must sup
 if ($contextBuilder -notmatch 'RequireComplete') { throw "Required context files must not be silently truncated" }
 if ($contextBuilder -notmatch 'managed-files\.json') { throw "Context builder must load the managed runtime manifest" }
 if ($contextBuilder -notmatch 'managed_files') { throw "Context builder must exclude manifest-owned runtime paths from generic context" }
+if ($contextBuilder -notmatch 'docs\\engineering\\work-requests') {
+    throw "Context builder must resolve the active task work request into prioritized context"
+}
+if ($contextBuilder -notmatch 'taskWorkRequestPath') {
+    throw "Context builder must derive work-request context from the active task"
+}
 
 $requiredResolver = Get-Content (Join-Path $repoRoot "scripts\resolve-writable-required-files.ps1") -Raw
 if ($requiredResolver -notmatch 'ambiguous') { throw "Required-file resolver must reject ambiguous basenames" }
