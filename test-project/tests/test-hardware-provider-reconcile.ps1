@@ -80,13 +80,25 @@ foreach ($needle in @(
     'analysis_context_max_chars',
     'local-runtime\\resolve-local-runtime\.ps1',
     'local-runtime-config\.json',
-    'ContextMaxChars',
-    '-Role \$owner',
-    '-Workload "analysis"'
+    'ContextMaxChars'
 )) {
     if ($agentRunner -notmatch $needle) {
         throw "Analysis runner reconciliation contract missing: $needle"
     }
+}
+
+$directRoleRouting = (
+    $agentRunner -match '-Role \$owner' -and
+    $agentRunner -match '-Workload "analysis"'
+)
+
+$splatRoleRouting = (
+    $agentRunner -match '(?s)\$routerArgs\s*=\s*@\{.*?Role\s*=\s*\$owner.*?Workload\s*=\s*"analysis".*?\}' -and
+    $agentRunner -match '\$execution\s*=\s*&\s*\$routerPath\s+@routerArgs'
+)
+
+if (-not ($directRoleRouting -or $splatRoleRouting)) {
+    throw "Analysis runner must pass owner role and analysis workload to provider routing"
 }
 
 $gateRunner = Get-Content (Join-Path $repoRoot "scripts\run-gate-agent.ps1") -Raw -Encoding UTF8

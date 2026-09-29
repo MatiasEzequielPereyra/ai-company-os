@@ -37,6 +37,18 @@ function Get-ConcreteStrings {
     )
 }
 
+function Test-RequiresConcreteEngineeringPlan {
+    param(
+        [string]$Owner,
+        [string]$TaskContent
+    )
+
+    if ($Owner -ne "engineering-manager") { return $false }
+
+    return (
+        $TaskContent -match '(?i)engineering execution plan|engineering plan|execution plan|decompos.*engineering|executable engineering'
+    )
+}
 if ($PSBoundParameters.ContainsKey("AuthMode") -and -not $PSBoundParameters.ContainsKey("Provider")) {
     if ($AuthMode -eq "ChatGPT") {
         $Provider = "Codex"
@@ -56,6 +68,7 @@ $status = Read-Field $task "Status"
 $owner = Read-Field $task "Owner"
 if ($status -ne "ACTIVE") { throw "Task $Id must be ACTIVE. Current status: $status" }
 if ([string]::IsNullOrWhiteSpace($owner)) { throw "Task $Id has no owner." }
+$requiresConcreteEngineeringPlan = Test-RequiresConcreteEngineeringPlan -Owner $owner -TaskContent $task
 
 $lockHelperPath = Join-Path $PSScriptRoot "task-execution-lock.ps1"
 if (-not (Test-Path $lockHelperPath -PathType Leaf)) {
@@ -67,16 +80,26 @@ $taskExecutionLock = Enter-TaskExecutionLock -ProjectPath $root -Id $Id -Operati
 try {
 $dispatchPath = Join-Path $root ("docs\engineering\dispatch\" + $Id + ".md")
 $rolePath = Join-Path $root (".codex\agents\" + $owner + ".md")
-$schemaPath = Join-Path $root "schemas\agent-result.schema.json"
+$schemaName = if ($requiresConcreteEngineeringPlan) {
+    "engineering-plan-result.schema.json"
+}
+else {
+    "agent-result.schema.json"
+}
+$schemaPath = Join-Path $root ("schemas\" + $schemaName)
 $routerPath = Join-Path $PSScriptRoot "provider-router.ps1"
 $contextBuilderPath = Join-Path $PSScriptRoot "build-agent-context.ps1"
 $localResolverPath = Join-Path $PSScriptRoot "local-runtime\resolve-local-runtime.ps1"
 $localRuntimeConfigPath = Join-Path $root ".codex\local-runtime-config.json"
+$engineeringPlanValidatorPath = Join-Path $PSScriptRoot "validate-engineering-plan-result.ps1"
 
 if (-not (Test-Path $dispatchPath)) { throw "Dispatch packet not found: $dispatchPath" }
 if (-not (Test-Path $rolePath)) { throw "Role instructions not found: $rolePath" }
 if (-not (Test-Path $schemaPath)) { throw "Agent result schema not found: $schemaPath" }
 if (-not (Test-Path $routerPath)) { throw "Provider router not found: $routerPath" }
+if ($requiresConcreteEngineeringPlan -and -not (Test-Path $engineeringPlanValidatorPath -PathType Leaf)) {
+    throw "Engineering plan semantic validator not found: $engineeringPlanValidatorPath"
+}
 
 $runtimeDir = Join-Path $root ".codex\runtime"
 $reportsDir = Join-Path $root "docs\engineering\agent-reports"
@@ -125,6 +148,18 @@ $promptLines = @(
     "blockers and recommended_next must each stay within 1500 characters.",
     "The report_markdown field must still contain the complete role deliverable within those limits.",
     "The summary field must be concise.",
+    $(if ($requiresConcreteEngineeringPlan) {
+        "For Engineering Manager execution planning, populate executable_work using the dedicated JSON schema. report_markdown is narrative context only; the runtime renders the canonical executable work section."
+    } else { "" }),
+    $(if ($requiresConcreteEngineeringPlan) {
+        "Each executable_work item must name a stable key, kind, concrete change, responsible owner, real repository/product areas, dependency keys and a concrete verification."
+    } else { "" }),
+    $(if ($requiresConcreteEngineeringPlan) {
+        "A COMPLETED plan MUST contain at least one real IMPLEMENTATION item against product/repository code, configuration, tests, data/schema, infrastructure or deployable behavior. Task/backlog/lifecycle authoring is never IMPLEMENTATION."
+    } else { "" }),
+    $(if ($requiresConcreteEngineeringPlan) {
+        "Use BLOCKED with executable_work=[] only when evidence or an authoritative prerequisite is materially insufficient to produce a safe implementation plan."
+    } else { "" }),
     "Return only the structured result required by the supplied JSON schema."
 )
 $prompt = $promptLines -join [Environment]::NewLine
@@ -251,7 +286,23 @@ if ($needsExternalContext) {
 Write-Host "Running agent: $owner -> $Id" -ForegroundColor Cyan
 Write-Host "Provider mode: $Provider" -ForegroundColor DarkGray
 
-$execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $jsonPath -Model $Model -Role $owner -Workload "analysis"
+$routerArgs = @{
+    Provider = $Provider
+    ProjectPath = $root
+    Prompt = $prompt
+    Context = $context
+    SchemaPath = $schemaPath
+    OutputPath = $jsonPath
+    Model = $Model
+    Role = $owner
+    Workload = "analysis"
+}
+
+if ($requiresConcreteEngineeringPlan) {
+    $routerArgs.SemanticValidatorPath = $engineeringPlanValidatorPath
+}
+
+$execution = & $routerPath @routerArgs
 
 if (-not (Test-Path $jsonPath)) { throw "Provider runtime did not produce structured output: $jsonPath" }
 
@@ -301,10 +352,60 @@ if ([string]$result.outcome -eq "COMPLETED") {
     }
 }
 
+if ($requiresConcreteEngineeringPlan -and $null -eq $result.PSObject.Properties["executable_work"]) {
+    throw "Structured Engineering Manager result is missing field: executable_work"
+}
 $providerUsed = [string]$execution.Provider
 $modelUsed = [string]$execution.Model
 $now = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 
+$reportBody = [string]$result.report_markdown
+$executionPlanRelative = ""
+
+if ($requiresConcreteEngineeringPlan -and [string]$result.outcome -eq "COMPLETED") {
+    $plansDir = Join-Path $root "docs\engineering\plans"
+    New-Item -ItemType Directory -Force -Path $plansDir | Out-Null
+
+    $workRequestId = Read-Field $task "Work request"
+    $executionPlanPath = Join-Path $plansDir ($Id + "-execution-plan.json")
+
+    $canonicalPlan = [ordered]@{
+        source_task_id = $Id
+        work_request_id = $workRequestId
+        generated = $now
+        provider = $providerUsed
+        model = $modelUsed
+        summary = [string]$result.summary
+        executable_work = @($result.executable_work)
+    }
+
+    Write-Utf8NoBom $executionPlanPath ($canonicalPlan | ConvertTo-Json -Depth 100)
+    $executionPlanRelative = "docs/engineering/plans/" + (Split-Path $executionPlanPath -Leaf)
+
+    $workLines = @(
+        foreach ($item in @($result.executable_work)) {
+            $areasText = (@($item.areas) -join ", ")
+            $dependsText = if (@($item.depends_on).Count -eq 0) {
+                "NONE"
+            }
+            else {
+                @($item.depends_on) -join ", "
+            }
+
+            "- Kind: $($item.kind) | Key: $($item.key) | Change: $($item.change) | Owner: $($item.owner) | Areas: $areasText | Depends on: $dependsText | Verify: $($item.verify)"
+        }
+    )
+
+    $reportBody = @(
+        [string]$result.report_markdown,
+        "",
+        "## Executable Work",
+        "",
+        ($workLines -join [Environment]::NewLine),
+        "",
+        "Canonical plan: $executionPlanRelative"
+    ) -join [Environment]::NewLine
+}
 $report = @(
     "# Agent Report - $Id",
     "",
@@ -314,7 +415,7 @@ $report = @(
     "Model: $modelUsed",
     "Outcome: $($result.outcome)",
     "",
-    $result.report_markdown
+    $reportBody
 ) -join [Environment]::NewLine
 
 Write-Utf8NoBom $reportPath $report
@@ -322,7 +423,15 @@ Write-Utf8NoBom $reportPath $report
 $submit = Join-Path $PSScriptRoot "submit-task-result.ps1"
 if (-not (Test-Path $submit)) { throw "submit-task-result.ps1 not found: $submit" }
 
-$changed = "docs/engineering/agent-reports/" + (Split-Path $reportPath -Leaf)
+$changedParts = @(
+    "docs/engineering/agent-reports/" + (Split-Path $reportPath -Leaf)
+)
+
+if (-not [string]::IsNullOrWhiteSpace($executionPlanRelative)) {
+    $changedParts += $executionPlanRelative
+}
+
+$changed = $changedParts -join "; "
 & $submit -ProjectPath $root -Id $Id -Outcome $result.outcome -Summary $result.summary -ChangedArtifacts $changed -Verification $result.verification -Decisions $result.decisions -Blockers $result.blockers -RecommendedNext $result.recommended_next
 
 Write-Host ""
