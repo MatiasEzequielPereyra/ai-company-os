@@ -12,6 +12,7 @@ from company_os.application.runtime_service import RuntimeService
 from company_os.application.activity_service import ActivityService
 from company_os.application.workflow_service import WorkflowService
 from company_os.application.doctor_service import DoctorService
+from company_os.application.system_doctor_service import SystemDoctorService
 from company_os.application.task_service import TaskService
 from company_os.cli.render import render_status
 from company_os.cli.render_activity import render_activity
@@ -372,6 +373,20 @@ def workflow_command(
             workflow
         )
 
+@app.command("version")
+def version_command() -> None:
+    """Show the installed AI Company OS version."""
+    from importlib.metadata import PackageNotFoundError
+    from importlib.metadata import version
+
+    try:
+        installed = version("ai-company-os-cli")
+    except PackageNotFoundError:
+        installed = "dev"
+
+    typer.echo(installed)
+
+
 @app.command("doctor")
 def doctor_command(
     project: Path | None = typer.Option(
@@ -383,8 +398,33 @@ def doctor_command(
         False,
         "--json",
     ),
+    system: bool = typer.Option(
+        False,
+        "--system",
+        help="Check local runtime dependencies instead of project state",
+    ),
 ) -> None:
-    """Check AI Company OS repository consistency."""
+    """Check AI Company OS repository or local runtime consistency."""
+
+    if system:
+        findings = SystemDoctorService().get_findings()
+
+        if as_json:
+            payload = [
+                finding.model_dump(mode="json")
+                for finding in findings
+            ]
+            typer.echo(
+                json.dumps(
+                    payload,
+                    indent=2,
+                    ensure_ascii=False,
+                )
+            )
+        else:
+            render_doctor(findings)
+
+        return
 
     project = (
         ConfigService()
