@@ -32,7 +32,29 @@ function Sanitize-ProviderError {
 }
 
 function Get-ConfiguredModel {
-    param([object]$Config,[string]$Name)
+    param(
+        [object]$Config,
+        [string]$Name,
+        [string]$Role,
+        [string]$Workload
+    )
+
+    if (
+        $Workload -eq "analysis" -and
+        -not [string]::IsNullOrWhiteSpace($Role) -and
+        $null -ne $Config -and
+        $null -ne $Config.analysis_models_by_role
+    ) {
+        $roleProperty = $Config.analysis_models_by_role.PSObject.Properties[$Role]
+
+        if ($null -ne $roleProperty -and $null -ne $roleProperty.Value) {
+            $providerProperty = $roleProperty.Value.PSObject.Properties[$Name]
+
+            if ($null -ne $providerProperty -and -not [string]::IsNullOrWhiteSpace([string]$providerProperty.Value)) {
+                return [string]$providerProperty.Value
+            }
+        }
+    }
 
     if ($null -eq $Config -or $null -eq $Config.models) { return "" }
 
@@ -69,6 +91,19 @@ if (Test-Path $configPath) {
 $autoOrder = @("Ollama")
 if ($null -ne $config -and $null -ne $config.auto_order -and @($config.auto_order).Count -gt 0) {
     $autoOrder = @($config.auto_order | ForEach-Object { [string]$_ })
+}
+
+if (
+    $Workload -eq "analysis" -and
+    -not [string]::IsNullOrWhiteSpace($Role) -and
+    $null -ne $config -and
+    $null -ne $config.analysis_auto_order_by_role
+) {
+    $roleOrderProperty = $config.analysis_auto_order_by_role.PSObject.Properties[$Role]
+
+    if ($null -ne $roleOrderProperty -and @($roleOrderProperty.Value).Count -gt 0) {
+        $autoOrder = @($roleOrderProperty.Value | ForEach-Object { [string]$_ })
+    }
 }
 
 $allowPaidFallback = $false
@@ -161,6 +196,33 @@ foreach ($candidate in $attempts) {
             continue
         }
 
+        if (
+            $Provider -eq "Auto" -and
+            $Workload -eq "analysis" -and
+            -not [string]::IsNullOrWhiteSpace($Role) -and
+            $null -ne $config -and
+            $null -ne $config.analysis_skip_local_profiles_by_role
+        ) {
+            $skipProperty = $config.analysis_skip_local_profiles_by_role.PSObject.Properties[$Role]
+
+            if (
+                $null -ne $skipProperty -and
+                @($skipProperty.Value) -contains [string]$localRuntime.Profile
+            ) {
+                $errors += (
+                    "Ollama: skipped for role " + $Role +
+                    " on local profile " + [string]$localRuntime.Profile
+                )
+                Write-Host (
+                    "Provider skipped: Ollama (" +
+                    [string]$localRuntime.Profile +
+                    " is not approved for " + $Role +
+                    " analysis)"
+                ) -ForegroundColor DarkYellow
+                continue
+            }
+        }
+
         Write-Host ("Local runtime profile: " + $localRuntime.Profile + "; model=" + $localRuntime.Model + "; num_ctx=" + $localRuntime.NumCtx + "; num_predict=" + $localRuntime.NumPredict) -ForegroundColor DarkGray
     }
 
@@ -193,7 +255,7 @@ foreach ($candidate in $attempts) {
         $providerModel = $Model
     }
     else {
-        $providerModel = Get-ConfiguredModel -Config $config -Name $candidateName
+        $providerModel = Get-ConfiguredModel -Config $config -Name $candidateName -Role $Role -Workload $Workload
     }
 
     $attempted++

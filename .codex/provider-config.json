@@ -32,5 +32,26 @@
     "qa": 90000,
     "security": 100000,
     "devops": 90000
+  },
+  "analysis_auto_order_by_role": {
+    "engineering-manager": [
+      "OpenRouter",
+      "Gemini",
+      "Ollama",
+      "Codex",
+      "DeepSeek",
+      "Grok"
+    ]
+  },
+  "analysis_models_by_role": {
+    "engineering-manager": {
+      "OpenRouter": "qwen/qwen3.8-27b:free",
+      "Gemini": "gemini-3.5-flash-lite"
+    }
+  },
+  "analysis_skip_local_profiles_by_role": {
+    "engineering-manager": [
+      "LOCAL_CPU_LOW"
+    ]
   }
 }

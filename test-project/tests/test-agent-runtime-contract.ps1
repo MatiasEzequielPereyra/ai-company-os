@@ -96,6 +96,15 @@ if ([string]$config.models.OpenRouter -ne "openrouter/free") {
 if ([string]$config.models.Gemini -ne "gemini-3.5-flash-lite") {
     throw "Gemini must remain available with the configured model"
 }
+if (@($config.analysis_auto_order_by_role."engineering-manager") -join "," -ne "OpenRouter,Gemini,Ollama,Codex,DeepSeek,Grok") {
+    throw "Engineering Manager analysis order must prefer structured cloud fallbacks before low-resource local planning"
+}
+if ([string]$config.analysis_models_by_role."engineering-manager".OpenRouter -ne "qwen/qwen3.8-27b:free") {
+    throw "Engineering Manager OpenRouter analysis must use the pinned free structured planning model"
+}
+if (@($config.analysis_skip_local_profiles_by_role."engineering-manager") -notcontains "LOCAL_CPU_LOW") {
+    throw "Engineering Manager must skip weak LOCAL_CPU_LOW Ollama analysis fallback"
+}
 if (@($config.writable_auto_order) -join "," -ne "Ollama") {
     throw "Writable Auto must be local-only Ollama by default"
 }
@@ -135,6 +144,18 @@ if ($runner -notmatch 'provider-router\.ps1') {
 $providerRouter = Get-Content (Join-Path $repoRoot "scripts\provider-router.ps1") -Raw
 if ($providerRouter -notmatch '\$autoOrder = @\("Ollama"\)') {
     throw "Provider router fallback Auto order must be local-only Ollama"
+}
+if ($providerRouter -notmatch 'analysis_auto_order_by_role') {
+    throw "Provider router must support role-specific analysis provider order"
+}
+if ($providerRouter -notmatch 'analysis_models_by_role') {
+    throw "Provider router must support role-specific analysis models"
+}
+if ($providerRouter -notmatch 'analysis_skip_local_profiles_by_role') {
+    throw "Provider router must support role-specific local analysis skip policy"
+}
+if ($providerRouter -notmatch 'Provider skipped: Ollama') {
+    throw "Provider router must surface local profile skips"
 }
 if ($runner -notmatch 'build-agent-context\.ps1') {
     throw "Agent runner must build repository context for external providers"
@@ -305,6 +326,17 @@ if ($gemini -notmatch 'GEMINI_API_KEY') {
 }
 if ($gemini -notmatch 'responseJsonSchema') {
     throw "Gemini adapter must request structured JSON output"
+}
+if ($gemini -notmatch 'ConvertTo-GeminiCompatibleSchema') {
+    throw "Gemini adapter must sanitize unsupported JSON Schema keywords"
+}
+foreach ($unsupportedKeyword in @("minLength","maxLength","pattern")) {
+    if ($gemini -notmatch [regex]::Escape($unsupportedKeyword)) {
+        throw "Gemini schema compatibility layer must strip $unsupportedKeyword"
+    }
+}
+if ($gemini -notmatch 'Get-GeminiErrorBody') {
+    throw "Gemini adapter must surface HTTP error response bodies"
 }
 
 foreach ($runnerName in @("run-agent-task.ps1","run-gate-agent.ps1","run-writable-agent.ps1","finalize-task.ps1")) {
