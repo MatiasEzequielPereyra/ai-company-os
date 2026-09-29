@@ -129,6 +129,7 @@ try {
 
     foreach ($name in @(
         "run-writable-agent.ps1",
+        "task-execution-lock.ps1",
         "advance-task.ps1",
         "update-task.ps1",
         "submit-task-result.ps1",
