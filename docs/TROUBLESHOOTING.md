@@ -534,13 +534,13 @@ Con `Auto`, el router puede intentar el siguiente provider disponible según:
 .codex/provider-config.json
 ```
 
-El orden actual de `main` es:
+El `main` actual configura `Auto` como local-first:
 
 ```text
-Codex → OpenRouter → Gemini
+Ollama
 ```
 
-si los providers siguientes están configurados.
+Otros providers pueden elegirse explícitamente o incorporarse conscientemente a `auto_order`.
 
 ---
 
@@ -588,8 +588,11 @@ $env:GEMINI_API_KEY = "TU_KEY"
 
 ```powershell
 Get-Command codex -ErrorAction SilentlyContinue
+Get-Command ollama -ErrorAction SilentlyContinue
 Test-Path Env:OPENROUTER_API_KEY
 Test-Path Env:GEMINI_API_KEY
+Test-Path Env:DEEPSEEK_API_KEY
+Test-Path Env:XAI_API_KEY
 Get-Content .\.codex\provider-config.json
 ```
 
@@ -738,7 +741,7 @@ Un `-Model` manual se usa con provider explícito, no con Auto.
 
 ### Significado
 
-OpenRouter y Gemini no inspeccionan el filesystem directamente.
+Ollama y los providers API externos no inspeccionan el filesystem del proyecto directamente desde el adapter.
 
 Reciben un **Repository Context Pack** construido por AI Company OS y limitado por:
 
