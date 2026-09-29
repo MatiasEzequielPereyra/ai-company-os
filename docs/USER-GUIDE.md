@@ -32,7 +32,7 @@ Actualmente están implementados y documentados en el repositorio:
 - planificación y materialización de tareas;
 - readiness y dispatch;
 - ejecución de agentes de análisis;
-- routing entre Codex, OpenRouter y Gemini;
+- routing entre Codex, Ollama, OpenRouter, Gemini, DeepSeek y Grok/xAI;
 - contratos JSON para resultados;
 - review, QA y security gates;
 - aprobación final;
@@ -44,11 +44,12 @@ Actualmente están implementados y documentados en el repositorio:
 
 ### 🚧 En evolución
 
-- TUI/CLI visual: existen ramas de desarrollo específicas, pero todavía no forman parte estable de `main`.
 - Automatización más profunda de merge/reconciliation entre worktrees.
-- Simulación y resiliencia avanzada de providers.
+- Resiliencia avanzada de providers y routing.
 - Métricas longitudinales de calidad sobre proyectos reales.
 - Flujo completamente autónomo de modificación, merge y release.
+
+La CLI `aico` y su interfaz interactiva ya forman parte de `main`. Los scripts PowerShell siguen siendo el contrato operativo de bajo nivel para lifecycle, gates y ejecución.
 
 Por esta razón, este manual **no presenta AI Company OS como una empresa autónoma terminada**.
 
@@ -222,107 +223,103 @@ ai-company-os/
 
 ## 9. Requisitos
 
-El proyecto está diseñado principalmente para Windows y PowerShell.
+La distribución soportada actualmente usa npm como entrada principal.
 
-Requisitos prácticos:
+Requisitos:
 
-- Windows PowerShell compatible con los scripts del proyecto;
-- Git para repositorios y worktrees;
-- un repositorio de software cuando se instala sobre un proyecto existente;
-- Codex CLI en `PATH` si se utiliza el provider Codex;
-- `OPENROUTER_API_KEY` si se utiliza OpenRouter;
-- `GEMINI_API_KEY` si se utiliza Gemini.
+- Node.js 20 o superior;
+- npm;
+- Python 3.11 o superior;
+- PowerShell;
+- Git;
+- Ollama si se quiere usar el runtime local por defecto.
 
-No se debe guardar ninguna API key dentro del repositorio.
+Instalación global:
+
+```powershell
+npm install -g @pereyram/ai-company-os
+aico version
+aico doctor --system
+```
+
+Providers opcionales adicionales:
+
+- Codex CLI en `PATH` para `Codex`;
+- `OPENROUTER_API_KEY` para OpenRouter;
+- `GEMINI_API_KEY` para Gemini;
+- `DEEPSEEK_API_KEY` para DeepSeek;
+- `XAI_API_KEY` para Grok/xAI.
+
+No guardar API keys dentro del repositorio.
 
 ## 10. Instalar AI Company OS en un proyecto existente
 
-Desde el repositorio de AI Company OS:
-
-```powershell
-.\scripts\install-existing-project.ps1 -TargetProject "C:\ruta\de\mi-proyecto"
-```
-
-El instalador copia la estructura, scripts, roles, policies, schemas y configuración necesaria.
-
-Luego:
+Desde el proyecto target:
 
 ```powershell
 cd "C:\ruta\de\mi-proyecto"
+aico install .
+aico use .
+aico doctor
+```
+
+El comando `aico install .` utiliza el instalador PowerShell del framework y deja el proyecto seleccionado para la CLI.
+
+Luego ejecutar intake cuando corresponda:
+
+```powershell
 .\scripts\initialize-project.ps1
 ```
 
-`initialize-project.ps1` realiza discovery del repositorio y genera intake de:
-
-- producto;
-- arquitectura;
-- operaciones;
-- ingeniería.
-
-Las detecciones automáticas son evidencia inicial, no decisiones aprobadas.
-
-## 11. Crear un proyecto nuevo administrado por AI Company OS
-
-Desde el repositorio del framework:
-
-```powershell
-.\scripts\new-project.ps1 -ProjectName "MiProyecto" -Destination "C:\Proyectos"
-```
-
-Después:
-
-```powershell
-cd "C:\Proyectos\MiProyecto"
-
-# new-project.ps1 no inicializa Git.
-# Hacelo si el proyecto utilizará Git/worktrees.
-git init
-
-.\scripts\initialize-project.ps1
-```
-
-`new-project.ps1` crea la estructura administrada por AI Company OS, pero actualmente no ejecuta `git init` por sí mismo.
-
-## 11.1 Actualizar una instalación existente
-
-El instalador actual no mantiene una versión embebida ni realiza un merge inteligente de personalizaciones.
-
-Sin `-Force`, preserva varios archivos existentes. Con `-Force`, puede reemplazar componentes del framework como:
+El instalador mantiene un manifest de archivos administrados en:
 
 ```text
-AGENTS.md
-.codex/config.toml
-.codex/provider-config.json
-.codex/workflow-profiles.json
-.codex/agents/*
-scripts/*
-scripts/providers/*
-schemas/*
+.codex/managed-files.json
 ```
 
-Por eso una actualización debe hacerse como cambio revisable:
+Las detecciones del intake son evidencia inicial, no decisiones aprobadas.
+
+## 11. Crear un proyecto nuevo
+
+La CLI expone:
 
 ```powershell
-# En el proyecto target:
+aico new MiProyecto C:\Proyectos
+```
+
+El comando usa internamente `new-project.ps1`.
+
+Para una primera prueba del lifecycle con runtime local, el checklist de First Run usa deliberadamente un repositorio Git vacío más `aico install .`, porque ese camino instala el conjunto completo de componentes administrados del proyecto existente.
+
+El script `new-project.ps1` no ejecuta `git init` por sí mismo.
+
+## 11.1 Actualizar CLI y runtime instalado
+
+Actualizar el paquete global:
+
+```powershell
+npm install -g @pereyram/ai-company-os@latest
+aico version
+aico doctor --system
+```
+
+Actualizar los componentes administrados dentro de un proyecto es una operación separada.
+
+Sin `--force`, el instalador preserva archivos existentes. Con `--force`, puede reemplazar componentes administrados.
+
+Proceso recomendado:
+
+```powershell
 git status --short --branch
 
-# Crear/cambiar a una branch de actualización según el workflow del proyecto.
-# Luego, desde el checkout actualizado de AI Company OS:
-.\scripts\install-existing-project.ps1 `
-  -TargetProject "C:\ruta\de\mi-proyecto" `
-  -Force
-```
+# trabajar en una branch de actualización
+aico install . --force
 
-Después, en el proyecto target:
-
-```powershell
 git diff
 .\scripts\validate-artifacts.ps1
 ```
 
-Revisar especialmente cualquier personalización previa de `AGENTS.md`, `.codex/`, scripts y schemas.
-
-No ejecutar `-Force` sobre cambios locales no revisados.
+No usar `--force` sobre cambios locales no revisados. El manifest administrado ayuda a identificar archivos del framework, pero no realiza merge semántico de personalizaciones.
 
 ## 12. Crear un Work Request
 
@@ -460,17 +457,22 @@ Elegir provider:
 
 ```powershell
 .\scripts\run-active-agents.ps1 -Provider Codex
+.\scripts\run-active-agents.ps1 -Provider Ollama
 .\scripts\run-active-agents.ps1 -Provider OpenRouter
 .\scripts\run-active-agents.ps1 -Provider Gemini
+.\scripts\run-active-agents.ps1 -Provider DeepSeek
+.\scripts\run-active-agents.ps1 -Provider Grok
 ```
 
-También existe `Auto`, que utiliza el orden configurado en `.codex/provider-config.json`.
+También existe `Auto`, que utiliza `auto_order` de `.codex/provider-config.json`.
 
-La configuración actual de `main` prioriza:
+El `main` actual es local-first y configura por defecto:
 
 ```text
-Codex → OpenRouter → Gemini
+Auto → Ollama
 ```
+
+`allow_paid_fallback` está deshabilitado por defecto, por lo que DeepSeek y Grok no se agregan silenciosamente como fallback pago. Pueden elegirse explícitamente cuando están configurados.
 
 ### Ejecución paralela
 
@@ -484,41 +486,52 @@ No se debe utilizar como mecanismo para que múltiples agentes editen simultáne
 
 ## 18. Providers
 
+Los runners de análisis y gates soportan:
+
+```text
+Auto
+Codex
+Ollama
+OpenRouter
+Gemini
+DeepSeek
+Grok
+```
+
+### Ollama
+
+Es el provider local por defecto del `main` actual cuando se usa `Auto`.
+
+La selección local utiliza perfiles de hardware y límites de contexto definidos en `.codex/local-runtime-config.json`. Verificar el entorno con:
+
+```powershell
+aico doctor --system
+ollama list
+```
+
 ### Codex
 
 Requiere Codex CLI disponible en `PATH`.
 
-El adapter incluido ejecuta Codex en modo de inspección y evita utilizar accidentalmente `CODEX_API_KEY` como vía de ejecución paga.
+El runner estándar lo usa para análisis/read-only y evita convertir automáticamente una falta de cuota en consumo de OpenAI API pago.
 
 ### OpenRouter
 
-Requiere:
-
-```powershell
-$env:OPENROUTER_API_KEY = "..."
-```
-
-El modelo por defecto actual configurado es:
-
-```text
-openrouter/free
-```
+Requiere `OPENROUTER_API_KEY`. El modelo configurado puede ser `openrouter/free`, pero la compatibilidad de modelos externos con structured output puede variar. El runtime valida el resultado antes de aceptarlo.
 
 ### Gemini
 
-Requiere:
+Requiere `GEMINI_API_KEY`.
 
-```powershell
-$env:GEMINI_API_KEY = "..."
-```
+### DeepSeek
 
-El modelo por defecto actual configurado es:
+Requiere `DEEPSEEK_API_KEY`.
 
-```text
-gemini-3.5-flash-lite
-```
+### Grok / xAI
 
-Los outputs de providers deben validar contra los contratos JSON locales antes de ser confiados por el workflow.
+Requiere `XAI_API_KEY`.
+
+Los providers distintos de Codex reciben un Repository Context Pack acotado. Los resultados deben validar contra los schemas locales antes de convertirse en evidencia del workflow.
 
 ## 19. Trabajo con escritura y aislamiento
 
