@@ -204,7 +204,8 @@ def prepare_engine_project(
     [string]$OutputPath,
     [string]$Model,
     [string]$Role,
-    [string]$Workload
+    [string]$Workload,
+    [string]$SemanticValidatorPath
 )
 
 $ErrorActionPreference = "Stop"
@@ -253,6 +254,65 @@ switch ($name) {
         }
     }
 
+    "engineering-plan-result.schema.json" {
+        if ($Role -ne "engineering-manager") {
+            throw "Engineering plan schema requested for unexpected role: $Role"
+        }
+
+        $result = [ordered]@{
+            outcome = "COMPLETED"
+            summary = "Prepared deterministic executable engineering plan for full TUI E2E."
+            report_markdown = "# Deterministic engineering execution plan`n`nPrepared concrete implementation, validation, and operations work for sample.txt."
+            executable_work = @(
+                [ordered]@{
+                    key = "IMPLEMENT-SAMPLE"
+                    kind = "IMPLEMENTATION"
+                    change = "Modify sample.txt so it contains changed by full TUI E2E."
+                    owner = "frontend"
+                    areas = @(
+                        "sample.txt"
+                    )
+                    depends_on = @()
+                    verify = "git diff --check"
+                },
+                [ordered]@{
+                    key = "VALIDATE-SAMPLE"
+                    kind = "VALIDATION"
+                    change = "Validate the completed sample.txt implementation and its evidence."
+                    owner = "qa"
+                    areas = @(
+                        "sample.txt"
+                    )
+                    depends_on = @(
+                        "IMPLEMENT-SAMPLE"
+                    )
+                    verify = "Review implementation evidence and confirm expected sample.txt content."
+                },
+                [ordered]@{
+                    key = "OPERATE-SAMPLE"
+                    kind = "OPERATIONS"
+                    change = "Record operational readiness after sample.txt validation succeeds."
+                    owner = "devops"
+                    areas = @(
+                        "sample.txt"
+                    )
+                    depends_on = @(
+                        "VALIDATE-SAMPLE"
+                    )
+                    verify = "Confirm operational readiness evidence is recorded."
+                }
+            )
+            verification = "Deterministic executable plan contains implementation, validation, and operations work."
+            decisions = "Use sample.txt as the concrete implementation surface for the full TUI E2E."
+            blockers = "NONE"
+            recommended_next = "Materialize the canonical engineering backlog."
+            completion_check = [ordered]@{
+                substantive_role_deliverable_produced = $true
+                missing_required_outputs = @()
+                evidence = "The deterministic fixture produced a concrete executable engineering plan with implementation work, dependencies, owners, areas, and verification."
+            }
+        }
+    }
     "engineering-backlog.schema.json" {
         if ($Prompt -notmatch '(?m)^Source task:\s*(AICO-\d+)\s*$') {
             throw "Engineering backlog stub could not resolve source task."
@@ -427,6 +487,14 @@ if (-not (Test-Path $directory)) {
     ($result | ConvertTo-Json -Depth 20),
     (New-Object System.Text.UTF8Encoding($false))
 )
+
+if (-not [string]::IsNullOrWhiteSpace($SemanticValidatorPath)) {
+    if (-not (Test-Path $SemanticValidatorPath -PathType Leaf)) {
+        throw "Semantic validator not found: $SemanticValidatorPath"
+    }
+
+    & $SemanticValidatorPath -JsonPath $OutputPath
+}
 
 [PSCustomObject]@{
     Provider = "E2EStub"
