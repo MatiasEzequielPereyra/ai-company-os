@@ -114,7 +114,11 @@ $payload = @{
     decisions = "NONE"
     blockers = "NONE"
     recommended_next = "REVIEW"
-} | ConvertTo-Json -Depth 10
+    completion_check = @{
+        substantive_role_deliverable_produced = $true
+        missing_required_outputs = @()
+        evidence = "Schema-valid fixture whose semantic contract is intentionally rejected."
+    }} | ConvertTo-Json -Depth 10
 [System.IO.File]::WriteAllText($OutputPath,$payload,(New-Object System.Text.UTF8Encoding($false)))
 [PSCustomObject]@{ Provider = "OpenRouter"; Model = $Model }
 '@
@@ -137,7 +141,11 @@ $payload = @{
     decisions = "NONE"
     blockers = "NONE"
     recommended_next = "REVIEW"
-} | ConvertTo-Json -Depth 10
+    completion_check = @{
+        substantive_role_deliverable_produced = $true
+        missing_required_outputs = @()
+        evidence = "Schema-valid fixture whose semantic contract is intentionally accepted."
+    }} | ConvertTo-Json -Depth 10
 [System.IO.File]::WriteAllText($OutputPath,$payload,(New-Object System.Text.UTF8Encoding($false)))
 [PSCustomObject]@{ Provider = "Gemini"; Model = $Model }
 '@
