@@ -8,7 +8,7 @@ param(
 
     [string]$ProjectPath = ".",
 
-    [ValidateSet("Auto","Codex","OpenRouter","Gemini")]
+    [ValidateSet("Auto","Codex","OpenRouter","Gemini","Ollama","DeepSeek","Grok")]
     [string]$Provider = "Auto",
 
     [string]$Model = ""
@@ -26,6 +26,7 @@ function Read-Field {
 function Add-Artifact {
     param(
         [System.Text.StringBuilder]$Builder,
+        [string]$Root,
         [string]$Path,
         [string]$Label,
         [int]$MaxChars = 60000
@@ -33,7 +34,17 @@ function Add-Artifact {
 
     if (-not (Test-Path $Path -PathType Leaf)) { return }
 
-    $content = Get-Content $Path -Raw -Encoding UTF8
+    $rootFull = [System.IO.Path]::GetFullPath($Root).TrimEnd([char[]]@("\","/"))
+    $pathFull = [System.IO.Path]::GetFullPath((Resolve-Path $Path).Path)
+    $rootPrefix = $rootFull + [System.IO.Path]::DirectorySeparatorChar
+
+    if (-not $pathFull.StartsWith($rootPrefix,[System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Explicit gate artifact is outside the project root: $pathFull"
+    }
+
+    $relativePath = $pathFull.Substring($rootPrefix.Length).Replace("\","/")
+
+    $content = Get-Content $pathFull -Raw -Encoding UTF8
     if ($null -eq $content) { $content = "" }
     if ($content.Length -gt $MaxChars) {
         $content = $content.Substring(0,$MaxChars) + [Environment]::NewLine + "[TRUNCATED]"
@@ -42,6 +53,9 @@ function Add-Artifact {
     [void]$Builder.AppendLine("")
     [void]$Builder.AppendLine("")
     [void]$Builder.AppendLine("===== " + $Label + " =====")
+    [void]$Builder.AppendLine("Repository-relative path: " + $relativePath)
+    [void]$Builder.AppendLine("Evidence type: explicit gate artifact")
+    [void]$Builder.AppendLine("")
     [void]$Builder.AppendLine($content)
 }
 
@@ -82,18 +96,66 @@ $schemaName = switch ($Gate) {
 $schemaPath = Join-Path $root ("schemas\" + $schemaName)
 $routerPath = Join-Path $PSScriptRoot "provider-router.ps1"
 $contextBuilderPath = Join-Path $PSScriptRoot "build-agent-context.ps1"
+$localResolverPath = Join-Path $PSScriptRoot "local-runtime\resolve-local-runtime.ps1"
+$localRuntimeConfigPath = Join-Path $root ".codex\local-runtime-config.json"
 
 foreach ($required in @($schemaPath,$routerPath,$contextBuilderPath)) {
     if (-not (Test-Path $required)) { throw "Required gate component not found: $required" }
 }
 
+$localRuntime = $null
+$localRuntimeConfigured = (
+    (Test-Path $localResolverPath -PathType Leaf) -and
+    (Test-Path $localRuntimeConfigPath -PathType Leaf)
+)
+
+if ($Provider -eq "Ollama" -and -not $localRuntimeConfigured) {
+    throw "Ollama local runtime is not configured for this project. Run initialize-local-runtime.ps1 first."
+}
+
+if ($Provider -in @("Auto","Ollama") -and $localRuntimeConfigured) {
+    $localArgs = @{
+        ProjectPath = $root
+        Role = $reviewerRole
+        Workload = "gate"
+    }
+
+    if ($Provider -eq "Ollama" -and -not [string]::IsNullOrWhiteSpace($Model)) {
+        $localArgs.ModelOverride = $Model
+    }
+
+    $localRuntime = & $localResolverPath @localArgs
+    if ($Provider -eq "Ollama" -and -not [bool]$localRuntime.Available) {
+        throw ("Ollama local runtime unavailable: " + [string]$localRuntime.Reason)
+    }
+
+    if ([bool]$localRuntime.Available) {
+        Write-Host ("Local runtime: " + $localRuntime.Profile + " -> " + $localRuntime.Model) -ForegroundColor DarkGray
+    }
+}
+
 $maxChars = 180000
+$artifactMaxChars = 60000
 $configPath = Join-Path $root ".codex\provider-config.json"
+$providerConfig = $null
 if (Test-Path $configPath) {
     try {
         $providerConfig = Get-Content $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
         if ($null -ne $providerConfig.gate_context_max_chars) {
             $maxChars = [int]$providerConfig.gate_context_max_chars
+        }
+
+        if ($null -ne $localRuntime -and [bool]$localRuntime.Available) {
+            $maxChars = [Math]::Min($maxChars,[int]$localRuntime.GateContextMaxChars)
+            $artifactMaxChars = [Math]::Min($artifactMaxChars,[int]$localRuntime.GateArtifactMaxChars)
+        }
+        elseif ($Provider -eq "Ollama") {
+            if ($null -ne $providerConfig.ollama_gate_context_max_chars) {
+                $maxChars = [Math]::Min($maxChars,[int]$providerConfig.ollama_gate_context_max_chars)
+            }
+            if ($null -ne $providerConfig.ollama_gate_artifact_max_chars) {
+                $artifactMaxChars = [int]$providerConfig.ollama_gate_artifact_max_chars
+            }
         }
     }
     catch {
@@ -108,13 +170,13 @@ $evidence = New-Object System.Text.StringBuilder
 [void]$evidence.Append($baseContext)
 
 $reportPath = Join-Path $root ("docs\engineering\agent-reports\" + $Id + ".md")
-Add-Artifact -Builder $evidence -Path $reportPath -Label "PRIMARY AGENT REPORT"
+Add-Artifact -Builder $evidence -Root $root -Path $reportPath -Label "PRIMARY AGENT REPORT" -MaxChars $artifactMaxChars
 
 $latestResult = Get-ChildItem (Join-Path $root "docs\engineering\results") -Filter ($Id + "-result-*.md") -File -ErrorAction SilentlyContinue |
     Sort-Object Name -Descending |
     Select-Object -First 1
 if ($null -ne $latestResult) {
-    Add-Artifact -Builder $evidence -Path $latestResult.FullName -Label "LATEST TASK RESULT"
+    Add-Artifact -Builder $evidence -Root $root -Path $latestResult.FullName -Label "LATEST TASK RESULT" -MaxChars $artifactMaxChars
 }
 
 if ($Gate -in @("QA","Security")) {
@@ -122,13 +184,13 @@ if ($Gate -in @("QA","Security")) {
         Sort-Object Name -Descending |
         Select-Object -First 1
     if ($null -ne $latestReview) {
-        Add-Artifact -Builder $evidence -Path $latestReview.FullName -Label "LATEST INDEPENDENT REVIEW"
+        Add-Artifact -Builder $evidence -Root $root -Path $latestReview.FullName -Label "LATEST INDEPENDENT REVIEW" -MaxChars $artifactMaxChars
     }
 }
 
 if ($Gate -eq "Security") {
     $qaPath = Join-Path $root ("docs\engineering\qa\" + $Id + "-qa.md")
-    Add-Artifact -Builder $evidence -Path $qaPath -Label "QA GATE"
+    Add-Artifact -Builder $evidence -Root $root -Path $qaPath -Label "QA GATE" -MaxChars $artifactMaxChars
 }
 
 $promptLines = @(
@@ -146,6 +208,10 @@ $promptLines = @(
     "Reject/fail only when the report or task delivery itself is materially incomplete, unsupported, contradictory, outside role authority, or fails the assigned acceptance criteria.",
     "Do not invent repository evidence.",
     "Use only the supplied context and artifacts.",
+    "Explicit gate artifacts are authoritative supplied evidence when they include a Repository-relative path.",
+    "An explicit gate artifact remains authoritative even when its path is intentionally excluded from the generic repository inventory.",
+    "Do not infer that an explicit gate artifact is missing merely because it is absent from the generic repository inventory.",
+    "Correlate result ChangedArtifacts references with the canonical Repository-relative path attached to explicit gate artifacts.",
     "",
     "For Review: APPROVE means the deliverable is fit to proceed to QA; CHANGES_REQUIRED means the deliverable itself needs corrective work.",
     "For QA: PASS means the deliverable satisfies its task-level acceptance and evidence requirements; FAIL means the deliverable itself does not.",
@@ -160,8 +226,9 @@ $runtimeDir = Join-Path $root ".codex\runtime"
 New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
 $outputPath = Join-Path $runtimeDir ($Id + "-" + $Gate.ToLowerInvariant() + "-gate.json")
 
+Write-Host ("Gate context budget: base=" + $maxChars + " chars, artifact=" + $artifactMaxChars + " chars") -ForegroundColor DarkGray
 Write-Host "Running $Gate gate: $reviewerRole -> $Id" -ForegroundColor Cyan
-$execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $evidence.ToString() -SchemaPath $schemaPath -OutputPath $outputPath -Model $Model
+$execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $evidence.ToString() -SchemaPath $schemaPath -OutputPath $outputPath -Model $Model -Role $reviewerRole -Workload "gate"
 
 if (-not (Test-Path $outputPath)) {
     throw "Gate provider did not produce structured output: $outputPath"

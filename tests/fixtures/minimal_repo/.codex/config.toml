@@ -1,0 +1,10 @@
+[agents]
+enabled = true
+
+[agents.ceo]
+description = "Orchestrator"
+config_file = "./agents/ceo.toml"
+
+[agents.backend]
+description = "Backend"
+config_file = "./agents/backend.toml"
