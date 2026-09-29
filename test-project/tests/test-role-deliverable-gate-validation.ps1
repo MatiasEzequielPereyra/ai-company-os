@@ -104,6 +104,7 @@ function New-GateFixture {
 
     foreach ($scriptName in @(
         "run-gate-agent.ps1",
+        "task-execution-lock.ps1",
         "review-task.ps1",
         "qa-task.ps1",
         "security-task.ps1",
