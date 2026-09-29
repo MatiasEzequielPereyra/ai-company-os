@@ -178,6 +178,7 @@ $ScriptFiles = @(
     "run-active-agents.ps1",
     "build-agent-context.ps1",
     "provider-router.ps1",
+    "select-provider-attempt-order.ps1",
     "run-gate-agent.ps1",
     "run-pending-gates.ps1",
     "generate-engineering-backlog.ps1",

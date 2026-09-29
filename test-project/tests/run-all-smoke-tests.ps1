@@ -26,6 +26,7 @@ $tests = @(
     "test-openrouter-truncation.ps1",
     "test-canonical-contracts.ps1",
     "test-provider-router-contract.ps1",
+    "test-provider-auto-intelligent-routing.ps1",
     "test-gate-artifact-identity.ps1",
     "test-agent-workspace-isolation.ps1",
     "test-writable-agent-runtime.ps1",

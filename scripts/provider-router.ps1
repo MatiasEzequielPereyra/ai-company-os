@@ -58,6 +58,7 @@ $validatorPath = Join-Path $PSScriptRoot "validate-json-contract.ps1"
 $metricsWriterPath = Join-Path $PSScriptRoot "write-operational-event.ps1"
 $localResolverPath = Join-Path $PSScriptRoot "local-runtime\resolve-local-runtime.ps1"
 $localRuntimeConfigPath = Join-Path $root ".codex\local-runtime-config.json"
+$autoSelectorPath = Join-Path $PSScriptRoot "select-provider-attempt-order.ps1"
 
 if (-not (Test-Path $validatorPath)) { throw "Provider contract validator not found: $validatorPath" }
 
@@ -77,7 +78,36 @@ if ($null -ne $config -and $null -ne $config.allow_paid_fallback) {
 }
 
 if ($Provider -eq "Auto") {
+
     $attempts = $autoOrder
+
+    if (
+        $null -ne $config -and
+        $null -ne $config.auto_routing -and
+        [bool]$config.auto_routing.enabled
+    ) {
+
+        if (-not (Test-Path $autoSelectorPath -PathType Leaf)) {
+            throw "Provider Auto selector not found: $autoSelectorPath"
+        }
+
+        $attempts = @(
+            & $autoSelectorPath `
+                -Config $config `
+                -FallbackOrder $autoOrder `
+                -ProjectPath $root `
+                -Role $Role `
+                -Workload $Workload
+        )
+
+        Write-Host (
+            "Provider Auto route: " +
+            ($attempts -join " -> ") +
+            "; role=" + $Role +
+            "; workload=" + $Workload
+        ) -ForegroundColor DarkGray
+    }
+
     if (-not [string]::IsNullOrWhiteSpace($Model)) {
         Write-Host "Provider Auto ignores -Model and uses provider-specific defaults." -ForegroundColor DarkYellow
     }

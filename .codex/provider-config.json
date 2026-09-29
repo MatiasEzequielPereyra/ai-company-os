@@ -38,5 +38,110 @@
     "qa": 90000,
     "security": 100000,
     "devops": 90000
+  },
+  "auto_routing": {
+    "enabled": true,
+    "providers": {
+      "Ollama": {
+        "quality": 0.55,
+        "cost": 0,
+        "speed": 0.8,
+        "reliability": 0.7
+      },
+      "OpenRouter": {
+        "quality": 0.78,
+        "cost": 0.05,
+        "speed": 0.7,
+        "reliability": 0.72
+      },
+      "Gemini": {
+        "quality": 0.84,
+        "cost": 0.05,
+        "speed": 0.75,
+        "reliability": 0.82
+      },
+      "DeepSeek": {
+        "quality": 0.88,
+        "cost": 0.45,
+        "speed": 0.7,
+        "reliability": 0.84
+      },
+      "Grok": {
+        "quality": 0.9,
+        "cost": 0.6,
+        "speed": 0.65,
+        "reliability": 0.84
+      },
+      "Codex": {
+        "quality": 0.95,
+        "cost": 0.8,
+        "speed": 0.55,
+        "reliability": 0.9
+      }
+    },
+    "workloads": {
+      "general": {
+        "minimum_quality": 0.5,
+        "quality_weight": 0.25,
+        "cost_weight": 0.45,
+        "speed_weight": 0.2,
+        "reliability_weight": 0.1
+      },
+      "analysis": {
+        "minimum_quality": 0.55,
+        "quality_weight": 0.35,
+        "cost_weight": 0.25,
+        "speed_weight": 0.15,
+        "reliability_weight": 0.25
+      },
+      "gate": {
+        "minimum_quality": 0.75,
+        "quality_weight": 0.45,
+        "cost_weight": 0.1,
+        "speed_weight": 0.1,
+        "reliability_weight": 0.35
+      },
+      "high-risk": {
+        "minimum_quality": 0.85,
+        "quality_weight": 0.6,
+        "cost_weight": 0.05,
+        "speed_weight": 0.05,
+        "reliability_weight": 0.3
+      }
+    },
+    "roles": {
+      "pm": {
+        "minimum_quality": 0.55
+      },
+      "cto": {
+        "minimum_quality": 0.72
+      },
+      "engineering-manager": {
+        "minimum_quality": 0.72
+      },
+      "qa": {
+        "minimum_quality": 0.75
+      },
+      "security": {
+        "minimum_quality": 0.82
+      },
+      "devops": {
+        "minimum_quality": 0.68
+      }
+    },
+    "health": {
+      "enabled": true,
+      "lookback_minutes": 60,
+      "cooldown_minutes": 15,
+      "failure_penalty_weight": 0.1,
+      "transient_categories": [
+        "rate_limit",
+        "timeout",
+        "transport"
+      ],
+      "reliability_prior_attempts": 4
+    },
+    "quality_headroom_scale": 0.1,
+    "profile_semantics": "Heuristic 0-1 routing policy; values are configurable preferences, not benchmark measurements."
   }
 }

@@ -22,6 +22,7 @@ try {
         ".codex\protocols\writable-execution.md",
         ".codex\templates\ticket.md",
         "scripts\validate-artifacts.ps1",
+        "scripts\select-provider-attempt-order.ps1",
         "scripts\new-agent-workspace.ps1",
         "scripts\run-writable-agent.ps1",
         "scripts\resolve-writable-required-files.ps1",
@@ -42,6 +43,7 @@ try {
     foreach ($relative in @(
         "scripts/build-agent-context.ps1",
         "scripts/run-agent-task.ps1",
+        "scripts/select-provider-attempt-order.ps1",
         "schemas/agent-result.schema.json",
         ".codex/agents/pm.md",
         "docs/PROJECT-BRIEF.md"
