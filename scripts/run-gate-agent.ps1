@@ -59,6 +59,34 @@ function Add-Artifact {
     [void]$Builder.AppendLine($content)
 }
 
+function Get-ConcreteStrings {
+    param([object]$Value)
+
+    return @(
+        @($Value) |
+            ForEach-Object {
+                if ($null -ne $_) { ([string]$_).Trim() }
+            } |
+            Where-Object {
+                -not [string]::IsNullOrWhiteSpace($_)
+            }
+    )
+}
+
+function Assert-StructuredFields {
+    param(
+        [object]$Result,
+        [string[]]$Fields,
+        [string]$Label
+    )
+
+    foreach ($field in $Fields) {
+        if ($null -eq $Result.PSObject.Properties[$field]) {
+            throw "$Label result missing field: $field"
+        }
+    }
+}
+
 $root = (Resolve-Path $ProjectPath).Path
 $taskPath = Join-Path $root ("tasks\" + $Id + ".md")
 if (-not (Test-Path $taskPath)) { throw "Task not found: $taskPath" }
@@ -85,7 +113,6 @@ if (-not (Test-Path $lockHelperPath -PathType Leaf)) {
 $taskExecutionLock = Enter-TaskExecutionLock -ProjectPath $root -Id $Id -Operation "GATE"
 
 try {
-
 $reviewerRole = switch ($Gate) {
     "Review" { "engineering-manager" }
     "QA" {
@@ -102,14 +129,29 @@ $schemaName = switch ($Gate) {
     "Security" { "security-gate-result.schema.json" }
 }
 
+$dispatchPath = Join-Path $root ("docs\engineering\dispatch\" + $Id + ".md")
+$originalOwnerRolePath = Join-Path $root (".codex\agents\" + $owner + ".md")
+
 $schemaPath = Join-Path $root ("schemas\" + $schemaName)
 $routerPath = Join-Path $PSScriptRoot "provider-router.ps1"
 $contextBuilderPath = Join-Path $PSScriptRoot "build-agent-context.ps1"
 $localResolverPath = Join-Path $PSScriptRoot "local-runtime\resolve-local-runtime.ps1"
 $localRuntimeConfigPath = Join-Path $root ".codex\local-runtime-config.json"
 
-foreach ($required in @($schemaPath,$routerPath,$contextBuilderPath)) {
-    if (-not (Test-Path $required)) { throw "Required gate component not found: $required" }
+if ([string]::IsNullOrWhiteSpace($owner)) {
+    throw "Task $Id has no original Owner."
+}
+
+foreach ($required in @(
+    $schemaPath,
+    $routerPath,
+    $contextBuilderPath,
+    $dispatchPath,
+    $originalOwnerRolePath
+)) {
+    if (-not (Test-Path $required -PathType Leaf)) {
+        throw "Required gate component not found: $required"
+    }
 }
 
 $localRuntime = $null
@@ -178,15 +220,54 @@ $baseContext = & $contextBuilderPath -ProjectPath $root -Id $Id -Owner $reviewer
 $evidence = New-Object System.Text.StringBuilder
 [void]$evidence.Append($baseContext)
 
+Add-Artifact `
+    -Builder $evidence `
+    -Root $root `
+    -Path $taskPath `
+    -Label "CANONICAL TASK" `
+    -MaxChars $artifactMaxChars
+
+Add-Artifact `
+    -Builder $evidence `
+    -Root $root `
+    -Path $dispatchPath `
+    -Label "DISPATCH PACKET" `
+    -MaxChars $artifactMaxChars
+
+Add-Artifact `
+    -Builder $evidence `
+    -Root $root `
+    -Path $originalOwnerRolePath `
+    -Label "ORIGINAL OWNER ROLE CONTRACT" `
+    -MaxChars $artifactMaxChars
+
 $reportPath = Join-Path $root ("docs\engineering\agent-reports\" + $Id + ".md")
-Add-Artifact -Builder $evidence -Root $root -Path $reportPath -Label "PRIMARY AGENT REPORT" -MaxChars $artifactMaxChars
+
+if (-not (Test-Path $reportPath -PathType Leaf)) {
+    throw "Primary agent report not found for gate validation: $reportPath"
+}
+
+Add-Artifact `
+    -Builder $evidence `
+    -Root $root `
+    -Path $reportPath `
+    -Label "PRIMARY AGENT REPORT" `
+    -MaxChars $artifactMaxChars
 
 $latestResult = Get-ChildItem (Join-Path $root "docs\engineering\results") -Filter ($Id + "-result-*.md") -File -ErrorAction SilentlyContinue |
     Sort-Object Name -Descending |
     Select-Object -First 1
-if ($null -ne $latestResult) {
-    Add-Artifact -Builder $evidence -Root $root -Path $latestResult.FullName -Label "LATEST TASK RESULT" -MaxChars $artifactMaxChars
+
+if ($null -eq $latestResult) {
+    throw "Latest task result not found for gate validation: $Id"
 }
+
+Add-Artifact `
+    -Builder $evidence `
+    -Root $root `
+    -Path $latestResult.FullName `
+    -Label "LATEST TASK RESULT" `
+    -MaxChars $artifactMaxChars
 
 if ($Gate -in @("QA","Security")) {
     $latestReview = Get-ChildItem (Join-Path $root "docs\engineering\reviews") -Filter ($Id + "-review-*.md") -File -ErrorAction SilentlyContinue |
@@ -212,6 +293,12 @@ $promptLines = @(
     "",
     "Evaluate the assigned task deliverable against its objective, acceptance criteria, evidence quality, internal consistency and role boundaries.",
     "This gate evaluates whether the DELIVERABLE is good enough to progress through the workflow.",
+    "The ORIGINAL OWNER ROLE CONTRACT is authoritative for the role-owned outputs and responsibilities that the deliverable must actually produce.",
+    "Compare the PRIMARY AGENT REPORT against the original owner role contract, especially its ## Output section and role Responsibilities, together with the canonical task and dispatch packet.",
+    "Validate that every material role-required output was actually produced as substantive work.",
+    "Repeating Objective / Requirements / Acceptance Criteria does not count as producing the role-owned deliverable.",
+    "A report that only paraphrases task metadata, requirements or acceptance criteria is incomplete when the original role requires architecture, analysis, decisions, plans, contracts, risks or other substantive outputs.",
+    "Review must return CHANGES_REQUIRED when a material role-required output is missing; QA cannot PASS a deliverable with missing required role outputs.",
     "Do not reject or fail merely because the underlying product has defects, P0/P1 findings, security issues, release blockers or failed product checks documented by the report.",
     "A strong audit report is allowed to conclude that the product is not production-ready.",
     "Reject/fail only when the report or task delivery itself is materially incomplete, unsupported, contradictory, outside role authority, or fails the assigned acceptance criteria.",
@@ -222,9 +309,13 @@ $promptLines = @(
     "Do not infer that an explicit gate artifact is missing merely because it is absent from the generic repository inventory.",
     "Correlate result ChangedArtifacts references with the canonical Repository-relative path attached to explicit gate artifacts.",
     "",
-    "For Review: APPROVE means the deliverable is fit to proceed to QA; CHANGES_REQUIRED means the deliverable itself needs corrective work.",
-    "For QA: PASS means the deliverable satisfies its task-level acceptance and evidence requirements; FAIL means the deliverable itself does not.",
-    "For Security: PASS means security-relevant aspects of the deliverable are adequately handled; FAIL means the deliverable itself has a security-quality defect; NOT_APPLICABLE is appropriate when an additional security gate provides no meaningful verification for an analysis-only deliverable.",
+    "For Review: APPROVE requires missing_required_outputs=[] and deliverable_defects=[]. CHANGES_REQUIRED requires at least one concrete missing_required_output or deliverable_defect.",
+    "For QA: assess concrete task/role criteria in criteria_assessment. PASS cannot contain an UNSATISFIED criterion. FAIL requires at least one concrete UNSATISFIED criterion.",
+    "For Security: security_relevant describes whether this deliverable has an additional security-relevant aspect to verify.",
+    "Security FAIL is valid only when security_relevant=true and deliverable_security_defects contains at least one concrete security defect OF THE DELIVERABLE.",
+    "Future product vulnerabilities, product security findings, implementation risks or security work documented by an otherwise valid deliverable are not deliverable_security_defects by themselves.",
+    "For a standard planning/analysis task with no additional security-relevant aspect, return NOT_APPLICABLE with security_relevant=false and deliverable_security_defects=[].",
+    "Security PASS requires security_relevant=true and no deliverable_security_defects.",
     "",
     "Return only the structured JSON required by the supplied schema."
 )
@@ -247,27 +338,213 @@ $result = Get-Content $outputPath -Raw -Encoding UTF8 | ConvertFrom-Json
 
 switch ($Gate) {
     "Review" {
-        foreach ($field in @("recommendation","findings","verification")) {
-            if ($null -eq $result.PSObject.Properties[$field]) { throw "Review result missing field: $field" }
+        Assert-StructuredFields `
+            -Result $result `
+            -Fields @(
+                "recommendation",
+                "findings",
+                "verification",
+                "missing_required_outputs",
+                "deliverable_defects"
+            ) `
+            -Label "Review"
+
+        $missingRequiredOutputs = @(
+            Get-ConcreteStrings -Value $result.missing_required_outputs
+        )
+
+        $deliverableDefects = @(
+            Get-ConcreteStrings -Value $result.deliverable_defects
+        )
+
+        if ([string]$result.recommendation -eq "APPROVE") {
+            if (
+                $missingRequiredOutputs.Count -gt 0 -or
+                $deliverableDefects.Count -gt 0
+            ) {
+                throw (
+                    "Invalid structured Review APPROVE: missing_required_outputs " +
+                    "and deliverable_defects must both be empty."
+                )
+            }
+        }
+        elseif ([string]$result.recommendation -eq "CHANGES_REQUIRED") {
+            if (
+                $missingRequiredOutputs.Count -eq 0 -and
+                $deliverableDefects.Count -eq 0
+            ) {
+                throw (
+                    "Invalid structured Review CHANGES_REQUIRED: identify at " +
+                    "least one concrete missing required output or deliverable defect."
+                )
+            }
+        }
+        else {
+            throw "Invalid structured Review recommendation: $($result.recommendation)"
         }
 
-        & (Join-Path $PSScriptRoot "review-task.ps1") -ProjectPath $root -Id $Id -Recommendation $result.recommendation -Reviewer ("ai-" + $reviewerRole) -Findings $result.findings -Verification $result.verification
+        & (Join-Path $PSScriptRoot "review-task.ps1") `
+            -ProjectPath $root `
+            -Id $Id `
+            -Recommendation $result.recommendation `
+            -Reviewer ("ai-" + $reviewerRole) `
+            -Findings $result.findings `
+            -Verification $result.verification
     }
 
     "QA" {
-        foreach ($field in @("outcome","evidence","findings")) {
-            if ($null -eq $result.PSObject.Properties[$field]) { throw "QA result missing field: $field" }
+        Assert-StructuredFields `
+            -Result $result `
+            -Fields @(
+                "outcome",
+                "evidence",
+                "findings",
+                "criteria_assessment"
+            ) `
+            -Label "QA"
+
+        $criteria = @($result.criteria_assessment)
+
+        if ($criteria.Count -eq 0) {
+            throw "Invalid structured QA result: criteria_assessment cannot be empty."
         }
 
-        & (Join-Path $PSScriptRoot "qa-task.ps1") -ProjectPath $root -Id $Id -Outcome $result.outcome -Evidence $result.evidence -Findings $result.findings
+        foreach ($criterion in $criteria) {
+            Assert-StructuredFields `
+                -Result $criterion `
+                -Fields @("criterion","status","evidence") `
+                -Label "QA criterion"
+
+            if ([string]::IsNullOrWhiteSpace([string]$criterion.criterion)) {
+                throw "Invalid structured QA criterion: criterion text is required."
+            }
+
+            if ([string]::IsNullOrWhiteSpace([string]$criterion.evidence)) {
+                throw "Invalid structured QA criterion: evidence is required."
+            }
+
+            if (
+                [string]$criterion.status -notin @(
+                    "SATISFIED",
+                    "UNSATISFIED",
+                    "NOT_APPLICABLE"
+                )
+            ) {
+                throw "Invalid structured QA criterion status: $($criterion.status)"
+            }
+        }
+
+        $unsatisfiedCriteria = @(
+            $criteria |
+                Where-Object {
+                    [string]$_.status -eq "UNSATISFIED"
+                }
+        )
+
+        if ([string]$result.outcome -eq "PASS") {
+            if ($unsatisfiedCriteria.Count -gt 0) {
+                throw (
+                    "Invalid structured QA PASS: at least one criterion is UNSATISFIED."
+                )
+            }
+        }
+        elseif ([string]$result.outcome -eq "FAIL") {
+            if ($unsatisfiedCriteria.Count -eq 0) {
+                throw (
+                    "Invalid structured QA FAIL: identify at least one concrete " +
+                    "UNSATISFIED criterion."
+                )
+            }
+        }
+        else {
+            throw "Invalid structured QA outcome: $($result.outcome)"
+        }
+
+        & (Join-Path $PSScriptRoot "qa-task.ps1") `
+            -ProjectPath $root `
+            -Id $Id `
+            -Outcome $result.outcome `
+            -Evidence $result.evidence `
+            -Findings $result.findings
     }
 
     "Security" {
-        foreach ($field in @("outcome","evidence","findings")) {
-            if ($null -eq $result.PSObject.Properties[$field]) { throw "Security result missing field: $field" }
+        Assert-StructuredFields `
+            -Result $result `
+            -Fields @(
+                "outcome",
+                "evidence",
+                "findings",
+                "security_relevant",
+                "deliverable_security_defects"
+            ) `
+            -Label "Security"
+
+        $securityRelevant = [bool]$result.security_relevant
+
+        $deliverableSecurityDefects = @(
+            Get-ConcreteStrings -Value $result.deliverable_security_defects
+        )
+
+        switch ([string]$result.outcome) {
+            "PASS" {
+                if (-not $securityRelevant) {
+                    throw (
+                        "Invalid structured Security PASS: security_relevant=false; " +
+                        "use NOT_APPLICABLE when no meaningful security verification applies."
+                    )
+                }
+
+                if ($deliverableSecurityDefects.Count -gt 0) {
+                    throw (
+                        "Invalid structured Security PASS: deliverable_security_defects " +
+                        "must be empty."
+                    )
+                }
+            }
+
+            "FAIL" {
+                if (-not $securityRelevant) {
+                    throw (
+                        "Invalid structured Security FAIL: security_relevant must be true."
+                    )
+                }
+
+                if ($deliverableSecurityDefects.Count -eq 0) {
+                    throw (
+                        "Invalid structured Security FAIL: at least one concrete " +
+                        "security defect of the deliverable is required."
+                    )
+                }
+            }
+
+            "NOT_APPLICABLE" {
+                if ($securityRelevant) {
+                    throw (
+                        "Invalid structured Security NOT_APPLICABLE: " +
+                        "security_relevant must be false."
+                    )
+                }
+
+                if ($deliverableSecurityDefects.Count -gt 0) {
+                    throw (
+                        "Invalid structured Security NOT_APPLICABLE: " +
+                        "deliverable_security_defects must be empty."
+                    )
+                }
+            }
+
+            default {
+                throw "Invalid structured Security outcome: $($result.outcome)"
+            }
         }
 
-        & (Join-Path $PSScriptRoot "security-task.ps1") -ProjectPath $root -Id $Id -Outcome $result.outcome -Evidence $result.evidence -Findings $result.findings
+        & (Join-Path $PSScriptRoot "security-task.ps1") `
+            -ProjectPath $root `
+            -Id $Id `
+            -Outcome $result.outcome `
+            -Evidence $result.evidence `
+            -Findings $result.findings
     }
 }
 
