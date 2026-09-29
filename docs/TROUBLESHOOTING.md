@@ -14,8 +14,15 @@ Antes de corregir nada, ejecutar desde la raíz del proyecto:
 
 ```powershell
 git status --short --branch
+aico doctor
 .\scripts\list-tasks.ps1
 .\scripts\validate-artifacts.ps1
+```
+
+Para problemas de instalación/runtime de máquina:
+
+```powershell
+aico doctor --system
 ```
 
 Si el problema está relacionado con estado derivado:
@@ -28,8 +35,11 @@ Si el problema está relacionado con providers, comprobar qué credenciales o ru
 
 ```powershell
 Get-Command codex -ErrorAction SilentlyContinue
+Get-Command ollama -ErrorAction SilentlyContinue
 Test-Path Env:OPENROUTER_API_KEY
 Test-Path Env:GEMINI_API_KEY
+Test-Path Env:DEEPSEEK_API_KEY
+Test-Path Env:XAI_API_KEY
 ```
 
 No imprimir el valor de las API keys en logs compartidos.
@@ -583,7 +593,7 @@ Test-Path Env:GEMINI_API_KEY
 Get-Content .\.codex\provider-config.json
 ```
 
-Al menos un provider debe estar disponible.
+Con la configuración por defecto de `main`, `Auto` intenta Ollama. Si Ollama no está disponible, elegí explícitamente otro provider configurado o ajustá `auto_order`; tener una API key no cambia por sí sola el orden de Auto.
 
 ---
 
@@ -736,17 +746,15 @@ Reciben un **Repository Context Pack** construido por AI Company OS y limitado p
 context_max_chars
 ```
 
-El valor actual de `main` es:
+El budget general actual de análisis es:
 
 ```text
-320000
+analysis_context_max_chars = 120000
 ```
 
-Los gates usan:
+y existen budgets por rol, por ejemplo CTO = 110000.
 
-```text
-gate_context_max_chars = 180000
-```
+Los gates externos conservan un budget general configurable, mientras que Ollama usa límites más pequeños derivados del perfil de hardware (por ejemplo `ollama_context_max_chars`, `ollama_gate_context_max_chars` y `.codex/local-runtime-config.json`).
 
 ### Resolución
 
@@ -1254,7 +1262,7 @@ Esto es especialmente importante cuando existen worktrees de tareas o ramas expe
 
 No documentarla ni usarla como contrato estable de `main`.
 
-Ejemplos actuales de áreas en evolución incluyen TUI, writable runtime y ajustes recientes de provider timeout.
+Ejemplos actuales de áreas en evolución incluyen merge/reconciliation automático, resiliencia de providers y ajustes del writable runtime. La CLI/TUI `aico` ya forma parte de `main`.
 
 Antes de utilizar una instrucción específica de una branch:
 
