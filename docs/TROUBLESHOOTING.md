@@ -672,6 +672,34 @@ AI Company OS debe rechazar ese resultado en lugar de convertirlo silenciosament
 - comprobar el schema requerido;
 - no editar manualmente el JSON solo para hacerlo pasar sin revisar su semántica.
 
+### Hallazgo de first-run real
+
+Durante la prueba humana del flujo PM → CTO, OpenRouter respondió correctamente a nivel HTTP pero en algunas ejecuciones el contenido estructurado terminó en JSON `null`. El runtime lo rechazó con:
+
+```text
+OpenRouter structured result root must be an object. Actual root type: null
+```
+
+Esto debe tratarse como un fallo de contrato del provider/modelo, no como una razón para avanzar la task manualmente.
+
+También se observó que context packs muy grandes aumentaban la fragilidad del flujo externo. Si el problema se repite, revisar:
+
+```powershell
+Get-Content .\.codex\provider-config.json
+```
+
+y comprobar especialmente:
+
+```text
+context_max_chars
+gate_context_max_chars
+models
+```
+
+No existe un valor universal correcto para todos los modelos. Reducir contexto puede ser una mitigación diagnóstica, pero no sustituye verificar que el modelo elegido soporte el contrato de structured output requerido.
+
+Con `-Provider OpenRouter`, `-Model` permite fijar un modelo explícito. Evitar documentar un modelo gratuito concreto como requisito permanente: la disponibilidad y compatibilidad de modelos externos puede cambiar.
+
 ---
 
 ## 25. Provider Auto ignora -Model
