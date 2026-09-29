@@ -87,6 +87,14 @@ Available specialized roles include:
 - qa
 - security
 
+### Engineering Manager identifier note
+
+The Codex agent registration key is `engineering_manager`.
+
+PowerShell task metadata, task Owner values, and role filenames use `engineering-manager`.
+
+These are two identifiers for the same conceptual role and must not be substituted blindly.
+
 The CEO should delegate specialized work instead of performing all work directly.
 
 Agents should operate within their defined area of responsibility.

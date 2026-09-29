@@ -30,6 +30,17 @@ aico
 
 For the complete installation and usage guide, see [INSTALL-QUICKSTART.txt](./INSTALL-QUICKSTART.txt).
 
+## Start here
+
+If this is your first time using the project:
+
+1. Follow [INSTALL-QUICKSTART.txt](./INSTALL-QUICKSTART.txt) for the supported npm/CLI installation path.
+2. Read [Quick Start](docs/QUICKSTART.md) for the first managed workflow.
+3. Run the disposable [First Run Checklist](docs/FIRST-RUN-CHECKLIST.md).
+4. Use the [User Guide](docs/USER-GUIDE.md) for the complete operating model.
+
+The user manual is written in Spanish; command names, role IDs, statuses, and machine contracts keep their canonical English identifiers.
+
 ## What problem it solves
 
 AI coding agents are useful at implementation and analysis, but multi-step work becomes unreliable when:
@@ -73,7 +84,7 @@ The framework includes:
 - project intake and repository discovery;
 - durable Markdown tasks under `tasks/`;
 - readiness, dispatch, result intake, review, QA, security, and final approval scripts;
-- provider routing for Codex CLI, OpenRouter, and Gemini;
+- provider routing for Codex CLI, Ollama, OpenRouter, Gemini, DeepSeek, and Grok/xAI;
 - structured provider result schemas;
 - engineering backlog generation/materialization;
 - state synchronization;
@@ -118,6 +129,30 @@ For isolated mutating work:
 
 This creates a task-specific Git worktree and branch. Integration is intentionally not automatic.
 
+## Typical user flow
+
+The CLI is the supported installation and navigation entrypoint. The PowerShell scripts remain the low-level workflow contract.
+
+From an installed managed project:
+
+```powershell
+.\scripts\initialize-project.ps1
+
+.\scripts\orchestrate.ps1 `
+  -Objective "Describe the work to prepare" `
+  -Type FEATURE `
+  -Priority P1
+
+.\scripts\list-tasks.ps1
+
+.\scripts\orchestrate.ps1 -WorkRequestId WR-XXX -Apply
+
+.\scripts\run-active-agents.ps1 -Provider Auto
+.\scripts\run-pending-gates.ps1 -Provider Auto
+```
+
+Tasks with dependencies may require several lifecycle rounds. Final approval remains explicit per task through `finalize-task.ps1`.
+
 ## Source-of-truth rules
 
 - `tasks/AICO-*.md` own ticket status, acceptance criteria, dependencies, evidence, and transition history.
@@ -152,3 +187,15 @@ GitHub Actions also runs the suite on Windows PowerShell for pushes and pull req
 ## Current maturity
 
 This repository is an engineering workflow framework, not yet a fully autonomous execution platform. The strongest current capabilities are durable coordination, structured analysis, lifecycle enforcement, and evidence capture. Remaining maturity work includes richer merge/reconciliation automation for isolated agent branches, deeper provider transport simulation, and longitudinal quality metrics across real projects.
+
+
+## User documentation
+
+- [Quick Start](docs/QUICKSTART.md) — installation-to-first-workflow path.
+- [First Run Checklist](docs/FIRST-RUN-CHECKLIST.md) — disposable acceptance path.
+- [User Guide](docs/USER-GUIDE.md) — complete concepts and operating model.
+- [End-to-End Walkthrough](docs/END-TO-END-WALKTHROUGH.md) — lifecycle walkthrough.
+- [Troubleshooting](docs/TROUBLESHOOTING.md) — symptom-based recovery.
+- [Command Reference](docs/COMMAND-REFERENCE.md) — CLI and PowerShell command contracts.
+- [FAQ](docs/FAQ.md) — concise conceptual answers.
+- [Documentation Status](docs/DOCUMENTATION-STATUS.md) — coverage and known gaps.
