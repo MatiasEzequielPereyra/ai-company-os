@@ -7,7 +7,7 @@
 ```text
 Manual: v0.1
 Target documentado: main
-Verified runtime baseline: ed4820f8cbd8cf62a6b5d9494e0633b47b5fc9f3
+Verified runtime baseline: 816404c51c34e0bc3e7c23ab9772a0b4d8be1753
 Estado: living documentation / review candidate
 ```
 
@@ -30,9 +30,12 @@ Estado: living documentation / review candidate
 | Dispatch | Cubierto | User Guide + Walkthrough |
 | Providers | Cubierto | User Guide + Troubleshooting |
 | Codex | Cubierto | User Guide + FAQ |
+| Ollama / local runtime | Cubierto | Quick Start + User Guide + Troubleshooting |
 | OpenRouter | Cubierto | User Guide + Troubleshooting |
 | Gemini | Cubierto | User Guide + Troubleshooting |
-| Auto fallback | Cubierto | FAQ + Troubleshooting |
+| DeepSeek | Cubierto | User Guide + FAQ |
+| Grok / xAI | Cubierto | User Guide + FAQ |
+| Auto routing | Cubierto | Local-first por defecto; FAQ + Troubleshooting |
 | Agent results | Cubierto | Walkthrough |
 | Review | Cubierto | User Guide + Walkthrough |
 | QA | Cubierto | User Guide + Walkthrough |
@@ -51,8 +54,8 @@ Estado: living documentation / review candidate
 | Command reference | Cubierto | COMMAND-REFERENCE.md |
 | Actualización del runtime instalado | Cubierto con cautela | Installer no es version-aware; requiere branch + diff |
 | FAQ | Cubierto | FAQ.md |
-| TUI visual | Pendiente | No estable en main |
-| Writable autonomous runtime | Parcial | Infraestructura documentada; automatización completa en evolución |
+| CLI / TUI `aico` | Cubierto | Integrada en main y distribuida por npm |
+| Writable runtime autorizado | Cubierto con límites | Worktree + policy + change-set; merge/push/deploy siguen separados |
 | Merge/reconciliation automático | Pendiente | No tratar como estable |
 | Deployment autónomo | No soportado implícitamente | Requiere autoridad externa/expresa |
 | Provider timeout configurable por config | Pendiente | main usa valores en adapters; no contrato provider_timeout_seconds |
@@ -89,7 +92,7 @@ Sí debe actualizarse inmediatamente cuando cambia alguno de estos contratos:
 
 ## Siguiente actualización prevista
 
-Cuando TUI/writable runtime y cambios de provider que están en ramas de integración lleguen a `main`, revisar como mínimo:
+Cuando cambien contratos públicos de CLI, writable runtime, providers o lifecycle en `main`, revisar como mínimo:
 
 ```text
 README.md
@@ -159,3 +162,24 @@ Hallazgos de runtime/provider que no deben confundirse con defectos conceptuales
 - la selección/budget de provider necesita hardening independiente de la documentación.
 
 El manual remite estos casos a Troubleshooting y no intenta convertir el First Run en una sesión de debugging de providers.
+
+
+## Revalidación contra main actual
+
+El 2026-09-29 se revalidaron los contratos públicos del manual contra:
+
+```text
+main @ 816404c51c34e0bc3e7c23ab9772a0b4d8be1753
+```
+
+Cambios absorbidos por la documentación:
+
+- instalación global por npm;
+- CLI `aico` y `aico shell` como interfaces integradas;
+- runtime local-first con Ollama en `Auto`;
+- providers Codex, Ollama, OpenRouter, Gemini, DeepSeek y Grok;
+- budgets de análisis reducidos/per-role;
+- managed-files manifest;
+- writable runtime autorizado con worktrees y policy.
+
+El first-run humano con OpenRouter fue realizado sobre el baseline anterior de la rama documental. Sus hallazgos siguen siendo útiles como evidencia de integración, pero no deben interpretarse como una reproducción exacta del routing local-first del `main` actual.
