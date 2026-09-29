@@ -1,0 +1,273 @@
+AI COMPANY OS — INSTALACIÓN Y GUÍA RÁPIDA
+===========================================
+
+Paquete npm:
+  @pereyram/ai-company-os
+
+Repositorio:
+  https://github.com/MatiasEzequielPereyra/ai-company-os
+
+
+1. REQUISITOS
+=============
+
+Requisitos mínimos:
+
+- Node.js 20 o superior
+- npm
+- Python 3.11 o superior
+- PowerShell
+- Git
+
+Para ejecución local automática con IA:
+
+- Ollama
+- Modelo recomendado por defecto: qwen3:8b
+
+Comprobar herramientas:
+
+  node --version
+  npm --version
+  python --version
+  pwsh --version
+  git --version
+  ollama --version
+
+
+2. INSTALACIÓN GLOBAL
+=====================
+
+Instalar AI Company OS desde npm:
+
+  npm install -g @pereyram/ai-company-os
+
+Actualizar a la última versión:
+
+  npm install -g @pereyram/ai-company-os@latest
+
+Comprobar la instalación:
+
+  aico version
+  aico --help
+
+Diagnóstico del sistema:
+
+  aico doctor --system
+
+El diagnóstico comprueba el entorno local, incluyendo Python, Git, Node,
+npm, PowerShell, Ollama y el modelo local recomendado.
+
+
+3. INSTALAR AI COMPANY OS EN UN PROYECTO EXISTENTE
+===================================================
+
+Entrar al proyecto:
+
+  cd C:\ruta\a\mi-proyecto
+
+Instalar AI Company OS:
+
+  aico install .
+
+Seleccionar ese proyecto como proyecto activo:
+
+  aico use .
+
+Comprobar:
+
+  aico current
+  aico doctor
+  aico status
+
+
+4. CREAR UN PROYECTO NUEVO
+===========================
+
+Crear un proyecto nuevo:
+
+  aico new mi-proyecto
+
+También se puede indicar una carpeta de destino:
+
+  aico new mi-proyecto C:\ruta\destino
+
+
+5. ABRIR LA INTERFAZ
+====================
+
+Abrir AI Company OS:
+
+  aico
+
+Abrir el cliente interactivo:
+
+  aico shell
+
+Salir del shell:
+
+  exit
+
+o:
+
+  quit
+
+
+6. COMANDOS PRINCIPALES
+=======================
+
+Ver proyecto activo:
+
+  aico current
+
+Cambiar proyecto:
+
+  aico use C:\ruta\al\proyecto
+
+Estado general:
+
+  aico status
+
+Ver tareas:
+
+  aico tasks
+
+Ver flujo/dependencias:
+
+  aico workflow
+
+Ver actividad persistida:
+
+  aico activity
+
+Ver handoffs entre agentes:
+
+  aico handoffs
+
+Diagnóstico del proyecto:
+
+  aico doctor
+
+Diagnóstico de la máquina/runtime:
+
+  aico doctor --system
+
+Salida JSON del diagnóstico del sistema:
+
+  aico doctor --system --json
+
+Ver versión instalada:
+
+  aico version
+
+
+7. SHELL INTERACTIVO
+====================
+
+Abrir:
+
+  aico shell
+
+Ejemplos dentro del shell:
+
+  status
+  tasks
+  tasks --status ACTIVE
+  tasks --owner pm
+  tasks --owner cto
+  tasks --priority P1
+  project
+  help
+  clear
+  exit
+
+
+8. FLUJO RÁPIDO RECOMENDADO
+===========================
+
+Para un repositorio existente:
+
+  cd C:\ruta\a\mi-proyecto
+  aico install .
+  aico use .
+  aico doctor --system
+  aico doctor
+  aico status
+  aico shell
+
+Para volver a abrir el proyecto más tarde:
+
+  cd C:\ruta\a\mi-proyecto
+  aico
+
+
+9. OLLAMA / EJECUCIÓN LOCAL
+===========================
+
+AI Company OS está preparado para trabajar local-first.
+
+Comprobar Ollama:
+
+  ollama list
+
+Instalar el modelo recomendado si no está disponible:
+
+  ollama pull qwen3:8b
+
+Después comprobar:
+
+  aico doctor --system
+
+La configuración automática local utiliza Ollama. Otros proveedores pueden
+permanecer disponibles para selección manual según la configuración del
+proyecto.
+
+
+10. ACTUALIZACIÓN
+=================
+
+Actualizar AI Company OS:
+
+  npm install -g @pereyram/ai-company-os@latest
+
+Comprobar versión:
+
+  aico version
+
+Después de actualizar, se recomienda:
+
+  aico doctor --system
+  aico doctor
+
+
+11. DESINSTALACIÓN
+==================
+
+Desinstalar el CLI global:
+
+  npm uninstall -g @pereyram/ai-company-os
+
+Esto elimina el paquete global. Los archivos de AI Company OS que ya se hayan
+instalado dentro de proyectos existentes no se eliminan automáticamente.
+
+
+12. RESUMEN
+===========
+
+Instalar:
+
+  npm install -g @pereyram/ai-company-os
+
+Preparar un repo:
+
+  aico install .
+  aico use .
+
+Comprobar:
+
+  aico doctor --system
+  aico status
+
+Usar:
+
+  aico
+  aico shell

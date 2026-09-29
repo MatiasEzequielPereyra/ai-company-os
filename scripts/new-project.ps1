@@ -188,7 +188,10 @@ $ScriptFiles = @(
     "validate-artifacts.ps1",
     "write-operational-event.ps1",
     "summarize-metrics.ps1",
-    "new-agent-workspace.ps1"
+    "new-agent-workspace.ps1",
+    "run-writable-agent.ps1",
+    "resolve-writable-required-files.ps1",
+    "task-execution-lock.ps1"
 )
 
 foreach ($ScriptFile in $ScriptFiles) {
@@ -214,6 +217,11 @@ if (Test-Path $ProviderConfigSource) {
 $WorkflowProfilesSource = Join-Path $ScriptRoot ".codex\workflow-profiles.json"
 if (Test-Path $WorkflowProfilesSource) {
     Copy-Item $WorkflowProfilesSource (Join-Path $ProjectPath ".codex\workflow-profiles.json") -Force
+}
+
+$WritablePolicySource = Join-Path $ScriptRoot ".codex\writable-policy.json"
+if (Test-Path $WritablePolicySource) {
+    Copy-Item $WritablePolicySource (Join-Path $ProjectPath ".codex\writable-policy.json") -Force
 }
 
 # ------------------------------------------------------------
@@ -288,6 +296,27 @@ $SyncScript = Join-Path $ProjectPath "scripts\sync-company-state.ps1"
 if (Test-Path $SyncScript) {
     & $SyncScript -TasksPath (Join-Path $ProjectPath "tasks") -SprintPath $CurrentSprintPath | Out-Null
 }
+
+$resolvedProjectPath = (Resolve-Path $ProjectPath).Path
+$managedManifestPath = Join-Path $resolvedProjectPath ".codex\managed-files.json"
+$managedFiles = @(
+    Get-ChildItem $resolvedProjectPath -File -Recurse -Force -Name |
+        ForEach-Object { ([string]$_).Replace("\","/") } |
+        Where-Object { $_ -ne ".codex/managed-files.json" }
+)
+$managedFiles += ".codex/managed-files.json"
+$managedFiles = @($managedFiles | Sort-Object -Unique)
+
+$managedPayload = [ordered]@{
+    version = 1
+    managed_files = $managedFiles
+} | ConvertTo-Json -Depth 10
+
+[System.IO.File]::WriteAllText(
+    $managedManifestPath,
+    $managedPayload,
+    (New-Object System.Text.UTF8Encoding($false))
+)
 
 Write-Host "Company OS instalado." -ForegroundColor Green
 

@@ -24,6 +24,11 @@ try {
         decisions = "NONE"
         blockers = "NONE"
         recommended_next = "REVIEW"
+        completion_check = [ordered]@{
+            substantive_role_deliverable_produced = $true
+            missing_required_outputs = @()
+            evidence = "Canonical contract fixture contains the expected role-owned deliverable."
+        }
     }
     $validPath = Join-Path $tempRoot "valid.json"
     [System.IO.File]::WriteAllText($validPath,($valid | ConvertTo-Json -Depth 10),(New-Object System.Text.UTF8Encoding($false)))
@@ -36,6 +41,11 @@ try {
         decisions = "NONE"
         blockers = "NONE"
         recommended_next = "REVIEW"
+        completion_check = [ordered]@{
+            substantive_role_deliverable_produced = $true
+            missing_required_outputs = @()
+            evidence = "Completion self-check is intentionally valid so this fixture isolates the missing summary contract."
+        }
     }
     $invalidPath = Join-Path $tempRoot "invalid.json"
     [System.IO.File]::WriteAllText($invalidPath,($invalid | ConvertTo-Json -Depth 10),(New-Object System.Text.UTF8Encoding($false)))

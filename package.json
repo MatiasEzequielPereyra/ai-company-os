@@ -1,0 +1,61 @@
+{
+    "name": "@pereyram/ai-company-os",
+    "version": "0.1.1",
+    "description": "Local-first AI engineering company operating system",
+    "license": "MIT",
+    "type": "commonjs",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/MatiasEzequielPereyra/ai-company-os.git"
+    },
+    "homepage": "https://github.com/MatiasEzequielPereyra/ai-company-os",
+    "bugs": {
+        "url": "https://github.com/MatiasEzequielPereyra/ai-company-os/issues"
+    },
+    "bin": {
+        "aico": "npm-bin/aico.js",
+        "ai-company-os": "npm-bin/aico.js"
+    },
+    "files": [
+        ".agents",
+        ".codex/agents",
+        ".codex/policies",
+        ".codex/protocols",
+        ".codex/templates",
+        ".codex/workflows",
+        ".codex/config.toml",
+        ".codex/provider-config.json",
+        ".codex/local-runtime-config.json",
+        ".codex/workflow-profiles.json",
+        ".codex/writable-policy.json",
+        "npm-bin",
+        "schemas",
+        "scripts",
+        "src",
+        "templates",
+        "tasks/README.md",
+        "pyproject.toml",
+        "AGENTS.md",
+        "LICENSE",
+        "README.md"
+    ],
+    "engines": {
+        "node": ">=20"
+    },
+    "scripts": {
+        "test": "node --test npm-bin/package.test.js",
+        "prepack": "npm test"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
+    "keywords": [
+        "ai",
+        "agents",
+        "ollama",
+        "engineering",
+        "cli",
+        "tui",
+        "local-first"
+    ]
+}

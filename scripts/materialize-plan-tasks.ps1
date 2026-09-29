@@ -169,7 +169,8 @@ if ($plan -match '(?ms)^## Required Roles\s*\r?\n\s*\r?\n(.+?)(?:\r?\n\r?\n##|\z
 if ($roles.Count -eq 0) { throw "No required roles found in plan: $planPath" }
 
 $existingForRequest = @(Get-ChildItem $tasksPath -Filter "AICO-*.md" -File -ErrorAction SilentlyContinue | Where-Object {
-    (Get-Content $_.FullName -Raw -Encoding UTF8) -match ("(?m)^Work request:\s*" + [regex]::Escape($WorkRequestId) + "$")
+    $taskContent = Get-Content $_.FullName -Raw -Encoding UTF8
+    (Read-Field -Content $taskContent -Key "Work request") -eq $WorkRequestId
 })
 if ($existingForRequest.Count -gt 0) {
     throw "Tasks already materialized for $WorkRequestId. Existing count: $($existingForRequest.Count)"

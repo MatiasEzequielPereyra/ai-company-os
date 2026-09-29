@@ -5,3 +5,14 @@
 .env
 .env.*
 !.env.example
+# Python local artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
+# npm-managed Python runtime
+.aico-python/
+
+# npm package artifacts
+*.tgz

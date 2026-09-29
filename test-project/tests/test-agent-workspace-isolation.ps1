@@ -27,7 +27,8 @@ try {
         "# AICO-001 - Isolation fixture",
         "",
         "ID: AICO-001",
-        "Status: ACTIVE"
+        "Status: ACTIVE",
+        "Work kind: IMPLEMENTATION"
     ) -join [Environment]::NewLine
 
     [System.IO.File]::WriteAllText(

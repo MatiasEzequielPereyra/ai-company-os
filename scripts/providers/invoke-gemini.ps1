@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)][string]$Prompt,
-    [Parameter(Mandatory = $true)][string]$Context,
+    [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Context,
     [Parameter(Mandatory = $true)][string]$SchemaPath,
     [Parameter(Mandatory = $true)][string]$OutputPath,
     [string]$Model = "gemini-3.5-flash-lite"
