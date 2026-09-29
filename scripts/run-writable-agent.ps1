@@ -14,6 +14,47 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Get-AicoTempPath {
+    if ($env:OS -eq "Windows_NT") {
+        $localAppData = [Environment]::GetFolderPath(
+            [Environment+SpecialFolder]::LocalApplicationData
+        )
+
+        if (-not [string]::IsNullOrWhiteSpace($localAppData)) {
+            $candidate = Join-Path $localAppData "Temp"
+
+            if (-not (Test-Path -LiteralPath $candidate -PathType Container)) {
+                New-Item -ItemType Directory -Force -Path $candidate | Out-Null
+            }
+
+            return (Get-Item -LiteralPath $candidate).FullName
+        }
+    }
+
+    foreach ($candidate in @(
+        $env:TEMP,
+        $env:TMP,
+        [System.IO.Path]::GetTempPath()
+    )) {
+        if ([string]::IsNullOrWhiteSpace($candidate)) {
+            continue
+        }
+
+        try {
+            if (-not (Test-Path -LiteralPath $candidate -PathType Container)) {
+                New-Item -ItemType Directory -Force -Path $candidate | Out-Null
+            }
+
+            return (Get-Item -LiteralPath $candidate).FullName
+        }
+        catch {
+            continue
+        }
+    }
+
+    throw "Unable to resolve a writable temporary directory."
+}
+
 function Read-Field {
     param([string]$Content,[string]$Key)
     $pattern = "(?m)^" + [regex]::Escape($Key) + ":\s*(.+)$"
@@ -556,7 +597,7 @@ $prompt = @(
     "Return only JSON matching the supplied writable change-set schema."
 ) -join [Environment]::NewLine
 
-$tempRoot = Join-Path $env:TEMP "ai-company-os-writable"
+$tempRoot = Join-Path (Get-AicoTempPath) "ai-company-os-writable"
 New-Item -ItemType Directory -Force -Path $tempRoot | Out-Null
 $outputPath = Join-Path $tempRoot ($Id + "-" + [Guid]::NewGuid().ToString("N") + ".json")
 
