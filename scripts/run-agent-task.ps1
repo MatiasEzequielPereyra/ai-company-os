@@ -23,6 +23,20 @@ function Write-Utf8NoBom {
     [System.IO.File]::WriteAllText($Path,$Value,(New-Object System.Text.UTF8Encoding($false)))
 }
 
+function Get-ConcreteStrings {
+    param([object]$Value)
+
+    return @(
+        @($Value) |
+            ForEach-Object {
+                if ($null -ne $_) { ([string]$_).Trim() }
+            } |
+            Where-Object {
+                -not [string]::IsNullOrWhiteSpace($_)
+            }
+    )
+}
+
 if ($PSBoundParameters.ContainsKey("AuthMode") -and -not $PSBoundParameters.ContainsKey("Provider")) {
     if ($AuthMode -eq "ChatGPT") {
         $Provider = "Codex"
@@ -51,7 +65,6 @@ if (-not (Test-Path $lockHelperPath -PathType Leaf)) {
 $taskExecutionLock = Enter-TaskExecutionLock -ProjectPath $root -Id $Id -Operation "ANALYSIS"
 
 try {
-
 $dispatchPath = Join-Path $root ("docs\engineering\dispatch\" + $Id + ".md")
 $rolePath = Join-Path $root (".codex\agents\" + $owner + ".md")
 $schemaPath = Join-Path $root "schemas\agent-result.schema.json"
@@ -96,6 +109,13 @@ $promptLines = @(
     "- BLOCKED means you could not complete the assigned agent task itself because evidence, access, authorization or a prerequisite was materially unavailable.",
     "The blockers field is only for execution blockers that prevented task completion. Product defects, release blockers, security findings and QA failures belong in report_markdown/decisions/recommended_next.",
     "If the report contains a substantive completed assessment and no execution prerequisite prevented delivery, outcome must be COMPLETED and blockers should be NONE.",
+    "",
+    "Before returning COMPLETED, perform the structured completion_check against the original role instructions, task objective, requirements, acceptance criteria and dispatch.",
+    "Do not merely restate or reformulate the task Objective / Requirements / Acceptance Criteria and call that a deliverable.",
+    "COMPLETED requires completion_check.substantive_role_deliverable_produced=true and completion_check.missing_required_outputs must be empty.",
+    "For planning and analysis work, report_markdown must contain concrete analysis, decisions, architecture, plans, contracts, risks, recommendations or other substantive outputs required by the role; metadata/task paraphrase alone is insufficient.",
+    "If a material role-required output was not produced, list it in completion_check.missing_required_outputs and do not return COMPLETED.",
+    "The completion_check must cite concise evidence explaining why the role-owned deliverable is or is not substantively complete.",
     "",
     "Keep the structured result concise and evidence-dense.",
     "Do not reproduce repository files or large code excerpts.",
@@ -236,9 +256,48 @@ $execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $promp
 if (-not (Test-Path $jsonPath)) { throw "Provider runtime did not produce structured output: $jsonPath" }
 
 $result = Get-Content $jsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
-foreach ($field in @("outcome","summary","report_markdown","verification","decisions","blockers","recommended_next")) {
+foreach ($field in @("outcome","summary","report_markdown","verification","decisions","blockers","recommended_next","completion_check")) {
     if ($null -eq $result.PSObject.Properties[$field]) {
         throw "Structured agent result is missing field: $field"
+    }
+}
+
+$completionCheck = $result.completion_check
+
+if ($null -eq $completionCheck) {
+    throw "Structured agent result is missing completion_check."
+}
+
+foreach ($field in @(
+    "substantive_role_deliverable_produced",
+    "missing_required_outputs",
+    "evidence"
+)) {
+    if ($null -eq $completionCheck.PSObject.Properties[$field]) {
+        throw "Structured agent completion_check is missing field: $field"
+    }
+}
+
+$completionMissingOutputs = @(
+    Get-ConcreteStrings -Value $completionCheck.missing_required_outputs
+)
+
+$completionEvidence = ([string]$completionCheck.evidence).Trim()
+
+if ([string]::IsNullOrWhiteSpace($completionEvidence)) {
+    throw "Structured agent completion_check requires concrete evidence."
+}
+
+if ([string]$result.outcome -eq "COMPLETED") {
+    if (-not [bool]$completionCheck.substantive_role_deliverable_produced) {
+        throw "Invalid COMPLETED agent result: substantive role-owned deliverable was not produced."
+    }
+
+    if ($completionMissingOutputs.Count -gt 0) {
+        throw (
+            "Invalid COMPLETED agent result: required role outputs are missing: " +
+            ($completionMissingOutputs -join "; ")
+        )
     }
 }
 
