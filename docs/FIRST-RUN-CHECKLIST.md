@@ -101,6 +101,8 @@ Test-Path Env:GEMINI_API_KEY
 
 Para continuar con ejecución de agentes, al menos un provider debe estar disponible.
 
+> **Límite conocido de provider:** esta prueba valida el lifecycle, no la estabilidad de un modelo concreto. Si un provider devuelve errores como `structured result root must be an object`, `invalid JSON` o `schema`, no cambies estados ni artifacts a mano. Conservá la task en su estado real y consultá `docs/TROUBLESHOOTING.md`. Con OpenRouter, el router gratuito puede seleccionar modelos distintos entre ejecuciones y no todos satisfacen el contrato de structured output.
+
 ## 6. Crear un Work Request de RESEARCH
 
 ```powershell
