@@ -101,7 +101,6 @@ try {
         ".codex\local-runtime-config.json",
         ".codex\workflow-profiles.json",
         ".codex\writable-policy.json",
-        "scripts\update-runtime.ps1",
         "scripts\provider-router.ps1",
         "scripts\validate-engineering-plan-result.ps1",
         "scripts\providers\invoke-codex.ps1",
