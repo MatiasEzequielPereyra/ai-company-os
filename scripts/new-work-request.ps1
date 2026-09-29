@@ -6,6 +6,8 @@ param(
     [ValidateSet("P0","P1","P2","P3")]
     [string]$Priority = "P1",
     [string]$RequestedBy = "user",
+    [ValidateSet("NOT_INFERRED","EXPLICIT")]
+    [string]$ImplementationAuthorization = "NOT_INFERRED",
     [string]$ProjectPath = "."
 )
 
@@ -38,6 +40,13 @@ $now = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 $safeObjective = Safe-OneLine $Objective
 $safeRequestedBy = Safe-OneLine $RequestedBy
 
+if ($ImplementationAuthorization -eq "EXPLICIT") {
+    $permittedScope = "planning, task preparation, and implementation for this objective."
+}
+else {
+    $permittedScope = "planning and task preparation for this objective."
+}
+
 $requestPath = Join-Path $requestDir ($id + ".md")
 $lines = @(
     "# $id - Work Request",
@@ -58,8 +67,8 @@ $lines = @(
     "## Authorization Receipt",
     "",
     "Requested action: $safeObjective",
-    "Permitted scope: planning and task preparation for this objective.",
-    "Implementation authorization: NOT_INFERRED",
+    "Permitted scope: $permittedScope",
+    "Implementation authorization: $ImplementationAuthorization",
     "",
     "## Constraints",
     "",

@@ -6,6 +6,8 @@ param(
     [string]$Priority = "P1",
     [string]$WorkRequestId = "",
     [string]$RequestedBy = "user",
+    [ValidateSet("NOT_INFERRED","EXPLICIT")]
+    [string]$ImplementationAuthorization = "NOT_INFERRED",
     [string]$ProjectPath = ".",
     [switch]$Apply
 )
@@ -47,7 +49,7 @@ if ([string]::IsNullOrWhiteSpace($WorkRequestId)) {
         throw "Provide -Objective when creating a new work request, or provide -WorkRequestId to continue an existing one."
     }
 
-    & $newWorkRequest -ProjectPath $root -Objective $Objective -Type $Type -Priority $Priority -RequestedBy $RequestedBy
+    & $newWorkRequest -ProjectPath $root -Objective $Objective -Type $Type -Priority $Priority -RequestedBy $RequestedBy -ImplementationAuthorization $ImplementationAuthorization
 
     $requestDir = Join-Path $root "docs\engineering\work-requests"
     $latest = Get-ChildItem $requestDir -Filter "WR-*.md" -File |
