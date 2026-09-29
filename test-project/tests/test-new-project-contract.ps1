@@ -16,6 +16,8 @@ try {
         "AGENTS.md",
         ".codex\config.toml",
         ".codex\managed-files.json",
+        ".codex\provider-config.json",
+        ".codex\local-runtime-config.json",
         ".codex\workflow-profiles.json",
         ".codex\policies\workflow-policy.md",
         ".codex\protocols\task-lifecycle.md",
@@ -26,6 +28,12 @@ try {
         "scripts\run-writable-agent.ps1",
         "scripts\resolve-writable-required-files.ps1",
         "scripts\task-execution-lock.ps1",
+        "scripts\provider-router.ps1",
+        "scripts\providers\invoke-ollama.ps1",
+        "scripts\local-runtime\detect-hardware.ps1",
+        "scripts\local-runtime\resolve-local-runtime.ps1",
+        "scripts\local-runtime\initialize-local-runtime.ps1",
+        "scripts\local-runtime\benchmark-ollama.ps1",
         ".codex\writable-policy.json",
         "schemas\writable-change-set.schema.json",
         "schemas\task.schema.json",
@@ -44,6 +52,10 @@ try {
         "scripts/build-agent-context.ps1",
         "scripts/run-agent-task.ps1",
         "scripts/task-execution-lock.ps1",
+        "scripts/provider-router.ps1",
+        "scripts/local-runtime/resolve-local-runtime.ps1",
+        ".codex/provider-config.json",
+        ".codex/local-runtime-config.json",
         "schemas/agent-result.schema.json",
         ".codex/agents/pm.md",
         "docs/PROJECT-BRIEF.md"
@@ -60,6 +72,36 @@ try {
     $generatedHash = (Get-FileHash $generatedValidator -Algorithm SHA256).Hash
     if ($sourceHash -ne $generatedHash) {
         throw "Generated validate-artifacts.ps1 differs from source runtime. Source=$sourceValidator Generated=$generatedValidator"
+    }
+
+    foreach ($relative in @(
+        ".codex\provider-config.json",
+        ".codex\local-runtime-config.json",
+        "scripts\provider-router.ps1",
+        "scripts\local-runtime\detect-hardware.ps1",
+        "scripts\local-runtime\resolve-local-runtime.ps1",
+        "scripts\local-runtime\initialize-local-runtime.ps1",
+        "scripts\local-runtime\benchmark-ollama.ps1"
+    )) {
+        $sourcePath = Join-Path $repoRoot $relative
+        $generatedPath = Join-Path $projectPath $relative
+
+        $sourceRuntimeHash = (Get-FileHash $sourcePath -Algorithm SHA256).Hash
+        $generatedRuntimeHash = (Get-FileHash $generatedPath -Algorithm SHA256).Hash
+
+        if ($sourceRuntimeHash -ne $generatedRuntimeHash) {
+            throw "Generated runtime artifact differs from source: $relative"
+        }
+    }
+
+    $generatedProviderConfig = Get-Content (Join-Path $projectPath ".codex\provider-config.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+    if (@($generatedProviderConfig.analysis_skip_local_profiles_by_role."engineering-manager") -notcontains "LOCAL_CPU_LOW") {
+        throw "Generated project is missing Engineering Manager LOCAL_CPU_LOW skip policy"
+    }
+
+    $generatedLocalRuntimeConfig = Get-Content (Join-Path $projectPath ".codex\local-runtime-config.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($null -eq $generatedLocalRuntimeConfig.profiles.LOCAL_GPU_12GB) {
+        throw "Generated project is missing LOCAL_GPU_12GB hardware profile"
     }
 
     $sourceValidatorContent = Get-Content $sourceValidator -Raw -Encoding UTF8
