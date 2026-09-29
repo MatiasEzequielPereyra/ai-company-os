@@ -4,104 +4,85 @@
 
 > Prueba controlada para aprender el lifecycle sin tocar primero un proyecto importante.
 
-Esta prueba usa un **proyecto descartable** y un Work Request `RESEARCH` con dos planning tasks dependientes:
+Esta prueba usa un **repositorio Git descartable** y un Work Request `RESEARCH` con dos planning tasks dependientes:
 
 ```text
 PM → CTO
 ```
 
-Eso permite comprobar:
+Eso permite comprobar creación de Work Request, dependencias, dispatch, ejecución, Review, QA, Security, final approval y dependency refresh sin convertir esta guía en una prueba de implementación con escritura.
 
-- creación de Work Request;
-- materialización de tasks;
-- readiness;
-- dependencia;
-- dispatch;
-- ejecución con provider;
-- Review;
-- QA;
-- Security;
-- final approval;
-- desbloqueo de una dependencia.
-
-Además evita usar una task de `engineering-manager` como primer ejemplo, porque el Review gate actual también usa ese rol y no garantiza independencia de rol en ese caso.
-
-## 1. Partir desde AI Company OS
-
-Desde el checkout del framework:
+## 1. Comprobar la instalación
 
 ```powershell
-git status --short --branch
-$AiCompanyOsRoot = (Get-Location).Path
+aico version
+aico doctor --system
 ```
 
-Confirmá que estás en el repositorio correcto. Guardamos `$AiCompanyOsRoot` para poder volver a la documentación y test suite del framework después del demo.
+Si `aico` no existe:
 
-## 2. Crear un proyecto descartable
+```powershell
+npm install -g @pereyram/ai-company-os
+```
+
+## 2. Crear un repositorio descartable
 
 ```powershell
 $DemoRoot = Join-Path $env:TEMP "aico-first-run"
 
-if (Test-Path $DemoRoot) {
-  throw "El demo ya existe: $DemoRoot. Elegí otra ruta o revisá el anterior antes de borrarlo."
+if (Test-Path -LiteralPath $DemoRoot) {
+    throw "El demo ya existe: $DemoRoot. Revisalo antes de borrarlo o elegí otra ruta."
 }
 
-.\scripts\new-project.ps1 `
-  -ProjectName "aico-first-run" `
-  -Destination $env:TEMP
-
+New-Item -ItemType Directory -Path $DemoRoot | Out-Null
 Set-Location $DemoRoot
 git init
 ```
 
-Este demo no necesita contener una aplicación real. Su objetivo es aprender el workflow.
+## 3. Instalar AI Company OS en el demo
 
-## 3. Ejecutar intake
+```powershell
+aico install .
+aico use .
+```
+
+Este camino usa el instalador de proyecto existente, que en el `main` actual copia también configuración y componentes de runtime local administrados.
+
+## 4. Ejecutar intake y validar
 
 ```powershell
 .\scripts\initialize-project.ps1
-```
-
-Revisar los artifacts generados bajo:
-
-```text
-docs/product/
-docs/architecture/
-docs/engineering/
-docs/operations/
-```
-
-## 4. Validar la instalación
-
-```powershell
 .\scripts\validate-artifacts.ps1
 ```
 
-Si falla, no continuar. Consultar `docs/TROUBLESHOOTING.md` en el repositorio de AI Company OS.
+Que el intake detecte `UNKNOWN` en un repositorio vacío es esperable.
 
-## 5. Comprobar providers
+## 5. Elegir provider
 
-Codex:
-
-```powershell
-Get-Command codex -ErrorAction SilentlyContinue
-```
-
-OpenRouter:
+El `main` actual es local-first. Si `aico doctor --system` confirma Ollama disponible:
 
 ```powershell
-Test-Path Env:OPENROUTER_API_KEY
+$AicoProvider = "Auto"
 ```
 
-Gemini:
+Si querés usar otro provider configurado, elegilo explícitamente:
 
 ```powershell
-Test-Path Env:GEMINI_API_KEY
+$AicoProvider = "OpenRouter"
 ```
 
-Para continuar con ejecución de agentes, al menos un provider debe estar disponible.
+Providers soportados por el runner actual:
 
-> **Límite conocido de provider:** esta prueba valida el lifecycle, no la estabilidad de un modelo concreto. Si un provider devuelve errores como `structured result root must be an object`, `invalid JSON` o `schema`, no cambies estados ni artifacts a mano. Conservá la task en su estado real y consultá `docs/TROUBLESHOOTING.md`. Con OpenRouter, el router gratuito puede seleccionar modelos distintos entre ejecuciones y no todos satisfacen el contrato de structured output.
+```text
+Codex
+OpenRouter
+Gemini
+Ollama
+DeepSeek
+Grok
+```
+
+> Si un provider devuelve `structured result root must be an object`, `invalid JSON` o un error de schema, no avances estados ni artifacts a mano. Conservá el estado real de la task y consultá `docs/TROUBLESHOOTING.md`.
 
 ## 6. Crear un Work Request de RESEARCH
 
@@ -211,7 +192,7 @@ Confirmar:
 ```powershell
 .\scripts\run-agent-task.ps1 `
   -Id $PmTaskId `
-  -Provider Auto
+  -Provider $AicoProvider
 ```
 
 Si completa correctamente:
@@ -223,7 +204,7 @@ ACTIVE → REVIEW
 ## 13. Ejecutar sus gates
 
 ```powershell
-.\scripts\run-pending-gates.ps1 -Provider Auto
+.\scripts\run-pending-gates.ps1 -Provider $AicoProvider
 ```
 
 Después:
@@ -311,9 +292,9 @@ CTO debería estar `ACTIVE`.
 ```powershell
 .\scripts\run-agent-task.ps1 `
   -Id $CtoTaskId `
-  -Provider Auto
+  -Provider $AicoProvider
 
-.\scripts\run-pending-gates.ps1 -Provider Auto
+.\scripts\run-pending-gates.ps1 -Provider $AicoProvider
 ```
 
 ## 19. Revisar y finalizar CTO
@@ -417,10 +398,4 @@ Si alguno de esos puntos no está claro, consultar:
 - `docs/END-TO-END-WALKTHROUGH.md`;
 - `docs/TROUBLESHOOTING.md`.
 
-Los documentos de usuario viven en el repositorio fuente de AI Company OS. Para volver:
-
-```powershell
-Set-Location $AiCompanyOsRoot
-```
-
-El instalador runtime no copia necesariamente toda la documentación de usuario al proyecto target.
+Los documentos de usuario viven en el repositorio fuente de AI Company OS y en GitHub. El runtime instalado en un proyecto target no copia necesariamente toda la documentación de usuario.
