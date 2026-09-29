@@ -33,7 +33,8 @@ param(
     [string]$Context,
     [string]$SchemaPath,
     [string]$OutputPath,
-    [string]$Model
+    [string]$Model,
+    [int]$TimeoutSeconds
 )
 $payload = @{
     outcome = "COMPLETED"
@@ -74,7 +75,8 @@ param(
     [string]$Context,
     [string]$SchemaPath,
     [string]$OutputPath,
-    [string]$Model
+    [string]$Model,
+    [int]$TimeoutSeconds
 )
 $payload = @{
     outcome = "COMPLETED"
@@ -104,7 +106,8 @@ param(
     [string]$Context,
     [string]$SchemaPath,
     [string]$OutputPath,
-    [string]$Model
+    [string]$Model,
+    [int]$TimeoutSeconds
 )
 $payload = @{
     outcome = "COMPLETED"
@@ -131,7 +134,8 @@ param(
     [string]$Context,
     [string]$SchemaPath,
     [string]$OutputPath,
-    [string]$Model
+    [string]$Model,
+    [int]$TimeoutSeconds
 )
 $payload = @{
     outcome = "COMPLETED"
@@ -184,7 +188,8 @@ param(
     [string]$Context,
     [string]$SchemaPath,
     [string]$OutputPath,
-    [string]$Model
+    [string]$Model,
+    [int]$TimeoutSeconds
 )
 throw ("adapter leaked " + $env:OPENROUTER_API_KEY)
 '@

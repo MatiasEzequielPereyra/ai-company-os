@@ -28,6 +28,21 @@ aico doctor --system
 aico
 ```
 
+When the globally installed npm package is upgraded, existing projects are not
+rewritten automatically. Upgrade only the AI Company OS-managed runtime with:
+
+```powershell
+npm install -g @pereyram/ai-company-os@latest
+cd C:\path\to\your-project
+aico update .
+```
+
+`aico update .` requires the project's `.codex/managed-files.json` ownership
+contract. It updates framework runtime scripts, provider adapters and schemas,
+merges supported runtime configuration, preserves project source/tasks/evidence,
+and refuses unmanaged conflicts instead of overwriting them. Do not use
+`aico install . --force` as a runtime-upgrade substitute.
+
 For the complete installation and usage guide, see [INSTALL-QUICKSTART.txt](./INSTALL-QUICKSTART.txt).
 
 ## Start here

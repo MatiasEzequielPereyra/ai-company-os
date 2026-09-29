@@ -64,6 +64,46 @@ function Get-ConfiguredModel {
     return [string]$property.Value
 }
 
+function Get-ConfiguredTimeoutSeconds {
+    param([object]$Config,[string]$Name)
+
+    $defaults = @{
+        Codex = 180
+        OpenRouter = 240
+        Gemini = 240
+        Ollama = 1800
+        DeepSeek = 300
+        Grok = 300
+    }
+
+    $fallback = if ($defaults.ContainsKey($Name)) {
+        [int]$defaults[$Name]
+    }
+    else {
+        240
+    }
+
+    if ($null -eq $Config -or $null -eq $Config.provider_timeout_seconds) {
+        return $fallback
+    }
+
+    $property = $Config.provider_timeout_seconds.PSObject.Properties[$Name]
+    if ($null -eq $property) {
+        return $fallback
+    }
+
+    $value = 0
+    if (-not [int]::TryParse([string]$property.Value,[ref]$value)) {
+        throw "Invalid provider timeout for $Name. Expected an integer from 1 to 3600 seconds."
+    }
+
+    if ($value -lt 1 -or $value -gt 3600) {
+        throw "Invalid provider timeout for $Name. Expected 1-3600 seconds, found $value."
+    }
+
+    return $value
+}
+
 function Get-ProviderErrorCategory {
     param([string]$Message)
     if ($Message -match "(?i)429|rate.?limit|quota|credits") { return "rate_limit" }
@@ -72,6 +112,22 @@ function Get-ProviderErrorCategory {
     if ($Message -match "(?i)schema|structured|invalid json|contract|semantic") { return "contract" }
     if ($Message -match "(?i)connection|network|transport|5\d\d") { return "transport" }
     return "unknown"
+}
+
+function Write-ProviderEvent {
+    param(
+        [hashtable]$Event,
+        [string]$WarningPrefix = "Provider metrics recording failed"
+    )
+
+    if (-not (Test-Path $metricsWriterPath)) { return }
+
+    try {
+        & $metricsWriterPath -ProjectPath $root -Event $Event | Out-Null
+    }
+    catch {
+        Write-Warning ($WarningPrefix + ": " + $_.Exception.Message)
+    }
 }
 
 $root = (Resolve-Path $ProjectPath).Path
@@ -267,23 +323,34 @@ foreach ($candidate in $attempts) {
         $providerModel = Get-ConfiguredModel -Config $config -Name $candidateName -Role $Role -Workload $Workload
     }
 
+    $providerTimeoutSeconds = Get-ConfiguredTimeoutSeconds -Config $config -Name $candidateName
+
     $attempted++
     $attemptStarted = Get-Date
     Write-Host ""
     Write-Host "Provider attempt: $candidateName" -ForegroundColor Cyan
 
+    Write-ProviderEvent -Event @{
+        event_type = "provider_attempt_started"
+        provider = $candidateName
+        model = $providerModel
+        timeout_seconds = $providerTimeoutSeconds
+        success = $false
+        error_category = ""
+    } -WarningPrefix "Provider start metrics could not be recorded"
+
     try {
         if ($candidateName -eq "Codex") {
-            $result = & $providerScript -ProjectPath $root -Prompt $Prompt -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel
+            $result = & $providerScript -ProjectPath $root -Prompt $Prompt -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel -TimeoutSeconds $providerTimeoutSeconds
         }
         elseif ($candidateName -eq "Ollama") {
-            $result = & $providerScript -Prompt $Prompt -Context $Context -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel -NumCtx ([int]$localRuntime.NumCtx) -NumPredict ([int]$localRuntime.NumPredict)
+            $result = & $providerScript -Prompt $Prompt -Context $Context -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel -NumCtx ([int]$localRuntime.NumCtx) -NumPredict ([int]$localRuntime.NumPredict) -TimeoutSeconds $providerTimeoutSeconds
             $result | Add-Member -NotePropertyName HardwareProfile -NotePropertyValue ([string]$localRuntime.Profile) -Force
             $result | Add-Member -NotePropertyName NumCtx -NotePropertyValue ([int]$localRuntime.NumCtx) -Force
             $result | Add-Member -NotePropertyName NumPredict -NotePropertyValue ([int]$localRuntime.NumPredict) -Force
         }
         else {
-            $result = & $providerScript -Prompt $Prompt -Context $Context -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel
+            $result = & $providerScript -Prompt $Prompt -Context $Context -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel -TimeoutSeconds $providerTimeoutSeconds
         }
 
         if (-not (Test-Path $OutputPath)) {
@@ -297,18 +364,26 @@ foreach ($candidate in $attempts) {
         }
 
         $durationMs = [int][math]::Round(((Get-Date) - $attemptStarted).TotalMilliseconds)
-        if (Test-Path $metricsWriterPath) {
-            try {
-                & $metricsWriterPath -ProjectPath $root -Event @{
-                    event_type = "provider_attempt"
-                    provider = $candidateName
-                    model = [string]$result.Model
-                    duration_ms = $durationMs
-                    success = $true
-                    error_category = ""
-                } | Out-Null
-            } catch { Write-Warning ("Provider succeeded, but metrics recording failed: " + $_.Exception.Message) }
-        }
+
+        Write-ProviderEvent -Event @{
+            event_type = "provider_attempt"
+            provider = $candidateName
+            model = [string]$result.Model
+            duration_ms = $durationMs
+            timeout_seconds = $providerTimeoutSeconds
+            success = $true
+            error_category = ""
+        } -WarningPrefix "Provider success metrics could not be recorded"
+
+        Write-ProviderEvent -Event @{
+            event_type = "provider_attempt_finished"
+            provider = $candidateName
+            model = [string]$result.Model
+            duration_ms = $durationMs
+            timeout_seconds = $providerTimeoutSeconds
+            success = $true
+            error_category = ""
+        } -WarningPrefix "Provider finish metrics could not be recorded"
 
         Write-Host "Provider succeeded: $candidateName" -ForegroundColor Green
         return $result
@@ -316,19 +391,48 @@ foreach ($candidate in $attempts) {
     catch {
         $safe = Sanitize-ProviderError -Message $_.Exception.Message
         $errors += ($candidateName + ": " + $safe)
-        $durationMs = [int][math]::Round(((Get-Date) - $attemptStarted).TotalMilliseconds)
-        if (Test-Path $metricsWriterPath) {
-            try {
-                & $metricsWriterPath -ProjectPath $root -Event @{
-                    event_type = "provider_attempt"
-                    provider = $candidateName
-                    model = $providerModel
-                    duration_ms = $durationMs
-                    success = $false
-                    error_category = (Get-ProviderErrorCategory -Message $safe)
-                } | Out-Null
-            } catch { Write-Warning ("Provider failure metrics could not be recorded: " + $_.Exception.Message) }
+
+        # A failed or timed-out provider must never leave a consumable structured
+        # result behind, regardless of whether the adapter wrote a partial file.
+        if (Test-Path $OutputPath) {
+            Remove-Item $OutputPath -Force -ErrorAction SilentlyContinue
         }
+
+        $durationMs = [int][math]::Round(((Get-Date) - $attemptStarted).TotalMilliseconds)
+        $errorCategory = Get-ProviderErrorCategory -Message $safe
+
+        if ($errorCategory -eq "timeout") {
+            Write-ProviderEvent -Event @{
+                event_type = "provider_timeout"
+                provider = $candidateName
+                model = $providerModel
+                duration_ms = $durationMs
+                timeout_seconds = $providerTimeoutSeconds
+                success = $false
+                error_category = "timeout"
+            } -WarningPrefix "Provider timeout metrics could not be recorded"
+        }
+
+        Write-ProviderEvent -Event @{
+            event_type = "provider_attempt"
+            provider = $candidateName
+            model = $providerModel
+            duration_ms = $durationMs
+            timeout_seconds = $providerTimeoutSeconds
+            success = $false
+            error_category = $errorCategory
+        } -WarningPrefix "Provider failure metrics could not be recorded"
+
+        Write-ProviderEvent -Event @{
+            event_type = "provider_attempt_finished"
+            provider = $candidateName
+            model = $providerModel
+            duration_ms = $durationMs
+            timeout_seconds = $providerTimeoutSeconds
+            success = $false
+            error_category = $errorCategory
+        } -WarningPrefix "Provider finish metrics could not be recorded"
+
         Write-Host "Provider failed: $candidateName" -ForegroundColor Yellow
         Write-Host $safe -ForegroundColor DarkYellow
 

@@ -59,6 +59,32 @@ try {
     process.exit(0);
   }
 
+  if (command === "update") {
+    const target = path.resolve(
+      args[1] || process.cwd()
+    );
+
+    // Validate/update the package-owned Python runtime before mutating the
+    // target project. Updating a project must not also change active-project
+    // selection as an unrelated side effect.
+    ensureVenv();
+
+    runPowerShell(
+      "scripts/update-runtime.ps1",
+      [
+        "-TargetProject",
+        target
+      ]
+    );
+
+    console.log("");
+    console.log(
+      `AI Company OS runtime updated: ${target}`
+    );
+
+    process.exit(0);
+  }
+
   if (command === "new") {
     const projectName = args[1];
 

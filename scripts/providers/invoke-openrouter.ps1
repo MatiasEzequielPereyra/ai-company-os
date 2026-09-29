@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory = $true)][string]$Context,
     [Parameter(Mandatory = $true)][string]$SchemaPath,
     [Parameter(Mandatory = $true)][string]$OutputPath,
-    [string]$Model = "openrouter/free"
+    [string]$Model = "openrouter/free",
+    [ValidateRange(1,3600)][int]$TimeoutSeconds = 240
 )
 
 $ErrorActionPreference = "Stop"
@@ -156,7 +157,7 @@ $maxAttempts = 3
 
 for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
     try {
-        $response = Invoke-RestMethod -Method Post -Uri "https://openrouter.ai/api/v1/chat/completions" -Headers $headers -ContentType "application/json; charset=utf-8" -Body $bodyBytes -TimeoutSec 240
+        $response = Invoke-RestMethod -Method Post -Uri "https://openrouter.ai/api/v1/chat/completions" -Headers $headers -ContentType "application/json; charset=utf-8" -Body $bodyBytes -TimeoutSec $TimeoutSeconds
         break
     }
     catch {
