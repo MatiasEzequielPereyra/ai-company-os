@@ -25,6 +25,7 @@ try {
         "scripts\new-agent-workspace.ps1",
         "scripts\run-writable-agent.ps1",
         "scripts\resolve-writable-required-files.ps1",
+        "scripts\task-execution-lock.ps1",
         ".codex\writable-policy.json",
         "schemas\writable-change-set.schema.json",
         "schemas\task.schema.json",
@@ -42,6 +43,7 @@ try {
     foreach ($relative in @(
         "scripts/build-agent-context.ps1",
         "scripts/run-agent-task.ps1",
+        "scripts/task-execution-lock.ps1",
         "schemas/agent-result.schema.json",
         ".codex/agents/pm.md",
         "docs/PROJECT-BRIEF.md"
