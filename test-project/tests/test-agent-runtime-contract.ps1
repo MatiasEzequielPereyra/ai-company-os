@@ -12,6 +12,7 @@ $required = @(
     "scripts\build-agent-context.ps1",
     "scripts\resolve-writable-required-files.ps1",
     "scripts\task-execution-lock.ps1",
+    "scripts\validate-engineering-plan-result.ps1",
     "scripts\providers\invoke-codex.ps1",
     "scripts\providers\invoke-openrouter.ps1",
     "scripts\providers\invoke-gemini.ps1",
@@ -29,6 +30,7 @@ $required = @(
     "scripts\materialize-engineering-backlog.ps1",
     ".codex\provider-config.json",
     "schemas\agent-result.schema.json",
+    "schemas\engineering-plan-result.schema.json",
     "schemas\writable-change-set.schema.json",
     ".codex\writable-policy.json",
     "schemas\review-result.schema.json",
@@ -177,6 +179,57 @@ if ($runner -notmatch 'analysis_context_max_chars') {
 }
 if ($runner -notmatch 'structured result concise|Keep the structured result concise') {
     throw "Agent runner must instruct schema-critical analysis results to stay concise"
+}
+if ($runner -notmatch 'engineering-plan-result\.schema\.json') {
+    throw "Engineering Manager planning must use the dedicated structured result schema"
+}
+if ($runner -notmatch 'validate-engineering-plan-result\.ps1') {
+    throw "Engineering Manager planning must use the semantic plan validator"
+}
+if ($runner -notmatch 'SemanticValidatorPath') {
+    throw "Engineering Manager semantic validation must run inside provider routing"
+}
+if ($runner -notmatch 'execution-plan\.json') {
+    throw "Engineering Manager planning must persist a canonical structured execution plan"
+}
+
+if ($providerRouter -notmatch 'SemanticValidatorPath') {
+    throw "Provider router must accept a semantic validator"
+}
+if ($providerRouter -notmatch '& \$SemanticValidatorPath -JsonPath') {
+    throw "Provider router must execute semantic validation before accepting provider output"
+}
+
+$backlogGenerator = Get-Content (Join-Path $repoRoot "scripts\generate-engineering-backlog.ps1") -Raw
+
+if ($backlogGenerator -notmatch 'execution-plan\.json') {
+    throw "Engineering backlog generation must consume the canonical structured execution plan"
+}
+if ($backlogGenerator -notmatch 'authoritative downstream scope') {
+    throw "Canonical structured execution plan must be authoritative downstream scope"
+}
+
+$engineeringPlanSchema = Get-Content (Join-Path $repoRoot "schemas\engineering-plan-result.schema.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+
+if (@($engineeringPlanSchema.required) -notcontains "executable_work") {
+    throw "Engineering plan result schema must require executable_work"
+}
+if ([int]$engineeringPlanSchema.properties.executable_work.maxItems -lt 1) {
+    throw "Engineering plan result schema must bound executable_work"
+}
+
+$engineeringPlanValidator = Get-Content (Join-Path $repoRoot "scripts\validate-engineering-plan-result.ps1") -Raw
+
+foreach ($signal in @(
+    'contains no real IMPLEMENTATION work',
+    'cannot depend on itself',
+    'unknown dependency',
+    'control-plane area',
+    'recursive meta-implementation'
+)) {
+    if ($engineeringPlanValidator -notmatch [regex]::Escape($signal)) {
+        throw "Engineering plan semantic validator missing protection: $signal"
+    }
 }
 $writableRunner = Get-Content (Join-Path $repoRoot "scripts\run-writable-agent.ps1") -Raw
 if ($writableRunner -notmatch 'ValidateSet\("Auto","Ollama","OpenRouter","Gemini"\)') {
@@ -365,6 +418,7 @@ $parseTargets = @(
     "scripts\run-active-agents.ps1",
     "scripts\run-writable-agent.ps1",
     "scripts\provider-router.ps1",
+    "scripts\validate-engineering-plan-result.ps1",
     "scripts\build-agent-context.ps1",
     "scripts\providers\invoke-codex.ps1",
     "scripts\providers\invoke-openrouter.ps1",
