@@ -59,8 +59,8 @@ try {
         throw "Installed package root not found: $installedPackageRoot"
     }
 
-    $repoFull = [System.IO.Path]::GetFullPath($repoRoot).TrimEnd([char[]]@("\\","/"))
-    $installedFull = [System.IO.Path]::GetFullPath($installedPackageRoot).TrimEnd([char[]]@("\\","/"))
+    $repoFull = [System.IO.Path]::GetFullPath($repoRoot).TrimEnd([char[]]@('\','/'))
+    $installedFull = [System.IO.Path]::GetFullPath($installedPackageRoot).TrimEnd([char[]]@('\','/'))
 
     if ([string]::Equals(
         $repoFull,
