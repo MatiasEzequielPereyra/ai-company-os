@@ -15,12 +15,28 @@
     },
     "findings": {
       "type": "string"
+    },
+    "security_relevant": {
+      "type": "boolean",
+      "description": "Whether this deliverable has an additional security-relevant aspect that this gate can meaningfully verify."
+    },
+    "deliverable_security_defects": {
+      "type": "array",
+      "description": "Concrete security-quality defects of the deliverable itself. Future product security work or vulnerabilities documented by a valid report are not deliverable security defects.",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1000
+      },
+      "maxItems": 30
     }
   },
   "required": [
     "outcome",
     "evidence",
-    "findings"
+    "findings",
+    "security_relevant",
+    "deliverable_security_defects"
   ],
   "additionalProperties": false
 }
