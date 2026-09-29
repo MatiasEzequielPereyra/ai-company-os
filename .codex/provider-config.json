@@ -53,5 +53,13 @@
     "engineering-manager": [
       "LOCAL_CPU_LOW"
     ]
+  },
+  "provider_timeout_seconds": {
+    "Codex": 180,
+    "OpenRouter": 240,
+    "Gemini": 240,
+    "Ollama": 1800,
+    "DeepSeek": 300,
+    "Grok": 300
   }
 }

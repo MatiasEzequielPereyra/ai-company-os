@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Context,
     [Parameter(Mandatory = $true)][string]$SchemaPath,
     [Parameter(Mandatory = $true)][string]$OutputPath,
-    [string]$Model = "grok-4.7"
+    [string]$Model = "grok-4.7",
+    [ValidateRange(1,3600)][int]$TimeoutSeconds = 300
 )
 
 $ErrorActionPreference = "Stop"
@@ -97,7 +98,7 @@ $maxAttempts = 3
 
 for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
     try {
-        $response = Invoke-RestMethod -Method Post -Uri "https://api.x.ai/v1/chat/completions" -Headers $headers -ContentType "application/json; charset=utf-8" -Body $bodyBytes -TimeoutSec 300
+        $response = Invoke-RestMethod -Method Post -Uri "https://api.x.ai/v1/chat/completions" -Headers $headers -ContentType "application/json; charset=utf-8" -Body $bodyBytes -TimeoutSec $TimeoutSeconds
         break
     }
     catch {
