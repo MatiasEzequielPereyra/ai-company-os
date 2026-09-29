@@ -4,6 +4,32 @@ AI Company OS is a **PowerShell-first engineering workflow framework for coordin
 
 It is not an autonomous software company and it is not a replacement for Git, CI, code review, or human authorization. Its purpose is to make AI-assisted engineering work **durable, inspectable, repeatable, and gated** instead of leaving important decisions and execution state inside chat history.
 
+## Install
+
+Install AI Company OS globally from npm:
+
+```powershell
+npm install -g @pereyram/ai-company-os
+```
+
+Start the CLI:
+
+```powershell
+aico
+```
+
+Quick start for an existing repository:
+
+```powershell
+cd C:\path\to\your-project
+aico install .
+aico use .
+aico doctor --system
+aico
+```
+
+For the complete installation and usage guide, see [INSTALL-QUICKSTART.txt](./INSTALL-QUICKSTART.txt).
+
 ## What problem it solves
 
 AI coding agents are useful at implementation and analysis, but multi-step work becomes unreliable when:
