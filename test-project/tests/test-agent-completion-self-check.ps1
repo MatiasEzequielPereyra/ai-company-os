@@ -59,6 +59,11 @@ try {
         -Force
 
     Copy-Item `
+        (Join-Path $repoRoot "scripts\task-execution-lock.ps1") `
+        (Join-Path $tempRoot "scripts\task-execution-lock.ps1") `
+        -Force
+
+    Copy-Item `
         (Join-Path $repoRoot "schemas\agent-result.schema.json") `
         (Join-Path $tempRoot "schemas\agent-result.schema.json") `
         -Force
