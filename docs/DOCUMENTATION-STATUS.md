@@ -56,6 +56,7 @@ Estado: living documentation / review candidate
 | Merge/reconciliation automático | Pendiente | No tratar como estable |
 | Deployment autónomo | No soportado implícitamente | Requiere autoridad externa/expresa |
 | Provider timeout configurable por config | Pendiente | main usa valores en adapters; no contrato provider_timeout_seconds |
+| First-run humano con provider externo | Validado con hallazgos | PM → CTO completado hasta DONE; ver Documentation Usability Review |
 
 ## Criterio para actualizar esta tabla
 
@@ -120,3 +121,41 @@ Resolving the runtime policy itself requires an explicit architecture/product de
 ## Windows PowerShell 5.1 / UTF-8
 
 Documentación revisada para el caso real de lectura desde Windows PowerShell 5.1. Los Markdown UTF-8 sin BOM pueden verse con caracteres corruptos si se usa `Get-Content` sin `-Encoding UTF8`. La guía de First Run y Quick Start incluyen la instrucción explícita.
+
+## Live first-run validation — 2026-09-29
+
+Se completó un first-run real en un proyecto descartable siguiendo el flujo documentado:
+
+```text
+RESEARCH
+→ PM
+→ Review
+→ QA
+→ Security
+→ final approval
+→ CTO
+→ Review
+→ QA
+→ Security
+→ final approval
+→ DONE
+```
+
+Resultado documental:
+
+```text
+Lifecycle explicado por el manual: VALIDADO
+Dependency unlock PM → CTO: VALIDADO
+Final approval separado de Security: VALIDADO
+Provider externo real: VALIDADO CON HALLAZGOS
+```
+
+Hallazgos de runtime/provider que no deben confundirse con defectos conceptuales del manual:
+
+- el baseline actual permite context packs externos demasiado grandes para algunos modelos;
+- `openrouter/free` puede seleccionar un modelo incompatible con el structured-output contract;
+- un provider puede responder HTTP correctamente y aun devolver un root JSON `null`;
+- AI Company OS rechaza correctamente ese resultado inválido;
+- la selección/budget de provider necesita hardening independiente de la documentación.
+
+El manual remite estos casos a Troubleshooting y no intenta convertir el First Run en una sesión de debugging de providers.
