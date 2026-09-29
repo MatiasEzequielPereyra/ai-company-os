@@ -28,7 +28,8 @@
         ".codex/local-runtime-config.json",
         ".codex/workflow-profiles.json",
         ".codex/writable-policy.json",
-        "npm-bin",
+        "npm-bin/aico.js",
+        "npm-bin/bootstrap.js",
         "schemas",
         "scripts",
         "src",
@@ -36,6 +37,7 @@
         "tasks/README.md",
         "pyproject.toml",
         "AGENTS.md",
+        "INSTALL-QUICKSTART.txt",
         "LICENSE",
         "README.md"
     ],
