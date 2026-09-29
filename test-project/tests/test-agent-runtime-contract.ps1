@@ -214,6 +214,18 @@ $engineeringPlanSchema = Get-Content (Join-Path $repoRoot "schemas\engineering-p
 if (@($engineeringPlanSchema.required) -notcontains "executable_work") {
     throw "Engineering plan result schema must require executable_work"
 }
+if (@($engineeringPlanSchema.required) -notcontains "completion_check") {
+    throw "Engineering plan result schema must require completion_check"
+}
+foreach ($field in @(
+    "substantive_role_deliverable_produced",
+    "missing_required_outputs",
+    "evidence"
+)) {
+    if (@($engineeringPlanSchema.properties.completion_check.required) -notcontains $field) {
+        throw "Engineering plan completion_check missing required field: $field"
+    }
+}
 if ([int]$engineeringPlanSchema.properties.executable_work.maxItems -lt 1) {
     throw "Engineering plan result schema must bound executable_work"
 }
