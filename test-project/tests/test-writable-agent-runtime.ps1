@@ -241,6 +241,55 @@ The prior writable implementation needs correction.
         throw "Writable execution evidence artifact was not generated."
     }
 
+    $primaryReportPath = Join-Path `
+        $fixtureRepo `
+        "docs\engineering\agent-reports\AICO-001.md"
+
+    if (-not (Test-Path $primaryReportPath -PathType Leaf)) {
+        throw "Successful writable execution did not publish the canonical primary agent report."
+    }
+
+    $primaryReport = Get-Content `
+        $primaryReportPath `
+        -Raw `
+        -Encoding UTF8
+
+    foreach ($requiredReportEvidence in @(
+        "Owner: frontend",
+        "Work kind: IMPLEMENTATION",
+        "# Implementation - Safe fixture change.",
+        "docs/engineering/writable-evidence/AICO-001.md"
+    )) {
+        if ($primaryReport -notmatch [regex]::Escape($requiredReportEvidence)) {
+            throw (
+                "Primary writable agent report is missing required evidence: " +
+                $requiredReportEvidence
+            )
+        }
+    }
+
+    $resultPath = Join-Path `
+        $fixtureRepo `
+        "docs\engineering\results\AICO-001-result-001.md"
+
+    if (-not (Test-Path $resultPath -PathType Leaf)) {
+        throw "Successful writable execution did not create its task result."
+    }
+
+    $resultText = Get-Content `
+        $resultPath `
+        -Raw `
+        -Encoding UTF8
+
+    if (
+        $resultText -notmatch
+        [regex]::Escape(
+            "docs/engineering/agent-reports/AICO-001.md"
+        )
+    ) {
+        throw "Writable task result does not reference the canonical primary agent report."
+    }
+
     Set-FakeResult @{
         outcome = "COMPLETED"
         summary = "Traversal attempt"
