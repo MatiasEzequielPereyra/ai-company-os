@@ -36,18 +36,27 @@ try {
         throw "npm pack --dry-run returned no package metadata."
     }
 
-    $files = @($pack[0].files | ForEach-Object { [string]$_.path })
+    $files = @($pack[0].files | ForEach-Object { ([string]$_.path).Replace("\","/") })
 
     foreach ($relative in @(
         "npm-bin/aico.js",
         "npm-bin/bootstrap.js",
         "scripts/update-runtime.ps1",
         "scripts/provider-router.ps1",
+        "scripts/run-agent-task.ps1",
+        "scripts/run-gate-agent.ps1",
+        "scripts/run-writable-agent.ps1",
         "scripts/validate-engineering-plan-result.ps1",
         "scripts/providers/invoke-codex.ps1",
         "scripts/providers/invoke-ollama.ps1",
+        "scripts/providers/invoke-openrouter.ps1",
+        "scripts/providers/invoke-gemini.ps1",
+        "scripts/providers/invoke-deepseek.ps1",
+        "scripts/providers/invoke-xai.ps1",
+        "scripts/local-runtime/resolve-local-runtime.ps1",
         ".codex/provider-config.json",
         ".codex/local-runtime-config.json",
+        ".codex/workflow-profiles.json",
         ".codex/writable-policy.json",
         "schemas/agent-result.schema.json",
         "schemas/engineering-plan-result.schema.json",
@@ -58,12 +67,81 @@ try {
         }
     }
 
-    foreach ($unexpected in @(
-        "test-project/tests/test-provider-timeout.ps1",
-        "test-project/tests/test-update-runtime-contract.ps1"
-    )) {
-        if ($files -contains $unexpected) {
-            throw "npm package unexpectedly includes repository-only test artifact: $unexpected"
+    $allowedExact = @(
+        "package.json",
+        "README.md",
+        "LICENSE",
+        "AGENTS.md",
+        "pyproject.toml",
+        "tasks/README.md"
+    )
+
+    $allowedPrefixes = @(
+        ".agents/",
+        ".codex/agents/",
+        ".codex/policies/",
+        ".codex/protocols/",
+        ".codex/templates/",
+        ".codex/workflows/",
+        "npm-bin/",
+        "schemas/",
+        "scripts/",
+        "src/",
+        "templates/"
+    )
+
+    $allowedCodexFiles = @(
+        ".codex/config.toml",
+        ".codex/provider-config.json",
+        ".codex/local-runtime-config.json",
+        ".codex/workflow-profiles.json",
+        ".codex/writable-policy.json"
+    )
+
+    foreach ($relative in $files) {
+        $allowed = (
+            $allowedExact -contains $relative -or
+            $allowedCodexFiles -contains $relative
+        )
+
+        if (-not $allowed) {
+            foreach ($prefix in $allowedPrefixes) {
+                if ($relative.StartsWith(
+                    $prefix,
+                    [System.StringComparison]::OrdinalIgnoreCase
+                )) {
+                    $allowed = $true
+                    break
+                }
+            }
+        }
+
+        if (-not $allowed) {
+            throw "npm package contains undeclared repository artifact: $relative"
+        }
+    }
+
+    $forbiddenPatterns = @(
+        '(?i)(^|/)\.git($|/)',
+        '(?i)(^|/)\.github($|/)',
+        '(?i)(^|/)\.env($|[./])',
+        '(?i)(^|/)node_modules($|/)',
+        '(?i)(^|/)\.aico-python($|/)',
+        '(?i)(^|/)(\.venv|venv)($|/)',
+        '(?i)(^|/)coverage($|/)',
+        '(?i)(^|/)\.pytest_cache($|/)',
+        '(?i)(^|/)__pycache__($|/)',
+        '(?i)^test-project/',
+        '(?i)^tasks/AICO-',
+        '(?i)^\.codex/state/',
+        '(?i)\.(pem|p12|pfx|key)$'
+    )
+
+    foreach ($relative in $files) {
+        foreach ($pattern in $forbiddenPatterns) {
+            if ($relative -match $pattern) {
+                throw "npm package contains forbidden artifact: $relative"
+            }
         }
     }
 
@@ -104,7 +182,7 @@ try {
             throw "npm pack did not create the expected tarball: $tarballPath"
         }
 
-        & $npmCommand.Source install --prefix $installRoot --ignore-scripts $tarballPath
+        & $npmCommand.Source install --prefix $installRoot --ignore-scripts --no-audit --no-fund $tarballPath
         if ($LASTEXITCODE -ne 0) {
             throw "Installing the packed tarball failed with exit code $LASTEXITCODE."
         }
@@ -116,7 +194,15 @@ try {
             "scripts\provider-router.ps1",
             "scripts\validate-engineering-plan-result.ps1",
             "scripts\providers\invoke-codex.ps1",
-            ".codex\provider-config.json"
+            "scripts\providers\invoke-ollama.ps1",
+            "scripts\providers\invoke-openrouter.ps1",
+            "scripts\providers\invoke-gemini.ps1",
+            "scripts\providers\invoke-deepseek.ps1",
+            "scripts\providers\invoke-xai.ps1",
+            "scripts\local-runtime\resolve-local-runtime.ps1",
+            ".codex\provider-config.json",
+            ".codex\workflow-profiles.json",
+            "schemas\engineering-plan-result.schema.json"
         )) {
             if (-not (Test-Path (Join-Path $installedPackageRoot $relative) -PathType Leaf)) {
                 throw "Installed npm tarball is missing required artifact: $relative"
@@ -136,7 +222,10 @@ try {
         }
     }
 
-    Write-Host "PASS: npm test, npm pack inspection, and isolated tarball installation" -ForegroundColor Green
+    Write-Host (
+        "PASS: npm test, package allowlist/denylist inspection, " +
+        "actual tarball creation, and isolated tarball installation"
+    ) -ForegroundColor Green
 }
 finally {
     Pop-Location
