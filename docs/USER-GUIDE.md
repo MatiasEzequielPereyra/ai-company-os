@@ -704,7 +704,7 @@ El sistema intenta mantener el fallo dentro del límite del provider y evita ace
 
 Con `Provider Auto`, el router puede utilizar el orden de providers configurado.
 
-En la rama `main`, OpenRouter y Gemini utilizan actualmente un timeout de 240 segundos por request y hasta 3 intentos para errores transitorios. Esa configuración está implementada en los adapters y todavía no debe confundirse con una propiedad estable `provider_timeout_seconds` en `.codex/provider-config.json`.
+Los adapters API mantienen sus propios contratos de timeout/retry. No asumir que una propiedad `provider_timeout_seconds` en `.codex/provider-config.json` sea el contrato canónico salvo que el runtime actual la consuma explícitamente.
 
 ## 24. Recuperación entre sesiones
 
@@ -739,15 +739,19 @@ Para ejecutar el smoke suite local:
 
 La suite incluye una prueba end-to-end determinística que lleva un cambio real por el lifecycle de resultados, review, QA, security y aprobación final.
 
-## 26. TUI / CLI visual
+## 26. CLI / TUI
 
-🚧 **En desarrollo.**
+La CLI `aico` forma parte de `main` y se distribuye mediante npm.
 
-El repositorio contiene ramas dedicadas a TUI/CLI, pero esa interfaz todavía no forma parte estable de `main`.
+```powershell
+npm install -g @pereyram/ai-company-os
+aico
+aico shell
+```
 
-Por esa razón, este manual no publica todavía un comando de instalación o arranque de TUI como interfaz oficial.
+La CLI cubre instalación, selección de proyecto, diagnóstico, estado, tareas, workflow, actividad y navegación interactiva.
 
-Cuando la TUI sea integrada y pase las validaciones E2E, esta sección deberá reemplazarse por un tutorial completo.
+Los scripts PowerShell siguen siendo la interfaz de bajo nivel para lifecycle completo, providers, gates y operaciones avanzadas.
 
 ## 27. Flujo recomendado para un usuario nuevo
 
