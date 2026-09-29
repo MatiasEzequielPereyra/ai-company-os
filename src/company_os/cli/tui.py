@@ -825,6 +825,111 @@ class AICompanyTUI(App):
     #agent-detail {
         width: 100%;
     }
+        Screen.hacker-mode {
+        background: $background;
+        color: $foreground;
+    }
+
+    Screen.hacker-mode Header {
+        background: $background;
+        color: $accent;
+        text-style: bold;
+    }
+
+    Screen.hacker-mode Footer {
+        background: $background;
+        color: $foreground;
+    }
+
+    Screen.hacker-mode #nav {
+        width: 31;
+        min-width: 27;
+        border: solid $accent;
+        background: $background;
+    }
+
+    Screen.hacker-mode #content-scroll {
+        border: solid $accent;
+        background: $background;
+        padding: 0 1;
+    }
+
+    Screen.hacker-mode #content-title {
+        color: $accent;
+        background: $background;
+        text-style: bold;
+        margin-bottom: 0;
+        padding: 0 1;
+    }
+
+    Screen.hacker-mode ListView,
+    Screen.hacker-mode ListItem,
+    Screen.hacker-mode Static {
+        background: $background;
+    }
+
+    Screen.hacker-mode ListView > ListItem {
+        height: auto;
+        padding: 0 1;
+        color: $foreground;
+        background: $background;
+    }
+
+    Screen.hacker-mode ListView > ListItem Label {
+        color: $foreground;
+        background: $background;
+    }
+
+    Screen.hacker-mode ListView > ListItem.-hovered,
+    Screen.hacker-mode ListView > ListItem.-hovered Label {
+        color: white;
+        background: $secondary;
+        text-style: bold;
+    }
+
+    Screen.hacker-mode ListView > ListItem.-highlight,
+    Screen.hacker-mode ListView:focus > ListItem.-highlight,
+    Screen.hacker-mode ListView > ListItem.-highlight Label,
+    Screen.hacker-mode ListView:focus > ListItem.-highlight Label {
+        color: white;
+        background: $secondary;
+        text-style: bold;
+    }
+
+    Screen.hacker-mode Input {
+        color: $foreground;
+        background: $background;
+        border: solid $secondary;
+    }
+
+    Screen.hacker-mode Input:focus {
+        color: $accent;
+        background: $background;
+        border: solid $accent;
+    }
+
+    Screen.hacker-mode #task-list,
+    Screen.hacker-mode #agent-list,
+    Screen.hacker-mode #projects-list,
+    Screen.hacker-mode #work-requests-list,
+    Screen.hacker-mode #proposal-list,
+    Screen.hacker-mode #help-sections,
+    Screen.hacker-mode #help-content-scroll {
+        border: solid $accent;
+        background: $background;
+    }
+
+    Screen.hacker-mode #tasks-heading,
+    Screen.hacker-mode #agents-heading,
+    Screen.hacker-mode #projects-heading,
+    Screen.hacker-mode #project-path-heading,
+    Screen.hacker-mode #work-requests-heading,
+    Screen.hacker-mode #proposal-heading {
+        color: $accent;
+        background: $background;
+        text-style: bold;
+    }
+    
     """
 
     BINDINGS = [
