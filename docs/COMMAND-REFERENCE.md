@@ -20,6 +20,49 @@ Los IDs `WR-XXX` y `AICO-XXX` son placeholders. Reemplazarlos por IDs reales ant
 
 ---
 
+# CLI `aico`
+
+La instalación soportada del usuario final se distribuye por npm:
+
+```powershell
+npm install -g @pereyram/ai-company-os
+```
+
+Comandos principales:
+
+```powershell
+aico version
+aico --help
+aico doctor --system
+aico install .
+aico use .
+aico current
+aico status
+aico tasks
+aico workflow
+aico activity
+aico handoffs
+aico doctor
+aico
+aico shell
+```
+
+Crear un proyecto:
+
+```powershell
+aico new MiProyecto C:\Proyectos
+```
+
+Actualizar el paquete:
+
+```powershell
+npm install -g @pereyram/ai-company-os@latest
+```
+
+Los comandos PowerShell siguientes son el contrato operativo de bajo nivel y siguen siendo necesarios para lifecycle completo y operaciones avanzadas.
+
+---
+
 # Instalación y proyecto
 
 ## initialize-project.ps1 — [APPLY]
@@ -60,7 +103,9 @@ Parámetros:
 -Force           reemplaza componentes existentes cuando el instalador lo permite
 ```
 
-Usar `-Force` con cuidado: puede reemplazar archivos de configuración, roles, scripts y schemas ya presentes en el proyecto target. Hacerlo sobre una branch limpia y revisar `git diff`.
+Usar `-Force` con cuidado: puede reemplazar archivos administrados ya presentes en el proyecto target. El instalador mantiene `.codex/managed-files.json`, pero no realiza merge semántico. Hacerlo sobre una branch limpia y revisar `git diff`.
+
+Para usuarios del paquete npm, el equivalente recomendado es `aico install .` y `aico install . --force`.
 
 ---
 
@@ -364,7 +409,7 @@ Parámetros:
 ```text
 -ProjectPath
 -Parallel
--Provider      Auto | Codex | OpenRouter | Gemini
+-Provider      Auto | Codex | Ollama | OpenRouter | Gemini | DeepSeek | Grok
 -Model
 -AuthMode      Auto | ChatGPT | ApiKey
 ```
@@ -373,7 +418,9 @@ Notas:
 
 - `-Parallel` usa un checkout compartido y está restringido al runner de análisis.
 - `AuthMode ApiKey` legacy está deshabilitado cuando implicaría el flujo OpenAI API anterior.
-- Para OpenRouter/Gemini usar `-Provider` explícito o `Auto`.
+- El `Auto` actual es local-first y usa `auto_order` de `.codex/provider-config.json` (por defecto Ollama).
+- OpenRouter, Gemini, DeepSeek y Grok pueden seleccionarse explícitamente cuando sus credenciales están configuradas.
+- `allow_paid_fallback=false` evita que DeepSeek/Grok aparezcan silenciosamente como fallback pago en Auto.
 
 ---
 
@@ -392,7 +439,7 @@ Parámetros:
 ```text
 -Id           obligatorio
 -ProjectPath
--Provider     Auto | Codex | OpenRouter | Gemini
+-Provider     Auto | Codex | Ollama | OpenRouter | Gemini | DeepSeek | Grok
 -Model
 -AuthMode
 ```
@@ -445,7 +492,7 @@ Parámetros:
 
 ```text
 -ProjectPath
--Provider     Auto | Codex | OpenRouter | Gemini
+-Provider     Auto | Codex | Ollama | OpenRouter | Gemini | DeepSeek | Grok
 -Model
 ```
 
@@ -476,7 +523,7 @@ Parámetros:
 -Id          obligatorio
 -Gate        Review | QA | Security
 -ProjectPath
--Provider    Auto | Codex | OpenRouter | Gemini
+-Provider    Auto | Codex | Ollama | OpenRouter | Gemini | DeepSeek | Grok
 -Model
 ```
 
@@ -590,7 +637,7 @@ Parámetros:
 ```text
 -SourceTaskId          obligatorio
 -ProjectPath
--Provider              Auto | Codex | OpenRouter | Gemini
+-Provider              Auto | Codex | Ollama | OpenRouter | Gemini | DeepSeek | Grok
 -Model
 -ReuseExistingOutput
 ```
