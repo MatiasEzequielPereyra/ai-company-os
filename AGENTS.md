@@ -76,11 +76,11 @@ This repository uses Codex multi-agent roles.
 
 The primary orchestrator is the CEO.
 
-Available specialized task-owner roles include:
+Available specialized roles include:
 
 - pm
 - cto
-- engineering-manager
+- engineering_manager
 - backend
 - frontend
 - devops
@@ -89,12 +89,11 @@ Available specialized task-owner roles include:
 
 ### Engineering Manager identifier note
 
-AI Company OS currently uses two identifiers for the same conceptual role:
+The Codex agent registration key is `engineering_manager`.
 
-- `engineering-manager` — canonical task `Owner` value and role filename stem used by the PowerShell workflow.
-- `engineering_manager` — Codex agent registration key in `.codex/config.toml`.
+PowerShell task metadata, task Owner values, and role filenames use `engineering-manager`.
 
-Do not substitute one for the other blindly. Task metadata and dispatch use the hyphenated form; Codex agent configuration uses the underscored key.
+These are two identifiers for the same conceptual role and must not be substituted blindly.
 
 The CEO should delegate specialized work instead of performing all work directly.
 
