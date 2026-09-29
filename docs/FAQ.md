@@ -193,34 +193,32 @@ El adapter actual está configurado para análisis/read-only en el runner están
 Actualmente el provider router de `main` soporta:
 
 ```text
+Auto
 Codex
+Ollama
 OpenRouter
 Gemini
+DeepSeek
+Grok
 ```
 
-y:
-
-```text
-Auto
-```
-
-para intentar providers en orden.
+`Auto` usa el orden configurado en `.codex/provider-config.json`.
 
 ---
 
 ## ¿Cuál es el orden de Auto?
 
-La configuración actual de `main` es:
+La configuración actual de `main` es local-first:
 
 ```text
-Codex
+Auto
 ↓
-OpenRouter
-↓
-Gemini
+Ollama
 ```
 
 según `.codex/provider-config.json`.
+
+`allow_paid_fallback` está deshabilitado por defecto. DeepSeek y Grok pueden seleccionarse explícitamente, pero no se agregan silenciosamente como fallback pago.
 
 ---
 
@@ -228,7 +226,7 @@ según `.codex/provider-config.json`.
 
 No.
 
-Si Codex no está disponible y no hay API keys válidas para los otros providers, el router termina con error.
+No. Con la configuración por defecto, `Auto` necesita que el runtime local Ollama sea resoluble. Si querés usar otro provider, podés seleccionarlo explícitamente o cambiar `auto_order` de forma consciente.
 
 ---
 
@@ -238,7 +236,7 @@ No.
 
 El adapter Codex evita utilizar accidentalmente `CODEX_API_KEY` como fallback de pago.
 
-OpenRouter y Gemini requieren sus credenciales correspondientes.
+Los providers API externos requieren sus credenciales correspondientes. La configuración por defecto no habilita fallback pago automático.
 
 ---
 
@@ -246,7 +244,7 @@ OpenRouter y Gemini requieren sus credenciales correspondientes.
 
 No necesariamente.
 
-OpenRouter y Gemini reciben un Repository Context Pack limitado.
+Ollama y los providers API externos reciben un Repository Context Pack limitado.
 
 Codex CLI puede inspeccionar el repositorio dentro del sandbox configurado.
 
@@ -324,11 +322,9 @@ Security puede decir que no hay un problema de seguridad y aun así el objetivo 
 
 ## ¿AI Company OS puede modificar código?
 
-El framework incluye infraestructura para trabajo con escritura autorizado mediante Git worktrees aislados.
+El runner estándar de agents sigue siendo de análisis/read-only.
 
-El runner estándar de agents en `main` es de análisis/read-only.
-
-La automatización completa de mutación e integración sigue siendo un área en evolución.
+`main` también incluye un writable runtime explícitamente autorizado que opera sobre worktrees aislados y aplica políticas de paths/verification. La integración Git posterior —merge, push o deploy— no queda autorizada automáticamente y sigue requiriendo control separado.
 
 ---
 
@@ -479,11 +475,11 @@ Los providers se prueban como contratos y la disponibilidad live se trata como i
 
 ---
 
-## ¿La TUI ya es la interfaz oficial?
+## ¿La CLI/TUI ya forma parte de main?
 
-No en `main`.
+Sí.
 
-Existen ramas de desarrollo de TUI/CLI visual, pero hasta que se integren y validen no se documentan como interfaz estable.
+El paquete npm expone el comando `aico`, incluyendo navegación CLI/TUI y `aico shell`. Los scripts PowerShell siguen siendo el contrato de bajo nivel para lifecycle, providers, gates y operaciones avanzadas.
 
 ---
 
