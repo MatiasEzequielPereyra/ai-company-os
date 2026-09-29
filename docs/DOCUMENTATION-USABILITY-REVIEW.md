@@ -12,10 +12,16 @@ Documentation branch:
 docs/user-manual-v0
 ```
 
-Runtime baseline reviewed:
+Initial runtime baseline used for the human acceptance path:
 
 ```text
 main @ ed4820f8cbd8cf62a6b5d9494e0633b47b5fc9f3
+```
+
+Post-test source-level contract revalidation:
+
+```text
+main @ 816404c51c34e0bc3e7c23ab9772a0b4d8be1753
 ```
 
 Documentation branch head validated during the review:
@@ -301,8 +307,8 @@ These findings are documented as provider/runtime limitations. The First Run rem
 
 This review does not establish production maturity for:
 
-- TUI;
-- fully autonomous writable runtime;
+- exhaustive interactive CLI/TUI usability;
+- fully autonomous mutation-to-integration;
 - automatic merge/reconciliation;
 - automatic push/deployment;
 - configurable `provider_timeout_seconds` contract.
@@ -319,17 +325,17 @@ This requires a product/architecture decision to change correctly.
 
 ### Upgrade mechanism
 
-There is no version-aware update/migration command for an installed AI Company OS runtime.
+The global package can be updated through npm, and installed projects maintain a managed-files manifest.
 
-The current safe process is Git-based review of an installer `-Force` update.
+Project runtime refresh still does not perform semantic merge of local customizations. The safe process remains a Git-reviewed `aico install . --force` update on a dedicated branch.
 
 ### Writable execution
 
-Isolation helpers and authorization concepts exist, but full autonomous mutation-to-integration is not yet a stable end-to-end user contract.
+`main` now includes an explicitly authorized writable runtime operating on isolated task worktrees with policy-bounded change sets. Automatic merge/push/deploy remain outside that authorization boundary.
 
-### TUI
+### CLI / TUI
 
-TUI work exists in development branches but is not part of stable `main`.
+The `aico` CLI/TUI is now integrated in `main` and distributed through npm. This documentation review validated its source-level command contract, but the earlier human PM → CTO acceptance test primarily exercised the PowerShell lifecycle rather than the full interactive UI.
 
 ## Review result
 
@@ -345,3 +351,22 @@ PDF publication readiness: NOT YET — wait for v1/runtime stabilization
 The PM → CTO acceptance path has now been executed successfully with a real external provider.
 
 The test should be repeated after major TUI, writable-runtime, provider, lifecycle, installer, or context-budget changes. Provider failures must be classified separately from documentation defects so the manual does not become a provider-debugging guide.
+
+
+## Post-review reconciliation — current main
+
+After the live PM → CTO acceptance test, `main` advanced substantially. Before considering the manual merge-ready, the documentation was reconciled against `main @ 816404c51c34e0bc3e7c23ab9772a0b4d8be1753`.
+
+The reconciliation updated:
+
+- npm installation and `aico` CLI onboarding;
+- CLI/TUI status from experimental to integrated;
+- default provider strategy from Codex/OpenRouter/Gemini fallback to local-first Ollama;
+- provider support to include Ollama, DeepSeek and Grok;
+- analysis context budgets from the earlier 320000-character baseline to current bounded/per-role limits;
+- managed-files upgrade behavior;
+- current writable runtime boundaries.
+
+The earlier OpenRouter acceptance findings are retained as historical integration evidence. Current `main` already incorporates part of the context-budget hardening that the test exposed.
+
+A fresh human acceptance pass on the final merged `main` is recommended after documentation integration, but the manual no longer knowingly describes the pre-CLI/pre-local-runtime contract.
