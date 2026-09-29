@@ -1,6 +1,6 @@
 # AI Company OS — Documentation Usability Review v0.1
 
-Date: 2026-09-25
+Date: 2026-09-29
 
 ## Scope
 
@@ -252,11 +252,54 @@ Head SHA: a4df897f224f1e17d20cb52ccf3cde6fb0a3ce5a
 
 This confirms the branch passed the existing Windows PowerShell smoke suite at that head.
 
-## What was not tested in this documentation review
+## Live human first-run acceptance test
 
-This review did **not** claim to perform a live provider execution on the user's Windows machine.
+A live first-run was completed on Windows PowerShell using a disposable project at:
 
-It also does not establish production maturity for:
+```text
+%TEMP%\aico-first-run
+```
+
+The operator followed the documented lifecycle through:
+
+```text
+initialize-project
+→ RESEARCH Work Request
+→ PM task
+→ Review
+→ QA
+→ Security
+→ final approval
+→ CTO dependency unlock
+→ CTO task
+→ Review
+→ QA
+→ Security
+→ final approval
+→ DONE
+```
+
+Observed successful external-provider execution included OpenRouter for PM, CTO, Review, QA and Security. The acceptance test reached:
+
+```text
+PM  = DONE
+CTO = DONE
+```
+
+The test also surfaced runtime limitations that belong to the product/provider layer rather than to the conceptual workflow:
+
+- the documented runtime baseline used `context_max_chars = 320000`, which produced an unnecessarily large external context for the CTO task;
+- reducing the agent context budget to approximately 110000 characters allowed the CTO execution to complete;
+- the default gate context budget of 180000 characters produced repeated OpenRouter structured-output failures in this environment;
+- `openrouter/free` can route to a model that returns JSON `null` or otherwise fails the required structured-output contract;
+- explicit provider/model selection can be necessary when the free router chooses an incompatible model;
+- the runtime correctly rejected invalid structured output instead of recording it as trusted evidence.
+
+These findings are documented as provider/runtime limitations. The First Run remains focused on the lifecycle and points provider-specific failures to Troubleshooting rather than teaching provider debugging inline.
+
+## What this review still does not establish
+
+This review does not establish production maturity for:
 
 - TUI;
 - fully autonomous writable runtime;
@@ -292,19 +335,13 @@ TUI work exists in development branches but is not part of stable `main`.
 
 ```text
 Documentation contract audit: PASS
-Repository smoke CI: PASS
-Live human first-run with external provider: PENDING HUMAN ACCEPTANCE TEST
+Repository smoke CI: PASS at the previously recorded reviewed head
+Live human first-run with external provider: PASS WITH RUNTIME FINDINGS
 PDF publication readiness: NOT YET — wait for v1/runtime stabilization
 ```
 
-## Human acceptance test
+## Human acceptance test status
 
-The remaining useful test is intentionally simple:
+The PM → CTO acceptance path has now been executed successfully with a real external provider.
 
-1. A person follows only `README.md` and `docs/FIRST-RUN-CHECKLIST.md`.
-2. They do not use prior chat history.
-3. They note every point where they need information not present in the docs.
-4. They complete the PM → CTO demo using an actually available provider.
-5. Any friction is treated as a documentation or product defect, not as user error.
-
-That test should be repeated after major TUI, writable-runtime, provider, lifecycle, or installer changes.
+The test should be repeated after major TUI, writable-runtime, provider, lifecycle, installer, or context-budget changes. Provider failures must be classified separately from documentation defects so the manual does not become a provider-debugging guide.
