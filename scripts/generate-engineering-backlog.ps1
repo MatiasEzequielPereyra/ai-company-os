@@ -250,6 +250,13 @@ if ($status -ne "DONE") {
 
 $report = Get-Content $reportPath -Raw -Encoding UTF8
 
+$executionPlanText = ""
+$executionPlanPath = Join-Path $root ("docs\engineering\plans\" + $SourceTaskId + "-execution-plan.json")
+if (Test-Path $executionPlanPath -PathType Leaf) {
+    $executionPlanText = Get-Content $executionPlanPath -Raw -Encoding UTF8
+}
+
+
 $latestResult = Get-ChildItem (Join-Path $root "docs\engineering\results") -Filter ($SourceTaskId + "-result-*.md") -File -ErrorAction SilentlyContinue |
     Sort-Object Name -Descending |
     Select-Object -First 1
@@ -270,6 +277,7 @@ $promptLines = @(
     "Encode dependencies only by logical item key; the materializer will translate them to AICO IDs.",
     "Do not copy AICO task IDs from the approved planning workflow into item dependencies; completed upstream planning tasks are already satisfied.",
     "Preserve the plan's priorities and critical path.",
+    "When a canonical structured execution plan is supplied, treat its executable_work items as authoritative downstream scope and preserve their keys, kinds, owners, areas, dependencies and verification intent.",
     "Create explicit DECISION items for unresolved PM/CTO/CEO decisions before dependent implementation work.",
     "If implementation authorization is required, include an explicit DECISION task near the root of the graph and set implementation_authorization_key to that item key.",
     "Use implementation_authorization_key = NONE only when the approved source plan explicitly requires no implementation authorization.",
