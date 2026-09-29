@@ -4,39 +4,38 @@
 
 ## 0. Requisitos
 
-Necesitás:
+Instalación soportada:
 
-- Windows con PowerShell;
-- Git, especialmente si vas a trabajar sobre un repositorio real o usar worktrees;
-- acceso al repositorio de AI Company OS;
-- al menos un provider disponible para ejecutar agentes: Codex CLI, OpenRouter o Gemini.
+- Node.js 20 o superior;
+- npm;
+- Python 3.11 o superior;
+- PowerShell;
+- Git.
 
-Clonar AI Company OS:
+Instalar el CLI:
 
 ```powershell
-git clone https://github.com/MatiasEzequielPereyra/ai-company-os.git
-cd .\ai-company-os
+npm install -g @pereyram/ai-company-os
+aico version
+aico doctor --system
 ```
 
-Si el repositorio requiere autenticación, Git debe estar autenticado previamente.
+Para el runtime local por defecto también necesitás Ollama. El `main` actual configura `Auto` como local-first y su `auto_order` por defecto contiene `Ollama`.
 
 ## 1. Instalarlo sobre un proyecto existente
 
-Desde el repositorio de AI Company OS:
+Desde el repositorio que querés administrar:
 
 ```powershell
-.\scripts\install-existing-project.ps1 -TargetProject "C:\ruta\de\mi-proyecto"
+Set-Location "C:\ruta\de\mi-proyecto"
+aico install .
+aico use .
+aico doctor
 ```
 
 El target debería ser un repositorio Git si vas a usar aislamiento por worktrees.
 
-Prestá atención a mensajes `SKIP existing:`. El instalador preserva determinados archivos existentes, por ejemplo `AGENTS.md` y configuración del framework. No uses `-Force` automáticamente: primero decidí si corresponde conservar, fusionar o reemplazar esos archivos.
-
-Luego:
-
-```powershell
-Set-Location "C:\ruta\de\mi-proyecto"
-```
+El instalador mantiene un manifest de archivos administrados bajo `.codex/managed-files.json`. Una actualización con `--force` puede reemplazar componentes administrados: hacela sobre una branch revisable y comprobá el diff.
 
 ## 2. Inicializar el proyecto
 
@@ -55,27 +54,39 @@ docs/operations/operations-intake.md
 
 El intake es evidencia automática. No convierte detecciones en decisiones aprobadas.
 
-## 3. Comprobar que existe un provider
+## 3. Elegir provider para la sesión
 
-Codex:
-
-```powershell
-Get-Command codex -ErrorAction SilentlyContinue
-```
-
-OpenRouter:
+Comprobar el runtime local recomendado:
 
 ```powershell
-Test-Path Env:OPENROUTER_API_KEY
+aico doctor --system
+ollama list
 ```
 
-Gemini:
+Si Ollama está disponible y configurado:
 
 ```powershell
-Test-Path Env:GEMINI_API_KEY
+$AicoProvider = "Auto"
 ```
 
-No necesitás los tres. Para `-Provider Auto`, al menos uno debe estar realmente disponible.
+También podés usar explícitamente un provider soportado:
+
+```text
+Codex
+OpenRouter
+Gemini
+Ollama
+DeepSeek
+Grok
+```
+
+Ejemplo:
+
+```powershell
+$AicoProvider = "OpenRouter"
+```
+
+Los providers externos requieren sus credenciales correspondientes. `DeepSeek` y `Grok` no se usan como fallback pago automático cuando `allow_paid_fallback` está deshabilitado; siguen pudiendo elegirse explícitamente si están configurados.
 
 ## 4. Crear un objetivo en modo PREPARE
 
@@ -149,7 +160,7 @@ Solo las tasks cuyas dependencias estén satisfechas deberían estar `ACTIVE`.
 ## 7. Ejecutar los agentes activos
 
 ```powershell
-.\scripts\run-active-agents.ps1 -Provider Auto
+.\scripts\run-active-agents.ps1 -Provider $AicoProvider
 ```
 
 Una entrega `COMPLETED` pasa normalmente:
@@ -161,7 +172,7 @@ ACTIVE → REVIEW
 ## 8. Ejecutar Review, QA y Security
 
 ```powershell
-.\scripts\run-pending-gates.ps1 -Provider Auto
+.\scripts\run-pending-gates.ps1 -Provider $AicoProvider
 ```
 
 Con gates satisfactorios, la task queda normalmente en:
@@ -215,8 +226,8 @@ Si aparecen nuevas tasks `READY`:
 
 ```powershell
 .\scripts\dispatch-ready-tasks.ps1 -Apply
-.\scripts\run-active-agents.ps1 -Provider Auto
-.\scripts\run-pending-gates.ps1 -Provider Auto
+.\scripts\run-active-agents.ps1 -Provider $AicoProvider
+.\scripts\run-pending-gates.ps1 -Provider $AicoProvider
 ```
 
 Después volver a revisar y finalizar cada task que corresponda.
