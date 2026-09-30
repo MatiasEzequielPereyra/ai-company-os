@@ -104,6 +104,7 @@ function New-GateFixture {
 
     foreach ($scriptName in @(
         "run-gate-agent.ps1",
+        "validate-gate-result-semantics.ps1",
         "task-execution-lock.ps1",
         "review-task.ps1",
         "qa-task.ps1",
@@ -372,7 +373,8 @@ function New-GateFixture {
         '    [string]$OutputPath,',
         '    [string]$Model,',
         '    [string]$Role,',
-        '    [string]$Workload',
+        '    [string]$Workload,',
+        '    [string]$SemanticValidatorPath',
         ')',
         '',
         '$mode = (Get-Content (Join-Path $ProjectPath ".codex\fixture-mode.txt") -Raw).Trim()',
@@ -540,6 +542,11 @@ function Invoke-GateFixture {
 
 Write-Host ""
 Write-Host "=== STATIC STRUCTURED CONTRACTS ===" -ForegroundColor Cyan
+
+$gateRunner = Get-Content (Join-Path $repoRoot "scripts\run-gate-agent.ps1") -Raw -Encoding UTF8
+[void](Assert-True ($gateRunner -match [regex]::Escape("validate-gate-result-semantics.ps1")) "Gate runner requires the semantic gate validator")
+[void](Assert-True ($gateRunner -match "SemanticValidatorPath") "Gate runner routes semantic validation through provider routing")
+[void](Assert-True ($gateRunner -match '& \$gateSemanticValidatorPath -JsonPath') "Gate runner revalidates semantic output before lifecycle mutation")
 
 $reviewSchema = Get-Content `
     (Join-Path $repoRoot "schemas\review-result.schema.json") `
