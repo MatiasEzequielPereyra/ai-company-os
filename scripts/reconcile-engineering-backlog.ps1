@@ -162,6 +162,39 @@ function Format-Checks {
     return ($items | ForEach-Object { "- [ ] " + $_ }) -join [Environment]::NewLine
 }
 
+function Test-SourceExplicitlyRequiresNoImplementationAuthorization {
+    param([string]$SourceEvidence)
+
+    if ([string]::IsNullOrWhiteSpace($SourceEvidence)) {
+        return $false
+    }
+
+    return (
+        $SourceEvidence -match
+        '(?i)\b(?:requires? no implementation authorization|no implementation authorization (?:is )?required|implementation authorization (?:is )?not required|does not require implementation authorization)\b'
+    )
+}
+
+function Test-IsExplicitImplementationAuthorizationDecision {
+    param([object]$Item)
+
+    if ($null -eq $Item -or [string]$Item.kind -ne "DECISION") {
+        return $false
+    }
+
+    $haystack = @(
+        [string]$Item.title,
+        [string]$Item.objective,
+        [string]$Item.context,
+        (@($Item.acceptance_criteria) -join " ")
+    ) -join " "
+
+    return (
+        $haystack -match
+        '(?i)(\b(?:authori[sz]e(?:d|s)?|approv(?:e|ed|es|ing))\s+(?:the\s+)?implementation(?:\s+scope)?\b|\bimplementation(?:\s+scope)?\s+(?:is\s+)?(?:explicitly\s+)?(?:authori[sz]ed|approved)\b)'
+    )
+}
+
 function Test-DependsOnKey {
     param(
         [string]$ItemKey,
@@ -379,6 +412,18 @@ $mappingPath = Join-Path $root ("docs\engineering\plans\" + $SourceTaskId + "-en
 if (-not (Test-Path $planPath)) { throw "Structured backlog not found: $planPath" }
 if (-not (Test-Path $tasksPath)) { throw "Tasks directory not found: $tasksPath" }
 
+$sourceEvidenceParts = @()
+foreach ($evidencePath in @(
+    (Join-Path $tasksPath ($SourceTaskId + ".md")),
+    (Join-Path $root ("docs\engineering\agent-reports\" + $SourceTaskId + ".md")),
+    (Join-Path $root ("docs\engineering\plans\" + $SourceTaskId + "-execution-plan.json"))
+)) {
+    if (Test-Path $evidencePath -PathType Leaf) {
+        $sourceEvidenceParts += Get-Content $evidencePath -Raw -Encoding UTF8
+    }
+}
+$sourceEvidence = $sourceEvidenceParts -join [Environment]::NewLine
+
 $backlog = Get-Content $planPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $backlog = Repair-MojibakeObject -Value $backlog
 
@@ -424,7 +469,15 @@ if ([string]::IsNullOrWhiteSpace($authorizationKey)) {
     throw "Backlog implementation_authorization_key cannot be empty."
 }
 
-if ($authorizationKey -ne "NONE") {
+if ($authorizationKey -eq "NONE") {
+    if (-not (Test-SourceExplicitlyRequiresNoImplementationAuthorization -SourceEvidence $sourceEvidence)) {
+        throw (
+            "implementation_authorization_key NONE is not supported by approved source evidence. " +
+            "Use NONE only when the approved source explicitly requires no implementation authorization."
+        )
+    }
+}
+else {
     if (-not $keys.ContainsKey($authorizationKey)) {
         throw "Implementation authorization key '$authorizationKey' does not reference a backlog item."
     }
@@ -432,6 +485,13 @@ if ($authorizationKey -ne "NONE") {
     $authorizationItem = $itemByKey[$authorizationKey]
     if ([string]$authorizationItem.kind -ne "DECISION") {
         throw "Implementation authorization item '$authorizationKey' must be a DECISION."
+    }
+
+    if (-not (Test-IsExplicitImplementationAuthorizationDecision -Item $authorizationItem)) {
+        throw (
+            "Implementation authorization item '" + $authorizationKey +
+            "' does not explicitly authorize implementation."
+        )
     }
 
     foreach ($item in $items) {
