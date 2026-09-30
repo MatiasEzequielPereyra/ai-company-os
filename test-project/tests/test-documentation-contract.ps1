@@ -83,10 +83,13 @@ foreach ($relative in $publicDocs) {
 }
 
 # Known stale default routing claim from the old manual must not reappear.
+$rightArrow = [char]0x2192
+$oldAutoPattern = 'Ollama\s*(?:->|' + [regex]::Escape([string]$rightArrow) + ')\s*OpenRouter'
+
 foreach ($relative in $publicDocs) {
     $content = Get-Content (Join-Path $root $relative) -Raw -Encoding UTF8
 
-    if ($content -match 'Ollama\s*(?:->|→)\s*OpenRouter') {
+    if ($content -match $oldAutoPattern) {
         throw "Stale multi-provider general Auto claim found in $relative"
     }
 }
@@ -101,7 +104,8 @@ if (($autoOrder -join ",") -ne "Ollama") {
 }
 
 $providerDoc = Get-Content (Join-Path $root "docs\operations\provider-runtime.md") -Raw -Encoding UTF8
-if ($providerDoc -notmatch 'General Auto' -or $providerDoc -notmatch 'Auto\s*(?:→|->)\s*Ollama') {
+$currentAutoPattern = 'Auto\s*(?:->|' + [regex]::Escape([string]$rightArrow) + ')\s*Ollama'
+if (($providerDoc -notmatch 'General Auto') -or ($providerDoc -notmatch $currentAutoPattern)) {
     throw "Provider runtime documentation does not state the current general Auto policy."
 }
 
