@@ -33,6 +33,18 @@ function Test-TransientGeminiError {
     return $false
 }
 
+function Test-GeminiRejectsLegacySampling {
+    param([string]$ModelName)
+
+    $normalized = ([string]$ModelName).Trim().ToLowerInvariant()
+
+    if ($normalized -match '^gemini-3\.5(?:-|$)') { return $true }
+    if ($normalized -match '^gemini-3\.(?:[6-9]|[1-9][0-9])(?:-|$)') { return $true }
+    if ($normalized -match '^gemini-(?:[4-9]|[1-9][0-9])(?:\.|-|$)') { return $true }
+
+    return $false
+}
+
 function ConvertTo-GeminiCompatibleSchema {
     param([object]$Value)
 
@@ -101,6 +113,19 @@ $schema = Get-Content $SchemaPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $geminiSchema = ConvertTo-GeminiCompatibleSchema -Value $schema
 $fullPrompt = $Prompt + [Environment]::NewLine + [Environment]::NewLine + "# Repository Context Pack" + [Environment]::NewLine + $Context
 
+$generationConfig = @{
+    maxOutputTokens = 12000
+    responseMimeType = "application/json"
+    responseJsonSchema = $geminiSchema
+}
+
+# Gemini 3.5+ retired temperature/top_p/top_k. Keep the legacy sampling
+# override only for older model families so existing configurations do not
+# silently change behavior.
+if (-not (Test-GeminiRejectsLegacySampling -ModelName $Model)) {
+    $generationConfig.temperature = 0.1
+}
+
 $body = @{
     contents = @(
         @{
@@ -110,12 +135,7 @@ $body = @{
             )
         }
     )
-    generationConfig = @{
-        temperature = 0.1
-        maxOutputTokens = 12000
-        responseMimeType = "application/json"
-        responseJsonSchema = $geminiSchema
-    }
+    generationConfig = $generationConfig
 } | ConvertTo-Json -Depth 100 -Compress
 
 try { $null = $body | ConvertFrom-Json }
