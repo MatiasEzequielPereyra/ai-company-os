@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import subprocess
 
+from rich import box
 from rich.console import Group
 from rich.panel import Panel
 from rich.table import Table
@@ -31,6 +32,14 @@ from company_os.application.corrective_reactivation_service import CorrectiveRea
 from company_os.cli.i18n import ui_text
 from company_os.cli.operation_progress import (
     OperationProgressState,
+)
+from company_os.cli.theme import (
+    HACKER_ERROR,
+    HACKER_NEON,
+    HACKER_NEON_DIM,
+    is_hacker_interface,
+    sync_hacker_screen_class,
+    terminal_section_title,
 )
 from company_os.application.gate_control_service import (
     GateControlService,
@@ -61,16 +70,16 @@ def _t(widget, key: str) -> str:
 
 class PlanControlScreen(Screen):
     BINDINGS = [
-        Binding("escape", "back", "Back"),
-        Binding("a", "activate", "Activate"),
-        Binding("r", "run_agents", "Analysis agent"),
+        Binding("escape", "back", "Atras / Back"),
+        Binding("a", "activate", "Activar / Activate"),
+        Binding("r", "run_agents", "Analisis / Analysis"),
         Binding("b", "engineering_backlog", "Engineering backlog"),
-        Binding("w", "prepare_writable", "Writable implementation"),
+        Binding("w", "prepare_writable", "Writable"),
         Binding("u", "unblock", "Retry blocked"),
-        Binding("g", "run_gates", "Run gates"),
-        Binding("f", "finalize", "Final approval"),
-        Binding("f5", "refresh_tasks", "Refresh"),
-        Binding("c", "copy_error", "Copy error"),
+        Binding("g", "run_gates", "Gates"),
+        Binding("f", "finalize", "Aprobacion / Approval"),
+        Binding("f5", "refresh_tasks", "Actualizar / Refresh"),
+        Binding("c", "copy_error", "Copiar / Copy"),
     ]
 
     def __init__(
@@ -108,11 +117,88 @@ class PlanControlScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
+        sync_hacker_screen_class(
+            self
+        )
+
         self.set_interval(
             0.25,
             self._tick_operation_progress,
         )
+
         self._refresh_view()
+
+    def refresh_language(self) -> None:
+        if not self.busy:
+            self._refresh_view()
+
+    def _hacker_mode(self) -> bool:
+        return is_hacker_interface(
+            getattr(
+                self.app,
+                "interface_theme",
+                "default",
+            )
+        )
+
+    def _status_display(
+        self,
+        value: str,
+    ):
+        if not self._hacker_mode():
+            return value
+
+        normalized = value.upper()
+
+        if any(
+            marker in normalized
+            for marker in (
+                "BLOCKED",
+                "FAIL",
+                "ERROR",
+                "CHANGES_REQUIRED",
+            )
+        ):
+            style = f"bold {HACKER_ERROR}"
+
+        elif any(
+            marker in normalized
+            for marker in (
+                "BACKLOG",
+                "WAIT",
+                "UNKNOWN",
+                "STALE",
+            )
+        ):
+            style = HACKER_NEON_DIM
+
+        else:
+            style = f"bold {HACKER_NEON}"
+
+        return Text(
+            value,
+            style=style,
+        )
+
+    def _panel_options(self) -> dict:
+        if not self._hacker_mode():
+            return {}
+
+        return {
+            "box": box.ASCII,
+            "border_style": HACKER_NEON,
+        }
+
+    def _panel_title(
+        self,
+        title: str,
+    ) -> str:
+        if self._hacker_mode():
+            return terminal_section_title(
+                title
+            )
+
+        return title
 
     def action_back(self) -> None:
         if self._reject_if_busy():
@@ -583,6 +669,61 @@ class PlanControlScreen(Screen):
                 in self.progress.recent_events
             )
 
+        panel_title = _t(
+            self,
+            "progress_title",
+        )
+
+        panel_options = {}
+
+        if self._hacker_mode():
+            terminal_lines = []
+
+            for line in lines:
+                if not line:
+                    terminal_lines.append("")
+                    continue
+
+                if line.startswith("["):
+                    terminal_lines.append(
+                        line.upper()
+                    )
+                    continue
+
+                if line.startswith("- "):
+                    terminal_lines.append(
+                        "> " + line[2:]
+                    )
+                    continue
+
+                if ":" in line:
+                    key, value = line.split(
+                        ":",
+                        1,
+                    )
+
+                    terminal_lines.append(
+                        f"> {key.upper():<18} "
+                        f"{value.strip()}"
+                    )
+                    continue
+
+                terminal_lines.append(
+                    f"> {line}"
+                )
+
+            lines = terminal_lines
+
+            panel_title = (
+                "LIVE PROCESS // "
+                + self.progress.title.upper()
+            )
+
+            panel_options = {
+                "box": box.ASCII,
+                "border_style": HACKER_NEON,
+            }
+
         self.query_one(
             "#plan-control-content",
             Static,
@@ -591,10 +732,8 @@ class PlanControlScreen(Screen):
                 Text(
                     "\n".join(lines)
                 ),
-                title=_t(
-                    self,
-                    "progress_title",
-                ),
+                title=panel_title,
+                **panel_options,
             )
         )
 
@@ -1335,7 +1474,10 @@ class PlanControlScreen(Screen):
         ).update(
             Panel(
                 message,
-                title=title,
+                title=self._panel_title(
+                    title
+                ),
+                **self._panel_options(),
             )
         )
 
@@ -1486,9 +1628,21 @@ class PlanControlScreen(Screen):
             )
         )
 
+        plan_tasks_title = _t(
+            self,
+            "pc_plan_tasks",
+        )
+
         table = Table(
-            title="Plan Tasks",
+            title=self._panel_title(
+                plan_tasks_title
+            ),
             show_lines=True,
+            **(
+                {"box": box.ASCII}
+                if self._hacker_mode()
+                else {}
+            ),
         )
 
         table.add_column("ID")
@@ -1520,7 +1674,9 @@ class PlanControlScreen(Screen):
 
             table.add_row(
                 task.id,
-                status,
+                self._status_display(
+                    status
+                ),
                 task.owner,
                 task.work_kind or "PLANNING",
                 task.title,
@@ -1539,8 +1695,22 @@ class PlanControlScreen(Screen):
             )
 
         summary = Table(
+            title=(
+                self._panel_title(
+                    _t(
+                        self,
+                        "status",
+                    )
+                )
+                if self._hacker_mode()
+                else None
+            ),
             show_header=False,
-            box=None,
+            box=(
+                box.ASCII
+                if self._hacker_mode()
+                else None
+            ),
         )
 
         summary.add_column("Status")
@@ -1557,7 +1727,9 @@ class PlanControlScreen(Screen):
             "DONE",
         ):
             summary.add_row(
-                status,
+                self._status_display(
+                    status
+                ),
                 str(
                     counts.get(
                         status,
@@ -1664,12 +1836,32 @@ class PlanControlScreen(Screen):
             or "unknown"
         )
 
+        header_content = (
+            (
+                f"> {_t(self, 'pc_project').upper():<14} "
+                f"{self.plan_data.project_name}\n"
+                f"> {_t(self, 'pc_work_request').upper():<14} "
+                f"{work_request}"
+            )
+            if self._hacker_mode()
+            else (
+                f"{_t(self, 'pc_project')}: "
+                f"{self.plan_data.project_name}\n"
+                f"{_t(self, 'pc_work_request')}: "
+                f"{work_request}"
+            )
+        )
+
         renderables = [
             Panel(
-                f"Project: "
-                f"{self.plan_data.project_name}\n"
-                f"Work Request: {work_request}",
-                title="Plan Control",
+                header_content,
+                title=self._panel_title(
+                    _t(
+                        self,
+                        "pc_control_title",
+                    )
+                ),
+                **self._panel_options(),
             ),
             Text(""),
         ]
@@ -1705,10 +1897,13 @@ class PlanControlScreen(Screen):
                                 last_lines
                             )
                         ),
-                        title=_t(
-                            self,
-                            "progress_last_operation",
+                        title=self._panel_title(
+                            _t(
+                                self,
+                                "progress_last_operation",
+                            )
                         ),
+                        **self._panel_options(),
                     ),
                     Text(""),
                 ]
@@ -1721,8 +1916,23 @@ class PlanControlScreen(Screen):
                 table,
                 Text(""),
                 Panel(
-                    "\n".join(controls),
-                    title="Controls",
+                    (
+                        "\n".join(
+                            f"> {item}"
+                            for item in controls
+                        )
+                        if self._hacker_mode()
+                        else "\n".join(
+                            controls
+                        )
+                    ),
+                    title=self._panel_title(
+                        _t(
+                            self,
+                            "pc_controls",
+                        )
+                    ),
+                    **self._panel_options(),
                 ),
                 Text(""),
                 Panel(
@@ -1742,10 +1952,29 @@ class PlanControlScreen(Screen):
                     "When a wave reaches DONE, press A "
                     "again to activate newly eligible "
                     "dependent tasks.",
-                    title="Workflow",
+                    title=self._panel_title(
+                        _t(
+                            self,
+                            "pc_workflow_title",
+                        )
+                    ),
+                    **self._panel_options(),
                 ),
             ]
         )
+
+        if self._hacker_mode():
+            renderables = [
+                item
+                for item in renderables
+                if not (
+                    isinstance(
+                        item,
+                        Text,
+                    )
+                    and not item.plain.strip()
+                )
+            ]
 
         self.query_one(
             "#plan-control-content",
