@@ -85,10 +85,8 @@ foreach ($relative in $publicDocs) {
 # Known stale default routing claim from the old manual must not reappear.
 foreach ($relative in $publicDocs) {
     $content = Get-Content (Join-Path $root $relative) -Raw -Encoding UTF8
-    if (
-        $content -match 'Ollama\s*(?:->|→)\s*OpenRouter\s*(?:->|→)\s*Gemini' -or
-        $content -match 'default order is:\s*(?:\r?\n)+\s*Ollama\s*(?:->|→)\s*OpenRouter'
-    ) {
+
+    if ($content -match 'Ollama\s*(?:->|→)\s*OpenRouter') {
         throw "Stale multi-provider general Auto claim found in $relative"
     }
 }
