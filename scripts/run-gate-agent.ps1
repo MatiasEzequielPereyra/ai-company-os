@@ -134,6 +134,7 @@ $originalOwnerRolePath = Join-Path $root (".codex\agents\" + $owner + ".md")
 
 $schemaPath = Join-Path $root ("schemas\" + $schemaName)
 $routerPath = Join-Path $PSScriptRoot "provider-router.ps1"
+$gateSemanticValidatorPath = Join-Path $PSScriptRoot "validate-gate-result-semantics.ps1"
 $contextBuilderPath = Join-Path $PSScriptRoot "build-agent-context.ps1"
 $localResolverPath = Join-Path $PSScriptRoot "local-runtime\resolve-local-runtime.ps1"
 $localRuntimeConfigPath = Join-Path $root ".codex\local-runtime-config.json"
@@ -145,6 +146,7 @@ if ([string]::IsNullOrWhiteSpace($owner)) {
 foreach ($required in @(
     $schemaPath,
     $routerPath,
+    $gateSemanticValidatorPath,
     $contextBuilderPath,
     $dispatchPath,
     $originalOwnerRolePath
@@ -328,13 +330,17 @@ $outputPath = Join-Path $runtimeDir ($Id + "-" + $Gate.ToLowerInvariant() + "-ga
 
 Write-Host ("Gate context budget: base=" + $maxChars + " chars, artifact=" + $artifactMaxChars + " chars") -ForegroundColor DarkGray
 Write-Host "Running $Gate gate: $reviewerRole -> $Id" -ForegroundColor Cyan
-$execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $evidence.ToString() -SchemaPath $schemaPath -OutputPath $outputPath -Model $Model -Role $reviewerRole -Workload "gate"
+$execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $evidence.ToString() -SchemaPath $schemaPath -OutputPath $outputPath -Model $Model -Role $reviewerRole -Workload "gate" -SemanticValidatorPath $gateSemanticValidatorPath
 
 if (-not (Test-Path $outputPath)) {
     throw "Gate provider did not produce structured output: $outputPath"
 }
 
 $result = Get-Content $outputPath -Raw -Encoding UTF8 | ConvertFrom-Json
+
+# Provider routing performs semantic retry/fallback. Revalidate once more before
+# mutating lifecycle state so alternate/custom router implementations also fail closed.
+& $gateSemanticValidatorPath -JsonPath $outputPath | Out-Null
 
 switch ($Gate) {
     "Review" {
