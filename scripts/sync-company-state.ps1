@@ -1,6 +1,7 @@
 param(
     [string]$TasksPath = "tasks",
-    [string]$SprintPath = ".codex/state/current-sprint.md"
+    [string]$SprintPath = ".codex/state/current-sprint.md",
+    [string]$ProjectRoot = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -36,7 +37,12 @@ function Format-TaskLines {
     }) -join [Environment]::NewLine)
 }
 
-$scriptProjectRoot = Split-Path -Parent $PSScriptRoot
+$scriptProjectRoot = if ([string]::IsNullOrWhiteSpace($ProjectRoot)) {
+    Split-Path -Parent $PSScriptRoot
+}
+else {
+    (Resolve-Path $ProjectRoot).Path
+}
 if (-not [System.IO.Path]::IsPathRooted($TasksPath)) { $TasksPath = Join-Path $scriptProjectRoot $TasksPath }
 if (-not [System.IO.Path]::IsPathRooted($SprintPath)) { $SprintPath = Join-Path $scriptProjectRoot $SprintPath }
 

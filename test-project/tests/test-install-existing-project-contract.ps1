@@ -9,7 +9,33 @@ try {
     New-Item -ItemType Directory -Force -Path $tempRoot | Out-Null
     [System.IO.File]::WriteAllText((Join-Path $tempRoot "existing-source.txt"),"preserve me",(New-Object System.Text.UTF8Encoding($false)))
 
+    $preexistingScriptsDir = Join-Path $tempRoot "scripts"
+    New-Item -ItemType Directory -Force -Path $preexistingScriptsDir | Out-Null
+    $preexistingSyncPath = Join-Path $preexistingScriptsDir "sync-company-state.ps1"
+    $preexistingSyncMarker = Join-Path $tempRoot "preexisting-sync-executed.txt"
+    $preexistingSyncContent = @'
+[System.IO.File]::WriteAllText(
+    (Join-Path $PSScriptRoot "..\preexisting-sync-executed.txt"),
+    "executed"
+)
+'@
+    [System.IO.File]::WriteAllText(
+        $preexistingSyncPath,
+        $preexistingSyncContent,
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+    $preexistingSyncHashBefore = (Get-FileHash $preexistingSyncPath -Algorithm SHA256).Hash
+
     & (Join-Path $repoRoot "scripts\install-existing-project.ps1") -TargetProject $tempRoot
+
+    if (Test-Path $preexistingSyncMarker) {
+        throw "Existing-project installer executed a pre-existing project-owned sync-company-state.ps1."
+    }
+
+    $preexistingSyncHashAfter = (Get-FileHash $preexistingSyncPath -Algorithm SHA256).Hash
+    if ($preexistingSyncHashAfter -ne $preexistingSyncHashBefore) {
+        throw "Existing-project installer modified a pre-existing project-owned sync-company-state.ps1."
+    }
 
     foreach ($relative in @(
         "existing-source.txt",
@@ -64,6 +90,9 @@ try {
     }
     if ($managed -contains "existing-source.txt") {
         throw "Existing client files must never be claimed as AI Company OS-managed"
+    }
+    if ($managed -contains "scripts/sync-company-state.ps1") {
+        throw "Skipped pre-existing sync-company-state.ps1 must remain project-owned and unmanaged."
     }
 
     & (Join-Path $tempRoot "scripts\validate-artifacts.ps1") -ProjectPath $tempRoot | Out-Null
