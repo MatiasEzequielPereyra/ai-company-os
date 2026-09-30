@@ -35,20 +35,90 @@ class CommandService:
 
         lower = request.casefold()
 
-        explicit_feature_request = bool(
-            re.search(
+        explicit_intent = None
+
+        leading_patterns = (
+            (
+                "AUDIT",
+                (
+                    r"^(?:(?:please|por favor)\s+)?"
+                    r"(?:audit|review|inspect|assess|"
+                    r"auditar|revisar|inspeccionar|evaluar)\b"
+                ),
+            ),
+            (
+                "FIX",
+                (
+                    r"^(?:(?:please|por favor)\s+)?"
+                    r"(?:fix|repair|resolve|correct|debug|"
+                    r"corregir|arreglar|solucionar|reparar)\b"
+                ),
+            ),
+            (
+                "FEATURE",
                 (
                     r"^(?:(?:please|por favor)\s+)?"
                     r"(?:add|adding|create|creating|"
-                    r"implement|implementing|build|building)\b"
+                    r"implement|implementing|build|building|"
+                    r"extend|extending|enhance|enhancing|"
+                    r"introduce|introducing|support|supporting|"
+                    r"enable|enabling|agregar|crear|implementar|"
+                    r"añadir|extender|mejorar|incorporar|"
+                    r"soportar|habilitar)\b"
+                ),
+            ),
+        )
+
+        for candidate_intent, pattern in leading_patterns:
+            if re.search(pattern, lower):
+                explicit_intent = candidate_intent
+                break
+
+        feature_signal = bool(
+            re.search(
+                (
+                    r"\b(?:add|adding|create|creating|"
+                    r"implement|implementing|build|building|"
+                    r"extend|extending|enhance|enhancing|"
+                    r"introduce|introducing|support|supporting|"
+                    r"enable|enabling|agregar|crear|implementar|"
+                    r"añadir|extender|mejorar|incorporar|"
+                    r"soportar|habilitar)\b"
+                ),
+                lower,
+            )
+            or any(
+                word in lower
+                for word in (
+                    "feature",
+                    "nuevo",
+                    "nueva funcionalidad",
+                )
+            )
+        )
+
+        fix_signal = bool(
+            re.search(
+                (
+                    r"\b(?:regression|broken|breaks|crash|crashes|"
+                    r"crashed|failing|fails|bug)\b"
+                    r"(?!\s+(?:report|reports|reporting|tracker|tracking))"
+                ),
+                lower,
+            )
+            or re.search(
+                (
+                    r"\b(?:throws?|returns?|shows?|produces?|causes?)"
+                    r"\s+(?:an?\s+)?error\b"
+                    r"|\berror\s+(?:when|while|during|after|on)\b"
+                    r"|\b(?:falla|fallo)\s+(?:al|cuando|durante)\b"
+                    r"|\brompe\b"
                 ),
                 lower,
             )
         )
 
-        if (
-            not explicit_feature_request
-            and any(
+        audit_signal = any(
             word in lower
             for word in (
                 "audit",
@@ -59,6 +129,15 @@ class CommandService:
                 "produccion",
             )
         )
+
+        if (
+            explicit_intent == "AUDIT"
+            or (
+                explicit_intent is None
+                and audit_signal
+                and not feature_signal
+                and not fix_signal
+            )
         ):
             intent = "AUDIT"
 
@@ -112,18 +191,12 @@ class CommandService:
             ]
 
         elif (
-            not explicit_feature_request
-            and any(
-            word in lower
-            for word in (
-                "error",
-                "bug",
-                "fix",
-                "falla",
-                "rompe",
-                "correg",
+            explicit_intent == "FIX"
+            or (
+                explicit_intent is None
+                and fix_signal
+                and not feature_signal
             )
-        )
         ):
             intent = "FIX"
 
@@ -177,21 +250,10 @@ class CommandService:
             ]
 
         elif (
-            explicit_feature_request
-            or re.search(
-                r"\b(?:add|adding|create|creating|implement|implementing|build|building)\b",
-                lower,
-            )
-            or any(
-                word in lower
-                for word in (
-                    "agregar",
-                    "crear",
-                    "feature",
-                    "implementar",
-                    "añadir",
-                    "nuevo",
-                )
+            explicit_intent == "FEATURE"
+            or (
+                explicit_intent is None
+                and feature_signal
             )
         ):
             intent = "FEATURE"
