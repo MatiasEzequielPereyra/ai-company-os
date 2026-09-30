@@ -43,7 +43,8 @@ $requiredProjectRuntimeArtifacts = @(
     ".codex\workflow-profiles.json",
     ".codex\writable-policy.json",
     "scripts\provider-router.ps1",
-    "scripts\validate-engineering-plan-result.ps1",
+    "scripts\validate-engineering-plan-result.ps1,
+        "scripts\validate-engineering-backlog-semantics.ps1",
     "scripts\providers\invoke-codex.ps1",
     "scripts\providers\invoke-ollama.ps1",
     "schemas\agent-result.schema.json",
@@ -241,7 +242,8 @@ try {
     foreach ($managedEntry in @(
         ".codex/provider-config.json",
         "scripts/provider-router.ps1",
-        "scripts/validate-engineering-plan-result.ps1",
+        "scripts/validate-engineering-plan-result.ps1,
+        "scripts/validate-engineering-backlog-semantics.ps1",
         "schemas/engineering-plan-result.schema.json"
     )) {
         if (@($existingManifest.managed_files) -notcontains $managedEntry) {
