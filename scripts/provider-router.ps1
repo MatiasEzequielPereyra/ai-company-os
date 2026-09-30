@@ -114,86 +114,134 @@ function Get-ProviderErrorCategory {
     return "unknown"
 }
 
-function Get-EffectiveAnalysisContextBudget {
+function Get-EffectiveProviderContextBudget {
     param(
         [object]$Config,
         [string]$Role,
         [string]$ProviderName,
+        [string]$Workload,
         [object]$LocalRuntime
     )
 
-    $defaultGlobal = 120000
-    $defaultRoleBudgets = @{
-        "pm" = 70000
-        "cto" = 110000
-        "engineering-manager" = 120000
-        "qa" = 90000
-        "security" = 100000
-        "devops" = 90000
-    }
-
-    $globalMax = $defaultGlobal
-    if ($null -ne $Config -and $null -ne $Config.analysis_context_max_chars) {
-        $globalMax = [int]$Config.analysis_context_max_chars
-    }
-    elseif ($null -ne $Config -and $null -ne $Config.context_max_chars) {
-        $globalMax = [Math]::Min([int]$Config.context_max_chars,$defaultGlobal)
-    }
-
-    $roleKey = ([string]$Role).Trim().ToLowerInvariant()
-    $roleMax = if ($defaultRoleBudgets.ContainsKey($roleKey)) {
-        [Math]::Min([int]$defaultRoleBudgets[$roleKey],$globalMax)
-    }
-    else {
-        $globalMax
-    }
-
-    if (
-        -not [string]::IsNullOrWhiteSpace($Role) -and
-        $null -ne $Config -and
-        $null -ne $Config.analysis_context_max_chars_by_role
-    ) {
-        $roleProperty = $Config.analysis_context_max_chars_by_role.PSObject.Properties[$Role]
-        if ($null -ne $roleProperty -and $null -ne $roleProperty.Value) {
-            $roleMax = [Math]::Min([int]$roleProperty.Value,$globalMax)
+    if ($Workload -eq "analysis") {
+        $defaultGlobal = 120000
+        $defaultRoleBudgets = @{
+            "pm" = 70000
+            "cto" = 110000
+            "engineering-manager" = 120000
+            "qa" = 90000
+            "security" = 100000
+            "devops" = 90000
         }
-    }
 
-    $providerMax = 0
-    $hardwareMax = 0
-    $effectiveMax = $roleMax
+        $globalMax = $defaultGlobal
+        if ($null -ne $Config -and $null -ne $Config.analysis_context_max_chars) {
+            $globalMax = [int]$Config.analysis_context_max_chars
+        }
+        elseif ($null -ne $Config -and $null -ne $Config.context_max_chars) {
+            $globalMax = [Math]::Min([int]$Config.context_max_chars,$defaultGlobal)
+        }
 
-    if ($ProviderName -eq "Ollama") {
-        if ($null -ne $Config -and $null -ne $Config.ollama_context_max_chars) {
-            $providerMax = [int]$Config.ollama_context_max_chars
-            if ($providerMax -gt 0) {
-                $effectiveMax = [Math]::Min($effectiveMax,$providerMax)
-            }
+        $roleKey = ([string]$Role).Trim().ToLowerInvariant()
+        $roleMax = if ($defaultRoleBudgets.ContainsKey($roleKey)) {
+            [Math]::Min([int]$defaultRoleBudgets[$roleKey],$globalMax)
+        }
+        else {
+            $globalMax
         }
 
         if (
-            $null -ne $LocalRuntime -and
-            [bool]$LocalRuntime.Available -and
-            $null -ne $LocalRuntime.ContextMaxChars
+            -not [string]::IsNullOrWhiteSpace($Role) -and
+            $null -ne $Config -and
+            $null -ne $Config.analysis_context_max_chars_by_role
         ) {
-            $hardwareMax = [int]$LocalRuntime.ContextMaxChars
-            if ($hardwareMax -gt 0) {
-                $effectiveMax = [Math]::Min($effectiveMax,$hardwareMax)
+            $roleProperty = $Config.analysis_context_max_chars_by_role.PSObject.Properties[$Role]
+            if ($null -ne $roleProperty -and $null -ne $roleProperty.Value) {
+                $roleMax = [Math]::Min([int]$roleProperty.Value,$globalMax)
             }
+        }
+
+        $providerMax = 0
+        $hardwareMax = 0
+        $effectiveMax = $roleMax
+
+        if ($ProviderName -eq "Ollama") {
+            if ($null -ne $Config -and $null -ne $Config.ollama_context_max_chars) {
+                $providerMax = [int]$Config.ollama_context_max_chars
+                if ($providerMax -gt 0) {
+                    $effectiveMax = [Math]::Min($effectiveMax,$providerMax)
+                }
+            }
+
+            if (
+                $null -ne $LocalRuntime -and
+                [bool]$LocalRuntime.Available -and
+                $null -ne $LocalRuntime.ContextMaxChars
+            ) {
+                $hardwareMax = [int]$LocalRuntime.ContextMaxChars
+                if ($hardwareMax -gt 0) {
+                    $effectiveMax = [Math]::Min($effectiveMax,$hardwareMax)
+                }
+            }
+        }
+
+        if ($effectiveMax -lt 10000) {
+            throw "Effective analysis context budget is too small for canonical task context: $effectiveMax"
+        }
+
+        return [PSCustomObject]@{
+            GlobalMaxChars = $globalMax
+            RoleMaxChars = $roleMax
+            ProviderMaxChars = $providerMax
+            HardwareMaxChars = $hardwareMax
+            EffectiveMaxChars = $effectiveMax
         }
     }
 
-    if ($effectiveMax -lt 10000) {
-        throw "Effective analysis context budget is too small for canonical task context: $effectiveMax"
+    if ($Workload -eq "gate") {
+        $globalMax = 180000
+        if ($null -ne $Config -and $null -ne $Config.gate_context_max_chars) {
+            $globalMax = [int]$Config.gate_context_max_chars
+        }
+
+        $providerMax = 0
+        $hardwareMax = 0
+        $effectiveMax = $globalMax
+
+        if ($ProviderName -eq "Ollama") {
+            if ($null -ne $Config -and $null -ne $Config.ollama_gate_context_max_chars) {
+                $providerMax = [int]$Config.ollama_gate_context_max_chars
+                if ($providerMax -gt 0) {
+                    $effectiveMax = [Math]::Min($effectiveMax,$providerMax)
+                }
+            }
+
+            if (
+                $null -ne $LocalRuntime -and
+                [bool]$LocalRuntime.Available -and
+                $null -ne $LocalRuntime.GateContextMaxChars
+            ) {
+                $hardwareMax = [int]$LocalRuntime.GateContextMaxChars
+                if ($hardwareMax -gt 0) {
+                    $effectiveMax = [Math]::Min($effectiveMax,$hardwareMax)
+                }
+            }
+        }
+
+        if ($effectiveMax -lt 4000) {
+            throw "Effective gate context budget is too small for canonical gate evidence: $effectiveMax"
+        }
+
+        return [PSCustomObject]@{
+            GlobalMaxChars = $globalMax
+            RoleMaxChars = $globalMax
+            ProviderMaxChars = $providerMax
+            HardwareMaxChars = $hardwareMax
+            EffectiveMaxChars = $effectiveMax
+        }
     }
 
-    return [PSCustomObject]@{
-        GlobalMaxChars = $globalMax
-        RoleMaxChars = $roleMax
-        ProviderMaxChars = $providerMax
-        HardwareMaxChars = $hardwareMax
-        EffectiveMaxChars = $effectiveMax
-    }
+    return $null
 }
 
 function Limit-ProviderContext {
@@ -425,14 +473,15 @@ foreach ($candidate in $attempts) {
     $candidateContext = $Context
     $contextBudget = $null
 
-    if ($Workload -eq "analysis" -and $candidateName -ne "Codex") {
+    if ($Workload -in @("analysis","gate") -and $candidateName -ne "Codex") {
         $contextBudgetArgs = @{
             Config = $config
             Role = $Role
             ProviderName = $candidateName
+            Workload = $Workload
             LocalRuntime = $localRuntime
         }
-        $contextBudget = Get-EffectiveAnalysisContextBudget @contextBudgetArgs
+        $contextBudget = Get-EffectiveProviderContextBudget @contextBudgetArgs
 
         $candidateContext = Limit-ProviderContext -Context $Context -MaxChars ([int]$contextBudget.EffectiveMaxChars)
 
