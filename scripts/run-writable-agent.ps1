@@ -526,6 +526,10 @@ foreach ($required in @($dispatchPath,$rolePath,$schemaPath,$policyPath,$routerP
 }
 
 $policy = Get-Content $policyPath -Raw -Encoding UTF8 | ConvertFrom-Json
+$verificationPolicyLines = @(
+    @($policy.verification_command_patterns) |
+    ForEach-Object { "- " + [string]$_ }
+)
 $configPath = Join-Path $root ".codex\provider-config.json"
 $config = $null
 
@@ -589,6 +593,11 @@ $prompt = @(
     "",
     "Verification commands are suggestions only. They are never executed unless the local writable policy explicitly allows them.",
     "Prefer deterministic repository-local verification such as tests, lint, typecheck, build, or dedicated verify scripts.",
+    "Do not invent test modules, test files, package scripts, commands, or verification targets that are not evidenced by the supplied task, dispatch, or repository context.",
+    "If no project-specific verifier is evidenced, use git diff --check rather than inventing one.",
+    "",
+    "Exact local verification-command allowlist patterns:",
+    ($verificationPolicyLines -join [Environment]::NewLine),
     "",
     "Outcome semantics:",
     "- COMPLETED means you produced a complete implementation change set ready for local application and verification.",
@@ -772,6 +781,11 @@ if ($verificationCommands.Count -gt [int]$policy.max_verification_commands) {
     throw "Writable change set exceeds max_verification_commands policy."
 }
 
+$safeVerificationCommands = @()
+foreach ($commandText in $verificationCommands) {
+    $safeVerificationCommands += Get-SafeCommand -Command ([string]$commandText) -Policy $policy
+}
+
 $planned = @{}
 $backups = @{}
 $totalWriteBytes = 0
@@ -853,8 +867,7 @@ try {
 
     $verificationLog = New-Object System.Collections.Generic.List[string]
 
-    foreach ($commandText in $verificationCommands) {
-        $safeCommand = Get-SafeCommand -Command ([string]$commandText) -Policy $policy
+    foreach ($safeCommand in $safeVerificationCommands) {
         Write-Host ""
         Write-Host ("Verification: " + $safeCommand.Display) -ForegroundColor Cyan
         $commandOutput = Invoke-VerificationCommand -SafeCommand $safeCommand -Workspace $workspace
