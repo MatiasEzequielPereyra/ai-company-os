@@ -12,7 +12,8 @@ $required = @(
     "scripts\build-agent-context.ps1",
     "scripts\resolve-writable-required-files.ps1",
     "scripts\task-execution-lock.ps1",
-    "scripts\validate-engineering-plan-result.ps1",
+    "scripts\validate-engineering-plan-result.ps1,
+        "scripts\validate-engineering-backlog-semantics.ps1",
     "scripts\providers\invoke-codex.ps1",
     "scripts\providers\invoke-openrouter.ps1",
     "scripts\providers\invoke-gemini.ps1",
@@ -230,7 +231,8 @@ if ([int]$engineeringPlanSchema.properties.executable_work.maxItems -lt 1) {
     throw "Engineering plan result schema must bound executable_work"
 }
 
-$engineeringPlanValidator = Get-Content (Join-Path $repoRoot "scripts\validate-engineering-plan-result.ps1") -Raw
+$engineeringPlanValidator = Get-Content (Join-Path $repoRoot "scripts\validate-engineering-plan-result.ps1,
+        "scripts\validate-engineering-backlog-semantics.ps1") -Raw
 
 foreach ($signal in @(
     'contains no real IMPLEMENTATION work',
@@ -430,7 +432,8 @@ $parseTargets = @(
     "scripts\run-active-agents.ps1",
     "scripts\run-writable-agent.ps1",
     "scripts\provider-router.ps1",
-    "scripts\validate-engineering-plan-result.ps1",
+    "scripts\validate-engineering-plan-result.ps1,
+        "scripts\validate-engineering-backlog-semantics.ps1",
     "scripts\build-agent-context.ps1",
     "scripts\providers\invoke-codex.ps1",
     "scripts\providers\invoke-openrouter.ps1",
