@@ -111,6 +111,8 @@ if ([string]::IsNullOrWhiteSpace($env:OPENROUTER_API_KEY)) {
 $schema = Get-Content $SchemaPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $fullPrompt = $Prompt + [Environment]::NewLine + [Environment]::NewLine + "# Repository Context Pack" + [Environment]::NewLine + $Context
 
+$maxOutputTokens = 12000
+
 $body = @{
     model = $Model
     messages = @(
@@ -120,7 +122,7 @@ $body = @{
         }
     )
     temperature = 0.1
-    max_tokens = 12000
+    max_tokens = $maxOutputTokens
     response_format = @{
         type = "json_schema"
         json_schema = @{
@@ -200,11 +202,41 @@ else {
     "UNKNOWN"
 }
 
+$promptTokens = 0
+$completionTokens = 0
+$totalTokens = 0
+$reasoningTokens = 0
+
+if ($null -ne $response.usage) {
+    if ($null -ne $response.usage.prompt_tokens) { $promptTokens = [int]$response.usage.prompt_tokens }
+    if ($null -ne $response.usage.completion_tokens) { $completionTokens = [int]$response.usage.completion_tokens }
+    if ($null -ne $response.usage.total_tokens) { $totalTokens = [int]$response.usage.total_tokens }
+
+    if (
+        $null -ne $response.usage.completion_tokens_details -and
+        $null -ne $response.usage.completion_tokens_details.reasoning_tokens
+    ) {
+        $reasoningTokens = [int]$response.usage.completion_tokens_details.reasoning_tokens
+    }
+}
+
+Write-Host (
+    "OpenRouter response: finish_reason=" + $finishReason +
+    ", max_tokens=" + $maxOutputTokens +
+    ", prompt_tokens=" + $promptTokens +
+    ", completion_tokens=" + $completionTokens +
+    ", reasoning_tokens=" + $reasoningTokens +
+    ", total_tokens=" + $totalTokens
+) -ForegroundColor DarkGray
+
 if ($finishReason -eq "length") {
     $responseModel = if ($null -ne $response.model) { [string]$response.model } else { $Model }
     throw (
         "OpenRouter structured completion was truncated before completion. " +
-        "Model: $responseModel; finish_reason: length. " +
+        "Model: $responseModel; finish_reason: length; " +
+        "max_tokens: $maxOutputTokens; prompt_tokens: $promptTokens; " +
+        "completion_tokens: $completionTokens; reasoning_tokens: $reasoningTokens; " +
+        "total_tokens: $totalTokens. " +
         "The incomplete structured result was rejected and was not persisted."
     )
 }
@@ -243,4 +275,10 @@ $normalizedContent = ConvertTo-StructuredObjectJson -Content $content
 [PSCustomObject]@{
     Provider = "OpenRouter"
     Model = $(if ($null -ne $response.model) { [string]$response.model } else { $Model })
+    FinishReason = $finishReason
+    MaxOutputTokens = $maxOutputTokens
+    PromptTokens = $promptTokens
+    CompletionTokens = $completionTokens
+    ReasoningTokens = $reasoningTokens
+    TotalTokens = $totalTokens
 }

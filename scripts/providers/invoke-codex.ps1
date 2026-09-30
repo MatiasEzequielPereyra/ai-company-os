@@ -15,6 +15,25 @@ function ConvertTo-PowerShellLiteral {
     return "'" + ([string]$Value).Replace("'","''") + "'"
 }
 
+function Remove-TemporaryFileBestEffort {
+    param([string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path)) { return }
+
+    try {
+        if ([System.IO.File]::Exists($Path)) {
+            [System.IO.File]::Delete($Path)
+        }
+    }
+    catch {
+        # Cleanup must never replace the provider's primary failure.
+        Write-Host (
+            "Codex temporary-file cleanup warning: " +
+            [System.IO.Path]::GetFileName($Path)
+        ) -ForegroundColor DarkYellow
+    }
+}
+
 function Stop-ProcessTree {
     param([int]$ProcessId)
 
@@ -208,16 +227,24 @@ catch {
     throw
 }
 finally {
-    $env:CODEX_API_KEY = $savedApiKey
+    try {
+        $env:CODEX_API_KEY = $savedApiKey
+    }
+    catch {
+        Write-Host "Codex environment cleanup warning: unable to restore CODEX_API_KEY." -ForegroundColor DarkYellow
+    }
 
     if ($null -ne $process) {
-        $process.Dispose()
+        try {
+            $process.Dispose()
+        }
+        catch {
+            Write-Host "Codex process cleanup warning: process handle could not be disposed." -ForegroundColor DarkYellow
+        }
     }
 
     foreach ($temporaryPath in @($promptPath,$runnerPath)) {
-        if (Test-Path $temporaryPath) {
-            Remove-Item $temporaryPath -Force -ErrorAction SilentlyContinue
-        }
+        Remove-TemporaryFileBestEffort -Path $temporaryPath
     }
 }
 

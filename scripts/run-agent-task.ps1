@@ -254,7 +254,7 @@ if ($needsExternalContext) {
             if ($null -ne $providerConfig.analysis_context_max_chars_by_role) {
                 $roleProperty = $providerConfig.analysis_context_max_chars_by_role.PSObject.Properties[$owner]
                 if ($null -ne $roleProperty -and $null -ne $roleProperty.Value) {
-                    $maxChars = [int]$roleProperty.Value
+                    $maxChars = [Math]::Min([int]$roleProperty.Value,$globalAnalysisMax)
                 }
             }
         }
@@ -263,15 +263,20 @@ if ($needsExternalContext) {
         }
     }
 
-    if ($null -ne $localRuntime -and [bool]$localRuntime.Available) {
-        $maxChars = [Math]::Min($maxChars,[int]$localRuntime.ContextMaxChars)
-    }
-    elseif (
-        $Provider -eq "Ollama" -and
-        $null -ne $providerConfig -and
-        $null -ne $providerConfig.ollama_context_max_chars
-    ) {
-        $maxChars = [Math]::Min($maxChars,[int]$providerConfig.ollama_context_max_chars)
+    # Auto must build the role/global context once because the effective provider
+    # is not known until routing time. Candidate-specific policy is enforced by
+    # provider-router.ps1. Explicit Ollama can be bounded earlier as an optimization.
+    if ($Provider -eq "Ollama") {
+        if (
+            $null -ne $providerConfig -and
+            $null -ne $providerConfig.ollama_context_max_chars
+        ) {
+            $maxChars = [Math]::Min($maxChars,[int]$providerConfig.ollama_context_max_chars)
+        }
+
+        if ($null -ne $localRuntime -and [bool]$localRuntime.Available) {
+            $maxChars = [Math]::Min($maxChars,[int]$localRuntime.ContextMaxChars)
+        }
     }
 
     if ($maxChars -lt 10000) {

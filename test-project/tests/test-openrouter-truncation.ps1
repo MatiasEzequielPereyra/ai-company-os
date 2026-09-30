@@ -32,6 +32,14 @@ try {
 
         return [PSCustomObject]@{
             model = "stub/schema-model"
+            usage = [PSCustomObject]@{
+                prompt_tokens = 7000
+                completion_tokens = 12000
+                total_tokens = 19000
+                completion_tokens_details = [PSCustomObject]@{
+                    reasoning_tokens = 3000
+                }
+            }
             choices = @(
                 [PSCustomObject]@{
                     finish_reason = "length"
@@ -59,6 +67,15 @@ try {
         $message = [string]$_.Exception.Message
         if ($message -notmatch 'finish_reason:\s*length|finish_reason=length|truncated') {
             throw "OpenRouter length rejection must explain truncation. Actual: $message"
+        }
+        if ($message -notmatch 'max_tokens:\s*12000') {
+            throw "OpenRouter length rejection must expose the configured output budget. Actual: $message"
+        }
+        if ($message -notmatch 'completion_tokens:\s*12000') {
+            throw "OpenRouter length rejection must expose completion token usage. Actual: $message"
+        }
+        if ($message -notmatch 'reasoning_tokens:\s*3000') {
+            throw "OpenRouter length rejection must expose reasoning token usage when available. Actual: $message"
         }
     }
 

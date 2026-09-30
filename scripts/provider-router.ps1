@@ -114,6 +114,151 @@ function Get-ProviderErrorCategory {
     return "unknown"
 }
 
+function Get-EffectiveProviderContextBudget {
+    param(
+        [object]$Config,
+        [string]$Role,
+        [string]$ProviderName,
+        [string]$Workload,
+        [object]$LocalRuntime
+    )
+
+    if ($Workload -eq "analysis") {
+        $defaultGlobal = 120000
+        $defaultRoleBudgets = @{
+            "pm" = 70000
+            "cto" = 110000
+            "engineering-manager" = 120000
+            "qa" = 90000
+            "security" = 100000
+            "devops" = 90000
+        }
+
+        $globalMax = $defaultGlobal
+        if ($null -ne $Config -and $null -ne $Config.analysis_context_max_chars) {
+            $globalMax = [int]$Config.analysis_context_max_chars
+        }
+        elseif ($null -ne $Config -and $null -ne $Config.context_max_chars) {
+            $globalMax = [Math]::Min([int]$Config.context_max_chars,$defaultGlobal)
+        }
+
+        $roleKey = ([string]$Role).Trim().ToLowerInvariant()
+        $roleMax = if ($defaultRoleBudgets.ContainsKey($roleKey)) {
+            [Math]::Min([int]$defaultRoleBudgets[$roleKey],$globalMax)
+        }
+        else {
+            $globalMax
+        }
+
+        if (
+            -not [string]::IsNullOrWhiteSpace($Role) -and
+            $null -ne $Config -and
+            $null -ne $Config.analysis_context_max_chars_by_role
+        ) {
+            $roleProperty = $Config.analysis_context_max_chars_by_role.PSObject.Properties[$Role]
+            if ($null -ne $roleProperty -and $null -ne $roleProperty.Value) {
+                $roleMax = [Math]::Min([int]$roleProperty.Value,$globalMax)
+            }
+        }
+
+        $providerMax = 0
+        $hardwareMax = 0
+        $effectiveMax = $roleMax
+
+        if ($ProviderName -eq "Ollama") {
+            if ($null -ne $Config -and $null -ne $Config.ollama_context_max_chars) {
+                $providerMax = [int]$Config.ollama_context_max_chars
+                if ($providerMax -gt 0) {
+                    $effectiveMax = [Math]::Min($effectiveMax,$providerMax)
+                }
+            }
+
+            if (
+                $null -ne $LocalRuntime -and
+                [bool]$LocalRuntime.Available -and
+                $null -ne $LocalRuntime.ContextMaxChars
+            ) {
+                $hardwareMax = [int]$LocalRuntime.ContextMaxChars
+                if ($hardwareMax -gt 0) {
+                    $effectiveMax = [Math]::Min($effectiveMax,$hardwareMax)
+                }
+            }
+        }
+
+        if ($effectiveMax -lt 10000) {
+            throw "Effective analysis context budget is too small for canonical task context: $effectiveMax"
+        }
+
+        return [PSCustomObject]@{
+            GlobalMaxChars = $globalMax
+            RoleMaxChars = $roleMax
+            ProviderMaxChars = $providerMax
+            HardwareMaxChars = $hardwareMax
+            EffectiveMaxChars = $effectiveMax
+        }
+    }
+
+    if ($Workload -eq "gate") {
+        $globalMax = 180000
+        if ($null -ne $Config -and $null -ne $Config.gate_context_max_chars) {
+            $globalMax = [int]$Config.gate_context_max_chars
+        }
+
+        $providerMax = 0
+        $hardwareMax = 0
+        $effectiveMax = $globalMax
+
+        if ($ProviderName -eq "Ollama") {
+            if ($null -ne $Config -and $null -ne $Config.ollama_gate_context_max_chars) {
+                $providerMax = [int]$Config.ollama_gate_context_max_chars
+                if ($providerMax -gt 0) {
+                    $effectiveMax = [Math]::Min($effectiveMax,$providerMax)
+                }
+            }
+
+            if (
+                $null -ne $LocalRuntime -and
+                [bool]$LocalRuntime.Available -and
+                $null -ne $LocalRuntime.GateContextMaxChars
+            ) {
+                $hardwareMax = [int]$LocalRuntime.GateContextMaxChars
+                if ($hardwareMax -gt 0) {
+                    $effectiveMax = [Math]::Min($effectiveMax,$hardwareMax)
+                }
+            }
+        }
+
+        if ($effectiveMax -lt 4000) {
+            throw "Effective gate context budget is too small for canonical gate evidence: $effectiveMax"
+        }
+
+        return [PSCustomObject]@{
+            GlobalMaxChars = $globalMax
+            RoleMaxChars = $globalMax
+            ProviderMaxChars = $providerMax
+            HardwareMaxChars = $hardwareMax
+            EffectiveMaxChars = $effectiveMax
+        }
+    }
+
+    return $null
+}
+
+function Limit-ProviderContext {
+    param(
+        [AllowEmptyString()][string]$Context,
+        [int]$MaxChars
+    )
+
+    if ($MaxChars -le 0 -or $Context.Length -le $MaxChars) {
+        return $Context
+    }
+
+    $marker = [Environment]::NewLine + "[TRUNCATED BY AI COMPANY OS PROVIDER CONTEXT POLICY]"
+    $take = [Math]::Max(0,$MaxChars - $marker.Length)
+    return $Context.Substring(0,$take) + $marker
+}
+
 function Write-ProviderEvent {
     param(
         [hashtable]$Event,
@@ -325,6 +470,32 @@ foreach ($candidate in $attempts) {
 
     $providerTimeoutSeconds = Get-ConfiguredTimeoutSeconds -Config $config -Name $candidateName
 
+    $candidateContext = $Context
+    $contextBudget = $null
+
+    if ($Workload -in @("analysis","gate") -and $candidateName -ne "Codex") {
+        $contextBudgetArgs = @{
+            Config = $config
+            Role = $Role
+            ProviderName = $candidateName
+            Workload = $Workload
+            LocalRuntime = $localRuntime
+        }
+        $contextBudget = Get-EffectiveProviderContextBudget @contextBudgetArgs
+
+        $candidateContext = Limit-ProviderContext -Context $Context -MaxChars ([int]$contextBudget.EffectiveMaxChars)
+
+        Write-Host (
+            "Provider context: " + $candidateName +
+            "; input_chars=" + $Context.Length +
+            "; effective_max_chars=" + [int]$contextBudget.EffectiveMaxChars +
+            "; sent_chars=" + $candidateContext.Length +
+            "; role_max_chars=" + [int]$contextBudget.RoleMaxChars +
+            "; provider_max_chars=" + [int]$contextBudget.ProviderMaxChars +
+            "; hardware_max_chars=" + [int]$contextBudget.HardwareMaxChars
+        ) -ForegroundColor DarkGray
+    }
+
     $attempted++
     $attemptStarted = Get-Date
     Write-Host ""
@@ -335,6 +506,9 @@ foreach ($candidate in $attempts) {
         provider = $candidateName
         model = $providerModel
         timeout_seconds = $providerTimeoutSeconds
+        context_chars = $candidateContext.Length
+        context_input_chars = $Context.Length
+        context_max_chars = $(if ($null -ne $contextBudget) { [int]$contextBudget.EffectiveMaxChars } else { 0 })
         success = $false
         error_category = ""
     } -WarningPrefix "Provider start metrics could not be recorded"
@@ -347,14 +521,14 @@ foreach ($candidate in $attempts) {
                 return (& $providerScript -ProjectPath $root -Prompt $EffectivePrompt -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel -TimeoutSeconds $providerTimeoutSeconds)
             }
             elseif ($candidateName -eq "Ollama") {
-                $candidateResult = & $providerScript -Prompt $EffectivePrompt -Context $Context -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel -NumCtx ([int]$localRuntime.NumCtx) -NumPredict ([int]$localRuntime.NumPredict) -TimeoutSeconds $providerTimeoutSeconds
+                $candidateResult = & $providerScript -Prompt $EffectivePrompt -Context $candidateContext -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel -NumCtx ([int]$localRuntime.NumCtx) -NumPredict ([int]$localRuntime.NumPredict) -TimeoutSeconds $providerTimeoutSeconds
                 $candidateResult | Add-Member -NotePropertyName HardwareProfile -NotePropertyValue ([string]$localRuntime.Profile) -Force
                 $candidateResult | Add-Member -NotePropertyName NumCtx -NotePropertyValue ([int]$localRuntime.NumCtx) -Force
                 $candidateResult | Add-Member -NotePropertyName NumPredict -NotePropertyValue ([int]$localRuntime.NumPredict) -Force
                 return $candidateResult
             }
             else {
-                return (& $providerScript -Prompt $EffectivePrompt -Context $Context -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel -TimeoutSeconds $providerTimeoutSeconds)
+                return (& $providerScript -Prompt $EffectivePrompt -Context $candidateContext -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel -TimeoutSeconds $providerTimeoutSeconds)
             }
         }
 
