@@ -269,7 +269,7 @@ El instalador crea/actualiza su manifest de ownership en:
 .codex/managed-files.json
 ~~~
 
-La instalación normal omite archivos existentes en paths del framework en vez de sobreescribirlos silenciosamente.
+La instalación normal omite archivos existentes en paths del framework en vez de sobreescribirlos silenciosamente. Si un `scripts/sync-company-state.ps1` preexistente es omitido, el installer no lo ejecuta: la sincronización post-install usa la implementación package-owned.
 
 Git no es un requisito duro para copiar el framework: si .git falta se emite un warning. Sin Git no está disponible el aislamiento writable por worktrees.
 
@@ -792,6 +792,8 @@ aico shell
 ```
 
 La CLI cubre instalación, selección de proyecto, diagnóstico, estado, tareas, workflow, actividad y navegación interactiva.
+
+En la TUI actual, `F2` cambia el idioma de interfaz entre ES/EN y `F3` alterna entre los temas Default/Hacker. La selección persiste entre sesiones y también existe una vista de Settings para la configuración de interfaz.
 
 Los scripts PowerShell siguen siendo la interfaz de bajo nivel para lifecycle completo, providers, gates y operaciones avanzadas.
 

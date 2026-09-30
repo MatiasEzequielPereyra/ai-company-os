@@ -26,6 +26,8 @@ This installs the framework surface into an existing directory.
 
 Normal installation skips existing framework-path files instead of overwriting them silently.
 
+A skipped pre-existing `scripts/sync-company-state.ps1` remains project-owned and is not executed by the installer. Post-install derived-state synchronization runs the package-owned sync implementation against the target project.
+
 The optional force mode exists for explicit reinstall scenarios. It can replace existing framework-path files and is **not** the supported substitute for project runtime update.
 
 ### Update a managed project runtime
@@ -160,6 +162,7 @@ Current release/package validation exercises the exact npm tarball and verifies:
 - packaged aico install;
 - package-local Python bootstrap;
 - preservation of a pre-existing user-owned file;
+- preservation and non-execution of a pre-existing project-owned sync script collision;
 - valid managed runtime artifacts;
 - packaged aico update;
 - restoration of a stale managed runtime file from the installed package;

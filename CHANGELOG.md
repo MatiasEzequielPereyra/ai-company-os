@@ -13,6 +13,7 @@ The project is pre-beta. Version entries should only be added when a release and
 - Release-validation workflow that builds and exercises the exact npm tarball.
 - Packaged end-to-end coverage for aico new, aico install, Python bootstrap, user-file preservation, and aico update.
 - Public documentation for provider routing, managed ownership/update behavior, security reporting, contribution workflow, and platform/maturity boundaries.
+- Persistent TUI language/theme settings, ES/EN switching, Default/Hacker presentation, and updated project/help/planning/work-request screens.
 
 ### Changed
 
@@ -25,6 +26,7 @@ The project is pre-beta. Version entries should only be added when a release and
 
 - Runtime update refuses unmanaged conflicts and unsafe reparse/path escapes.
 - Writable execution remains isolated to registered task worktrees and does not automatically commit, merge, push, deploy, publish, or retrieve secrets.
+- Existing-project installation no longer executes a skipped pre-existing `scripts/sync-company-state.ps1`; post-install state sync runs from the package-owned implementation.
 
 ## Verified repository history
 
@@ -33,5 +35,7 @@ The current Unreleased summary incorporates changes verified in repository histo
 - PR #24 — hardening(runtime): bound providers and add safe project upgrades
 - PR #25 — feat(planning): add structured engineering execution plans
 - PR #26 — hardening(release): validate packaged artifact end to end
+- PR #28 — feat(cli): integrate v1.2 hacker TUI with modern runtime
+- PR #29 — fix(installer): enforce existing-project sync trust boundary
 
 No new released version or release date is declared by this document.

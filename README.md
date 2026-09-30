@@ -8,7 +8,7 @@ It turns work requests, plans, tasks, agent results, review evidence, QA/securit
 
 AI Company OS is pre-beta software under active development.
 
-The current main branch includes project scaffolding, installation into existing repositories, an npm-distributed CLI, package-local Python bootstrap, a TUI, task lifecycle enforcement, provider routing, hardware-aware Ollama support, isolated writable execution, structured Engineering Manager planning, quality gates, managed runtime updates, and release/package validation.
+The current main branch includes project scaffolding, installation into existing repositories, an npm-distributed CLI, package-local Python bootstrap, a TUI with persistent ES/EN language and Default/Hacker themes, task lifecycle enforcement, provider routing, hardware-aware Ollama support, isolated writable execution, structured Engineering Manager planning, quality gates, managed runtime updates, and release/package validation.
 
 Current limitations are documented rather than hidden. Merge, push, deploy, release, and package publication remain outside the writable agent runtime. Cross-platform support is not established. Some workflow operations still use PowerShell scripts directly.
 
@@ -52,7 +52,7 @@ aico status
 aico
 ~~~
 
-The normal installer does not intentionally overwrite an existing file at a framework path. It records installed ownership in **.codex/managed-files.json**.
+The normal installer does not intentionally overwrite an existing file at a framework path. It records installed ownership in **.codex/managed-files.json**. Post-install state synchronization executes the package-owned sync implementation rather than a skipped project-owned script.
 
 Continue with the [Quick Start](https://github.com/MatiasEzequielPereyra/ai-company-os/blob/main/docs/QUICKSTART.md).
 
@@ -69,6 +69,8 @@ aico new my-project C:\Projects
 ~~~
 
 The command creates the project, installs the AI Company OS project structure, bootstraps the Python CLI, and selects the new project as active.
+
+Inside the TUI, **F2** switches the interface language and **F3** toggles the Default/Hacker theme. Those interface preferences persist across sessions.
 
 **Current limitation:** aico new does not run git init. If the project will use Git-backed lifecycle or isolated writable worktrees, initialize Git explicitly:
 

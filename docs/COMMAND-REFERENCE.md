@@ -42,6 +42,8 @@ aico
 
 Purpose: launch the TUI for the configured project.
 
+TUI shortcuts: `F2` switches ES/EN interface language and `F3` toggles the Default/Hacker theme. Interface preferences persist across sessions; the TUI also exposes a Settings view.
+
 Side effect: may bootstrap/update the package-local Python environment when the installed package version changed.
 
 Common failure: Python >=3.11 or PowerShell is unavailable.
@@ -109,7 +111,7 @@ Optional explicit reinstall flag:
 
 Purpose: install AI Company OS into an existing directory and select that project.
 
-Normal installation skips existing framework-path files. Force can replace them and is not the project-upgrade mechanism.
+Normal installation skips existing framework-path files. Skipped pre-existing scripts are not used as post-install executable code; derived-state synchronization runs through the package-owned sync implementation. Force can replace framework-path files and is not the project-upgrade mechanism.
 
 Common failures: invalid target, PowerShell missing, existing malformed managed manifest, Python bootstrap failure.
 

@@ -16,6 +16,8 @@ This file distinguishes what is documented and validated from what remains limit
 | aico update | update contract plus packaged npm E2E |
 | managed-files fail-closed update | update-runtime contract |
 | project-owned file preservation in packaged flows | npm E2E |
+| skipped project-owned sync script remains unexecuted during install | install contract plus packaged npm E2E |
+| persistent ES/EN language and Default/Hacker TUI themes | interface settings/theme tests plus TUI integration |
 | general Auto = Ollama by default | provider config/router/update contract |
 | Engineering Manager analysis override | provider config/router |
 | writable Auto/local-first safety | writable runtime and policy |
