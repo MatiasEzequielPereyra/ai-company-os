@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from rich import box
 from rich.panel import Panel
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, VerticalScroll
+from textual.containers import (
+    Horizontal,
+    VerticalScroll,
+)
 from textual.screen import Screen
 from textual.widgets import (
     Footer,
@@ -15,6 +19,13 @@ from textual.widgets import (
     Static,
 )
 
+from company_os.cli.widgets import CircularListView
+from company_os.cli.theme import (
+    HACKER_NEON,
+    is_hacker_interface,
+    sync_hacker_screen_class,
+    terminal_section_title,
+)
 from company_os.cli.i18n import (
     HELP_SECTION_IDS,
     help_section_content,
@@ -27,7 +38,17 @@ class HelpScreen(Screen):
         Binding(
             "escape",
             "back",
-            "Volver / Back",
+            "Atras / Back",
+        ),
+        Binding(
+            "left",
+            "back",
+            "Atras / Back",
+        ),
+        Binding(
+            "right",
+            "open_current",
+            "Abrir / Open",
         ),
     ]
 
@@ -57,11 +78,18 @@ class HelpScreen(Screen):
     }
     """
 
+    def __init__(
+        self,
+        initial_section: str = "getting-started",
+    ) -> None:
+        super().__init__()
+        self.initial_section = initial_section
+
     def compose(self) -> ComposeResult:
         yield Header()
 
         with Horizontal(id="help-main"):
-            yield ListView(
+            yield CircularListView(
                 *[
                     ListItem(
                         Label(
@@ -88,18 +116,57 @@ class HelpScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
+        sync_hacker_screen_class(
+            self
+        )
+
         section_list = self.query_one(
             "#help-sections",
             ListView,
         )
 
-        section_list.index = 0
+        index = 0
+
+        if self.initial_section in HELP_SECTION_IDS:
+            index = HELP_SECTION_IDS.index(
+                self.initial_section
+            )
+
+        section_list.index = index
         section_list.focus()
 
-        self._show_section(0)
+        self._show_section(index)
 
     def action_back(self) -> None:
         self.app.pop_screen()
+
+    def action_open_current(self) -> None:
+        section_list = self.query_one(
+            "#help-sections",
+            ListView,
+        )
+
+        index = section_list.index
+
+        if index is None:
+            return
+
+        self._show_section(index)
+
+    def on_list_view_highlighted(
+        self,
+        event: ListView.Highlighted,
+    ) -> None:
+        if event.list_view.id != "help-sections":
+            return
+
+        index = event.list_view.index
+
+        if index is None:
+            return
+
+        # Preview immediately while navigating.
+        self._show_section(index)
 
     def on_list_view_selected(
         self,
@@ -162,13 +229,35 @@ class HelpScreen(Screen):
             section_id,
         )
 
+        hacker = is_hacker_interface(
+            getattr(
+                self.app,
+                "interface_theme",
+                "default",
+            )
+        )
+
         self.query_one(
             "#help-content",
             Static,
         ).update(
             Panel(
                 body,
-                title=title,
+                title=(
+                    terminal_section_title(
+                        title
+                    )
+                    if hacker
+                    else title
+                ),
+                **(
+                    {
+                        "box": box.ASCII,
+                        "border_style": HACKER_NEON,
+                    }
+                    if hacker
+                    else {}
+                ),
             )
         )
 
