@@ -120,6 +120,36 @@ try {
 
     $planPath = Join-Path $tempRoot "docs\engineering\plans\AICO-006-engineering-backlog.json"
 
+    $noneAuthorizationFixture = (
+        $fixture |
+        ConvertTo-Json -Depth 20 |
+        ConvertFrom-Json
+    )
+    $noneAuthorizationFixture.implementation_authorization_key = "NONE"
+
+    [System.IO.File]::WriteAllText(
+        $planPath,
+        ($noneAuthorizationFixture | ConvertTo-Json -Depth 20),
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+
+    $unsupportedNoneRejected = $false
+    try {
+        & $materializer -SourceTaskId "AICO-006" -ProjectPath $tempRoot
+    }
+    catch {
+        if ($_.Exception.Message -match "NONE is not supported by approved source evidence") {
+            $unsupportedNoneRejected = $true
+        }
+        else {
+            throw
+        }
+    }
+
+    if (-not $unsupportedNoneRejected) {
+        throw "Materializer accepted NONE without explicit no-authorization source evidence."
+    }
+
     $invalidAuthorizationFixture = (
         $fixture |
         ConvertTo-Json -Depth 20 |
