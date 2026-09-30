@@ -174,6 +174,24 @@ try {
     }
 
     New-Item -ItemType Directory -Force -Path $existingProjectPath | Out-Null
+
+    $existingScriptsDir = Join-Path $existingProjectPath "scripts"
+    New-Item -ItemType Directory -Force -Path $existingScriptsDir | Out-Null
+    $existingSyncPath = Join-Path $existingScriptsDir "sync-company-state.ps1"
+    $existingSyncMarker = Join-Path $existingProjectPath "preexisting-sync-executed.txt"
+    $existingSyncContent = @'
+[System.IO.File]::WriteAllText(
+    (Join-Path $PSScriptRoot "..\preexisting-sync-executed.txt"),
+    "executed"
+)
+'@
+    [System.IO.File]::WriteAllText(
+        $existingSyncPath,
+        $existingSyncContent,
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+    $existingSyncHashBefore = (Get-FileHash $existingSyncPath -Algorithm SHA256).Hash
+
     $existingUserDir = Join-Path $existingProjectPath "src"
     New-Item -ItemType Directory -Force -Path $existingUserDir | Out-Null
 
@@ -206,6 +224,14 @@ try {
         throw "Packaged aico install modified a pre-existing project-owned file."
     }
 
+    $existingSyncHashAfter = (Get-FileHash $existingSyncPath -Algorithm SHA256).Hash
+    if ($existingSyncHashAfter -ne $existingSyncHashBefore) {
+        throw "Packaged aico install modified the pre-existing project-owned sync script."
+    }
+    if (Test-Path $existingSyncMarker) {
+        throw "Packaged aico install executed the pre-existing project-owned sync script."
+    }
+
     Assert-ManagedProjectRuntime -ProjectPath $existingProjectPath -Scenario "Packaged aico install"
 
     $existingManifest = Get-Content (
@@ -221,6 +247,10 @@ try {
         if (@($existingManifest.managed_files) -notcontains $managedEntry) {
             throw "Packaged aico install manifest is missing ownership entry: $managedEntry"
         }
+    }
+
+    if (@($existingManifest.managed_files) -contains "scripts/sync-company-state.ps1") {
+        throw "Packaged aico install must not claim a skipped project-owned sync script."
     }
 
     & $aicoCommand status --project $existingProjectPath --json
