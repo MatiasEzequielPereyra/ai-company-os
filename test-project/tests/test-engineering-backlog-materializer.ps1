@@ -119,6 +119,80 @@ try {
     }
 
     $planPath = Join-Path $tempRoot "docs\engineering\plans\AICO-006-engineering-backlog.json"
+
+    $noneAuthorizationFixture = (
+        $fixture |
+        ConvertTo-Json -Depth 20 |
+        ConvertFrom-Json
+    )
+    $noneAuthorizationFixture.implementation_authorization_key = "NONE"
+
+    [System.IO.File]::WriteAllText(
+        $planPath,
+        ($noneAuthorizationFixture | ConvertTo-Json -Depth 20),
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+
+    $unsupportedNoneRejected = $false
+    try {
+        & $materializer -SourceTaskId "AICO-006" -ProjectPath $tempRoot
+    }
+    catch {
+        if ($_.Exception.Message -match "NONE is not supported by approved source evidence") {
+            $unsupportedNoneRejected = $true
+        }
+        else {
+            throw
+        }
+    }
+
+    if (-not $unsupportedNoneRejected) {
+        throw "Materializer accepted NONE without explicit no-authorization source evidence."
+    }
+
+    $invalidAuthorizationFixture = (
+        $fixture |
+        ConvertTo-Json -Depth 20 |
+        ConvertFrom-Json
+    )
+
+    $invalidAuthorizationFixture.items[0].title = "Unresolved blockers"
+    $invalidAuthorizationFixture.items[0].objective = "Record unresolved blockers instead of guessing."
+    $invalidAuthorizationFixture.items[0].context = "Generated from orchestration plan for WR-001."
+    $invalidAuthorizationFixture.items[0].acceptance_criteria = @("Open questions and blockers are explicit.")
+
+    [System.IO.File]::WriteAllText(
+        $planPath,
+        ($invalidAuthorizationFixture | ConvertTo-Json -Depth 20),
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+
+    $genericAuthorizationRejected = $false
+    try {
+        & $materializer -SourceTaskId "AICO-006" -ProjectPath $tempRoot
+    }
+    catch {
+        if ($_.Exception.Message -match "does not explicitly authorize implementation") {
+            $genericAuthorizationRejected = $true
+        }
+        else {
+            throw
+        }
+    }
+
+    if (-not $genericAuthorizationRejected) {
+        throw "Materializer accepted a non-authorizing DECISION as implementation authorization."
+    }
+
+    $unexpectedTasks = @(
+        Get-ChildItem (Join-Path $tempRoot "tasks") -Filter "AICO-*.md" -File |
+            Where-Object { $_.BaseName -ne "AICO-006" }
+    )
+
+    if ($unexpectedTasks.Count -ne 0) {
+        throw "Materializer created tasks before rejecting invalid implementation authorization."
+    }
+
     $fixtureJson = $fixture | ConvertTo-Json -Depth 20
 
     [System.IO.File]::WriteAllText(

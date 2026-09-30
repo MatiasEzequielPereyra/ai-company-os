@@ -328,8 +328,30 @@ switch ($name) {
             source_task_id = $sourceTaskId
             work_request_id = $workRequestId
             summary = "Deterministic executable backlog for full TUI E2E."
-            implementation_authorization_key = "NONE"
+            implementation_authorization_key = "AUTHORIZE-IMPLEMENTATION"
             items = @(
+                [ordered]@{
+                    key = "AUTHORIZE-IMPLEMENTATION"
+                    kind = "DECISION"
+                    title = "Authorize implementation"
+                    owner = "engineering-manager"
+                    priority = "P0"
+                    objective = "Explicitly authorize implementation of the approved sample.txt backlog."
+                    context = "Human authorization is required before writable implementation."
+                    acceptance_criteria = @(
+                        "Implementation of the approved sample.txt change is explicitly authorized."
+                    )
+                    dependencies = @()
+                    affected_areas = @(
+                        "planning"
+                    )
+                    testing_requirements = @(
+                        "Record explicit implementation authorization evidence."
+                    )
+                    risks = @(
+                        "Writable implementation starts without explicit authorization."
+                    )
+                },
                 [ordered]@{
                     key = "IMPLEMENT-SAMPLE"
                     kind = "IMPLEMENTATION"
@@ -341,7 +363,9 @@ switch ($name) {
                     acceptance_criteria = @(
                         "sample.txt contains changed by full TUI E2E."
                     )
-                    dependencies = @()
+                    dependencies = @(
+                        "AUTHORIZE-IMPLEMENTATION"
+                    )
                     affected_areas = @(
                         "sample.txt"
                     )

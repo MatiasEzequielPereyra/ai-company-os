@@ -95,8 +95,70 @@ try {
         )
     } | ConvertTo-Json -Depth 20
 
+    $planPath = Join-Path $tempRoot "docs\engineering\plans\AICO-006-engineering-backlog.json"
+
+    $noneAuthorizationPlan = $plan | ConvertFrom-Json
+    $noneAuthorizationPlan.implementation_authorization_key = "NONE"
+
     [System.IO.File]::WriteAllText(
-        (Join-Path $tempRoot "docs\engineering\plans\AICO-006-engineering-backlog.json"),
+        $planPath,
+        ($noneAuthorizationPlan | ConvertTo-Json -Depth 20),
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+
+    $unsupportedNoneRejected = $false
+    try {
+        & $reconcile -SourceTaskId "AICO-006" -ProjectPath $tempRoot
+    }
+    catch {
+        if ($_.Exception.Message -match "NONE is not supported by approved source evidence") {
+            $unsupportedNoneRejected = $true
+        }
+        else {
+            throw
+        }
+    }
+
+    if (-not $unsupportedNoneRejected) {
+        throw "Reconcile accepted NONE without explicit no-authorization source evidence."
+    }
+
+    $genericAuthorizationPlan = $plan | ConvertFrom-Json
+    $genericAuthorizationPlan.items[0].title = "Unresolved blockers"
+    $genericAuthorizationPlan.items[0].objective = "Record unresolved blockers instead of guessing."
+    $genericAuthorizationPlan.items[0].context = "Implementation requires PM approval before blocker resolution."
+    $genericAuthorizationPlan.items[0].acceptance_criteria = @("Open questions and blockers are explicit.")
+
+    [System.IO.File]::WriteAllText(
+        $planPath,
+        ($genericAuthorizationPlan | ConvertTo-Json -Depth 20),
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+
+    $genericAuthorizationRejected = $false
+    try {
+        & $reconcile -SourceTaskId "AICO-006" -ProjectPath $tempRoot
+    }
+    catch {
+        if ($_.Exception.Message -match "does not explicitly authorize implementation") {
+            $genericAuthorizationRejected = $true
+        }
+        else {
+            throw
+        }
+    }
+
+    if (-not $genericAuthorizationRejected) {
+        throw "Reconcile accepted a non-authorizing DECISION as implementation authorization."
+    }
+
+    $unchangedExistingTask = Get-Content (Join-Path $tempRoot "tasks\AICO-007.md") -Raw -Encoding UTF8
+    if ($unchangedExistingTask -notmatch 'Old implementation title') {
+        throw "Reconcile mutated existing tasks before rejecting invalid implementation authorization."
+    }
+
+    [System.IO.File]::WriteAllText(
+        $planPath,
         $plan,
         (New-Object System.Text.UTF8Encoding($false))
     )

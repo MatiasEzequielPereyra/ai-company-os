@@ -163,6 +163,100 @@ try {
     if (@($decisionItem.dependencies).Count -ne 0) {
         throw "DONE upstream planning task dependency was not removed during backlog repair."
     }
+
+    $genericAuthorizationOutput = $runtimeOutput | ConvertFrom-Json
+    $genericAuthorizationOutput.implementation_authorization_key = "AICO-006-DISCARD-SEMANTICS"
+
+    [System.IO.File]::WriteAllText(
+        (Join-Path $tempRoot ".codex\runtime\AICO-006-engineering-backlog.json"),
+        ($genericAuthorizationOutput | ConvertTo-Json -Depth 20),
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+
+    $genericAuthorizationRejected = $false
+    try {
+        & $generator -SourceTaskId "AICO-006" -ProjectPath $tempRoot -ReuseExistingOutput
+    }
+    catch {
+        if ($_.Exception.Message -match "does not explicitly authorize implementation") {
+            $genericAuthorizationRejected = $true
+        }
+        else {
+            throw
+        }
+    }
+
+    if (-not $genericAuthorizationRejected) {
+        throw "Backlog generator accepted a non-authorizing DECISION as implementation authorization."
+    }
+
+    $noneAuthorizationOutput = $runtimeOutput | ConvertFrom-Json
+    $noneAuthorizationOutput.implementation_authorization_key = "NONE"
+
+    [System.IO.File]::WriteAllText(
+        (Join-Path $tempRoot ".codex\runtime\AICO-006-engineering-backlog.json"),
+        ($noneAuthorizationOutput | ConvertTo-Json -Depth 20),
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+
+    $unsupportedNoneRejected = $false
+    try {
+        & $generator -SourceTaskId "AICO-006" -ProjectPath $tempRoot -ReuseExistingOutput
+    }
+    catch {
+        if ($_.Exception.Message -match "NONE is not supported by approved source evidence") {
+            $unsupportedNoneRejected = $true
+        }
+        else {
+            throw
+        }
+    }
+
+    if (-not $unsupportedNoneRejected) {
+        throw "Backlog generator accepted NONE without explicit no-authorization source evidence."
+    }
+
+    [System.IO.File]::WriteAllText(
+        (Join-Path $tempRoot "docs\engineering\agent-reports\AICO-006.md"),
+        "# Approved engineering plan" + [Environment]::NewLine + "No implementation authorization is required for this work.",
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+
+    $explicitNoneOutput = @{
+        source_task_id = "AICO-006"
+        work_request_id = "WR-001"
+        summary = "Explicit no-authorization fixture"
+        implementation_authorization_key = "NONE"
+        items = @(
+            @{
+                key = "RELEASE_BUILD"
+                kind = "IMPLEMENTATION"
+                title = "Fix release build"
+                owner = "devops"
+                priority = "P0"
+                objective = "Produce a bootable release artifact."
+                context = "Release composition issue."
+                acceptance_criteria = @("Release artifact boots.")
+                dependencies = @()
+                affected_areas = @("scripts/build-release.mjs")
+                testing_requirements = @("git diff --check")
+                risks = @("Startup failure.")
+            }
+        )
+    }
+
+    [System.IO.File]::WriteAllText(
+        (Join-Path $tempRoot ".codex\runtime\AICO-006-engineering-backlog.json"),
+        ($explicitNoneOutput | ConvertTo-Json -Depth 20),
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+
+    & $generator -SourceTaskId "AICO-006" -ProjectPath $tempRoot -ReuseExistingOutput
+
+    $explicitNonePlan = Get-Content $planPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ([string]$explicitNonePlan.implementation_authorization_key -ne "NONE") {
+        throw "Backlog generator rejected NONE despite explicit no-authorization source evidence."
+    }
 }
 finally {
     if (Test-Path $tempRoot) {
