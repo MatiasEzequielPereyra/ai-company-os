@@ -82,8 +82,16 @@ if (-not (Test-Path $JsonPath -PathType Leaf)) {
     throw "Engineering backlog semantic validator input not found: $JsonPath"
 }
 
-$root = Split-Path -Parent $PSScriptRoot
-$backlog = Get-Content $JsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
+$resolvedJsonPath = (Resolve-Path $JsonPath).Path
+$runtimeDir = Split-Path -Parent $resolvedJsonPath
+$codexDir = Split-Path -Parent $runtimeDir
+$root = Split-Path -Parent $codexDir
+
+if ((Split-Path $runtimeDir -Leaf) -ne "runtime" -or (Split-Path $codexDir -Leaf) -ne ".codex") {
+    throw "Semantic contract: engineering backlog JSON must live under <project>/.codex/runtime."
+}
+
+$backlog = Get-Content $resolvedJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $sourceTaskId = [string]$backlog.source_task_id
 
 if ([string]::IsNullOrWhiteSpace($sourceTaskId)) {
