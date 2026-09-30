@@ -209,12 +209,14 @@ if (-not (Test-Path $tasksReadme)) {
     }
 }
 
-$syncScript = Join-Path $targetRoot "scripts\sync-company-state.ps1"
-if (Test-Path $syncScript) {
-    & $syncScript -TasksPath (Join-Path $targetRoot "tasks") -SprintPath (Join-Path $targetRoot ".codex\state\current-sprint.md") | Out-Null
-    if (Test-Path (Join-Path $targetRoot ".codex\state\company-state.json")) {
-        Add-ManagedFile ".codex\state\company-state.json"
-    }
+$trustedSyncScript = Join-Path $sourceRoot "scripts\sync-company-state.ps1"
+if (-not (Test-Path $trustedSyncScript -PathType Leaf)) {
+    throw "Trusted AI Company OS sync script not found: $trustedSyncScript"
+}
+
+& $trustedSyncScript -ProjectRoot $targetRoot -TasksPath (Join-Path $targetRoot "tasks") -SprintPath (Join-Path $targetRoot ".codex\state\current-sprint.md") | Out-Null
+if (Test-Path (Join-Path $targetRoot ".codex\state\company-state.json")) {
+    Add-ManagedFile ".codex\state\company-state.json"
 }
 
 Write-ManagedManifest -TargetRoot $targetRoot
