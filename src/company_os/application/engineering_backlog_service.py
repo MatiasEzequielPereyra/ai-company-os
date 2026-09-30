@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import shutil
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from company_os.application.process_stream import (
+    ProgressCallback,
+    run_streamed_process,
+)
 from company_os.application.work_request_service import (
     WorkRequestService,
 )
@@ -136,6 +139,7 @@ class EngineeringBacklogService:
         work_request_ids: list[str],
         provider: str = "Auto",
         model: str = "",
+        progress: ProgressCallback | None = None,
     ) -> EngineeringBacklogResult:
         root = Path(project_root).resolve()
         sources = self.ready_sources(
@@ -202,7 +206,17 @@ class EngineeringBacklogService:
                 )
                 continue
 
+            if progress is not None:
+                progress(
+                    "Generating engineering backlog from "
+                    + source.task_id
+                )
+
             if not plan_path.exists():
+                if progress is not None:
+                    progress(
+                        "Generating structured engineering backlog..."
+                    )
                 generate_args = [
                     "-SourceTaskId",
                     source.task_id,
@@ -223,6 +237,7 @@ class EngineeringBacklogService:
                 self._run_script(
                     generate_script,
                     generate_args,
+                    progress=progress,
                 )
 
                 if not plan_path.exists():
@@ -232,6 +247,11 @@ class EngineeringBacklogService:
                         f"canonical plan: {plan_path}"
                     )
 
+            if progress is not None:
+                progress(
+                    "Materializing engineering backlog..."
+                )
+
             self._run_script(
                 materialize_script,
                 [
@@ -240,6 +260,7 @@ class EngineeringBacklogService:
                     "-ProjectPath",
                     str(root),
                 ],
+                progress=progress,
             )
 
             if not mapping_path.exists():
@@ -252,6 +273,11 @@ class EngineeringBacklogService:
             materialized.append(
                 source.task_id
             )
+
+            if progress is not None:
+                progress(
+                    "Engineering backlog materialized."
+                )
 
         return EngineeringBacklogResult(
             materialized_source_ids=materialized,
@@ -281,8 +307,9 @@ class EngineeringBacklogService:
         self,
         script: Path,
         arguments: list[str],
+        progress: ProgressCallback | None = None,
     ) -> str:
-        process = subprocess.run(
+        process = run_streamed_process(
             [
                 self._powershell(),
                 "-NoProfile",
@@ -292,19 +319,11 @@ class EngineeringBacklogService:
                 str(script),
                 *arguments,
             ],
-            capture_output=True,
-            text=True,
             timeout=1800,
+            on_line=progress,
         )
 
-        output = (
-            (process.stdout or "")
-            + (
-                "\n" + process.stderr
-                if process.stderr
-                else ""
-            )
-        ).strip()
+        output = process.output.strip()
 
         if process.returncode != 0:
             raise RuntimeError(
