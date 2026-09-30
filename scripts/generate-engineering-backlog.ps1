@@ -152,7 +152,6 @@ function Test-IsExplicitImplementationAuthorizationDecision {
     }
 
     $haystack = @(
-        [string]$Item.key,
         [string]$Item.title,
         [string]$Item.objective,
         [string]$Item.context,
@@ -161,7 +160,7 @@ function Test-IsExplicitImplementationAuthorizationDecision {
 
     return (
         $haystack -match
-        '(?i)(\b(?:authori[sz]e(?:d|s)?|approv(?:e|ed|es|ing))\s+(?:the\s+)?implementation(?:\s+scope)?\b|\bimplementation(?:\s+scope)?\s+(?:is\s+)?(?:explicitly\s+)?(?:authori[sz]ed|approved)\b|\bimplementation\s+(?:authorization|approval)\b)'
+        '(?i)(\b(?:authori[sz]e(?:d|s)?|approv(?:e|ed|es|ing))\s+(?:the\s+)?implementation(?:\s+scope)?\b|\bimplementation(?:\s+scope)?\s+(?:is\s+)?(?:explicitly\s+)?(?:authori[sz]ed|approved)\b)'
     )
 }
 
