@@ -258,10 +258,10 @@ $payload = @{
     & (Join-Path $tempRoot "scripts\run-agent-task.ps1") @runArgs | Out-Null
 
     $runtimeDir = Join-Path $tempRoot ".codex\runtime"
-    if (-not (Test-Path (Join-Path $runtimeDir "p1-e2e-openrouter-attempted.txt")) {
+    if (-not (Test-Path (Join-Path $runtimeDir "p1-e2e-openrouter-attempted.txt"))) {
         throw "Focused E2E did not attempt OpenRouter first."
     }
-    if (-not (Test-Path (Join-Path $runtimeDir "p1-e2e-gemini-attempted.txt")) {
+    if (-not (Test-Path (Join-Path $runtimeDir "p1-e2e-gemini-attempted.txt"))) {
         throw "Focused E2E did not fall back to Gemini."
     }
 
