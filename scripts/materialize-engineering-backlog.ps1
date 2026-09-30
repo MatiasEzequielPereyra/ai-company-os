@@ -37,6 +37,27 @@ function Format-Checks {
     return ($items | ForEach-Object { "- [ ] " + $_ }) -join [Environment]::NewLine
 }
 
+function Test-IsExplicitImplementationAuthorizationDecision {
+    param([object]$Item)
+
+    if ($null -eq $Item -or [string]$Item.kind -ne "DECISION") {
+        return $false
+    }
+
+    $haystack = @(
+        [string]$Item.key,
+        [string]$Item.title,
+        [string]$Item.objective,
+        [string]$Item.context,
+        (@($Item.acceptance_criteria) -join " ")
+    ) -join " "
+
+    return (
+        $haystack -match
+        '(?i)(\b(?:authori[sz]e(?:d|s)?|approv(?:e|ed|es|ing))\s+(?:the\s+)?implementation(?:\s+scope)?\b|\bimplementation(?:\s+scope)?\s+(?:is\s+)?(?:explicitly\s+)?(?:authori[sz]ed|approved)\b|\bimplementation\s+(?:authorization|approval)\b)'
+    )
+}
+
 $root = (Resolve-Path $ProjectPath).Path
 $tasksPath = Join-Path $root "tasks"
 $planPath = Join-Path $root ("docs\engineering\plans\" + $SourceTaskId + "-engineering-backlog.json")
@@ -103,6 +124,13 @@ if ($authorizationKey -ne "NONE") {
     $authorizationItem = @($items | Where-Object { [string]$_.key -eq $authorizationKey })[0]
     if ([string]$authorizationItem.kind -ne "DECISION") {
         throw "Implementation authorization item '$authorizationKey' must be a DECISION."
+    }
+
+    if (-not (Test-IsExplicitImplementationAuthorizationDecision -Item $authorizationItem)) {
+        throw (
+            "Implementation authorization item '" + $authorizationKey +
+            "' does not explicitly authorize implementation."
+        )
     }
 }
 
