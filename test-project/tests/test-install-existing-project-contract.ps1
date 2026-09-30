@@ -52,6 +52,7 @@ try {
         "scripts\task-execution-lock.ps1",
         "scripts\validate-engineering-plan-result.ps1",
         "scripts\validate-engineering-backlog-semantics.ps1",
+        "scripts\validate-gate-result-semantics.ps1",
         ".codex\writable-policy.json",
         ".codex\local-runtime-config.json",
         "scripts\local-runtime\detect-hardware.ps1",
