@@ -198,16 +198,20 @@ if (Test-Path $configPath) {
             $maxChars = [int]$providerConfig.gate_context_max_chars
         }
 
-        if ($null -ne $localRuntime -and [bool]$localRuntime.Available) {
-            $maxChars = [Math]::Min($maxChars,[int]$localRuntime.GateContextMaxChars)
-            $artifactMaxChars = [Math]::Min($artifactMaxChars,[int]$localRuntime.GateArtifactMaxChars)
-        }
-        elseif ($Provider -eq "Ollama") {
+        # Auto builds the global gate evidence once. Candidate-specific provider
+        # and hardware limits are enforced by provider-router.ps1 after selection.
+        # Explicit Ollama can be bounded earlier without reducing cloud evidence.
+        if ($Provider -eq "Ollama") {
             if ($null -ne $providerConfig.ollama_gate_context_max_chars) {
                 $maxChars = [Math]::Min($maxChars,[int]$providerConfig.ollama_gate_context_max_chars)
             }
             if ($null -ne $providerConfig.ollama_gate_artifact_max_chars) {
-                $artifactMaxChars = [int]$providerConfig.ollama_gate_artifact_max_chars
+                $artifactMaxChars = [Math]::Min($artifactMaxChars,[int]$providerConfig.ollama_gate_artifact_max_chars)
+            }
+
+            if ($null -ne $localRuntime -and [bool]$localRuntime.Available) {
+                $maxChars = [Math]::Min($maxChars,[int]$localRuntime.GateContextMaxChars)
+                $artifactMaxChars = [Math]::Min($artifactMaxChars,[int]$localRuntime.GateArtifactMaxChars)
             }
         }
     }
