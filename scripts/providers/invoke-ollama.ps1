@@ -122,7 +122,7 @@ if (
 }
 
 Write-Host ("Ollama model: " + $Model) -ForegroundColor DarkGray
-Write-Host ("Ollama request: context_chars=" + $Context.Length + ", num_ctx=" + $NumCtx + ", num_predict=" + $NumPredict + ", timeout=" + $timeoutSeconds + "s") -ForegroundColor DarkGray
+Write-Host ("Ollama request: context_chars=" + $Context.Length + ", prompt_chars=" + $fullPrompt.Length + ", schema_chars=" + $schemaText.Length + ", num_ctx=" + $NumCtx + ", num_predict=" + $NumPredict + ", timeout=" + $timeoutSeconds + "s") -ForegroundColor DarkGray
 Write-Host "Ollama inference running..." -ForegroundColor DarkGray
 
 for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
@@ -155,8 +155,44 @@ if ($null -eq $response) {
     throw "Ollama request failed without a response after $maxAttempts attempts."
 }
 
+$done = if ($null -ne $response.done) { [bool]$response.done } else { $true }
+$doneReason = if ($null -ne $response.done_reason) { [string]$response.done_reason } else { "" }
+$promptEvalCount = if ($null -ne $response.prompt_eval_count) { [int]$response.prompt_eval_count } else { 0 }
+$evalCount = if ($null -ne $response.eval_count) { [int]$response.eval_count } else { 0 }
+
+Write-Host (
+    "Ollama response: done=" + $done +
+    ", done_reason=" + $(if ([string]::IsNullOrWhiteSpace($doneReason)) { "<unknown>" } else { $doneReason }) +
+    ", prompt_eval_count=" + $promptEvalCount +
+    ", eval_count=" + $evalCount
+) -ForegroundColor DarkGray
+
+if (-not $done) {
+    throw (
+        "Ollama returned an incomplete structured completion. " +
+        "done=false; done_reason=" + $doneReason +
+        "; prompt_eval_count=" + $promptEvalCount +
+        "; eval_count=" + $evalCount
+    )
+}
+
+if ($doneReason -match '(?i)^length$|max.*token|token.*limit') {
+    throw (
+        "Ollama structured completion was truncated. " +
+        "done_reason=" + $doneReason +
+        "; prompt_eval_count=" + $promptEvalCount +
+        "; eval_count=" + $evalCount +
+        "; num_predict=" + $NumPredict
+    )
+}
+
 if ($null -eq $response.message -or [string]::IsNullOrWhiteSpace([string]$response.message.content)) {
-    throw "Ollama returned no completion content."
+    throw (
+        "Ollama returned no completion content. " +
+        "done_reason=" + $doneReason +
+        "; prompt_eval_count=" + $promptEvalCount +
+        "; eval_count=" + $evalCount
+    )
 }
 
 $content = ([string]$response.message.content).Trim()
@@ -165,7 +201,13 @@ try {
     $parsed = $content | ConvertFrom-Json
 }
 catch {
-    throw "Ollama returned invalid JSON for the structured result contract."
+    throw (
+        "Ollama returned invalid JSON for the structured result contract. " +
+        "done_reason=" + $doneReason +
+        "; prompt_eval_count=" + $promptEvalCount +
+        "; eval_count=" + $evalCount +
+        "; response_chars=" + $content.Length
+    )
 }
 
 $normalized = $parsed | ConvertTo-Json -Depth 100 -Compress
@@ -174,4 +216,8 @@ $normalized = $parsed | ConvertTo-Json -Depth 100 -Compress
 [PSCustomObject]@{
     Provider = "Ollama"
     Model = $(if ($null -ne $response.model) { [string]$response.model } else { $Model })
+    Done = $done
+    DoneReason = $doneReason
+    PromptEvalCount = $promptEvalCount
+    EvalCount = $evalCount
 }
