@@ -171,7 +171,7 @@ if ([string]$result.summary -ne "SEMANTIC_GOOD") {
         (New-Object System.Text.UTF8Encoding($false))
     )
 
-    $semanticRetryCounter = Join-Path $tempRoot ".codex\runtime\semantic-retry-count.txt"
+    $semanticRetryCounter = Join-Path $tempRoot "semantic-retry-count.txt"
     $semanticRetryAdapter = @'
 param(
     [string]$Prompt,
