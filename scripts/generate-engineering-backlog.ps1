@@ -144,6 +144,27 @@ function Repair-MojibakeObject {
     return $Value
 }
 
+function Get-SubstantiveReportBody {
+    param([string]$Report)
+
+    if ([string]::IsNullOrWhiteSpace($Report)) { return "" }
+
+    $body = $Report
+    foreach ($pattern in @(
+        '(?m)^# Agent Report[^\r\n]*\r?\n?',
+        '(?m)^Generated:\s*[^\r\n]*\r?\n?',
+        '(?m)^Owner:\s*[^\r\n]*\r?\n?',
+        '(?m)^Provider:\s*[^\r\n]*\r?\n?',
+        '(?m)^Model:\s*[^\r\n]*\r?\n?',
+        '(?m)^Outcome:\s*[^\r\n]*\r?\n?'
+    )) {
+        $body = [regex]::Replace($body,$pattern,'')
+    }
+
+    $body = [regex]::Replace($body,'(?m)^\s*#{1,6}\s*[^\r\n]*\r?\n?','')
+    return $body.Trim()
+}
+
 function Test-IsExplicitImplementationAuthorizationDecision {
     param([object]$Item)
 
@@ -279,14 +300,20 @@ $taskPath = Join-Path $root ("tasks\" + $SourceTaskId + ".md")
 $reportPath = Join-Path $root ("docs\engineering\agent-reports\" + $SourceTaskId + ".md")
 $schemaPath = Join-Path $root "schemas\engineering-backlog.schema.json"
 $routerPath = Join-Path $PSScriptRoot "provider-router.ps1"
+$semanticValidatorPath = Join-Path $PSScriptRoot "validate-engineering-backlog-semantics.ps1"
 
-foreach ($path in @($taskPath,$reportPath,$schemaPath,$routerPath)) {
+foreach ($path in @($taskPath,$reportPath,$schemaPath,$routerPath,$semanticValidatorPath)) {
     if (-not (Test-Path $path)) { throw "Required backlog-generation input not found: $path" }
 }
 
 $task = Get-Content $taskPath -Raw -Encoding UTF8
 $status = Read-Field $task "Status"
+$owner = Read-Field $task "Owner"
 $workRequestId = Read-Field $task "Work request"
+
+if ($owner -ne "engineering-manager") {
+    throw "Engineering backlog source must be owned by engineering-manager. Current owner: $owner"
+}
 
 if ($status -ne "DONE") {
     throw "Source planning task $SourceTaskId must be DONE before executable backlog generation. Current status: $status"
@@ -300,6 +327,26 @@ if (Test-Path $executionPlanPath -PathType Leaf) {
     $executionPlanText = Get-Content $executionPlanPath -Raw -Encoding UTF8
 }
 
+$hasStructuredExecutionWork = $false
+if (-not [string]::IsNullOrWhiteSpace($executionPlanText)) {
+    try {
+        $executionPlan = $executionPlanText | ConvertFrom-Json
+        $hasStructuredExecutionWork = (@($executionPlan.executable_work).Count -gt 0)
+    }
+    catch {
+        throw "Canonical Engineering Manager execution plan is invalid JSON: $executionPlanPath"
+    }
+}
+
+if (-not $hasStructuredExecutionWork) {
+    $substantiveReportBody = Get-SubstantiveReportBody -Report $report
+    if ($substantiveReportBody.Length -lt 80) {
+        throw (
+            "Engineering Manager source evidence is not substantive enough to generate an executable backlog. " +
+            "Provide a canonical execution plan with executable_work or a substantive approved report."
+        )
+    }
+}
 
 $latestResult = Get-ChildItem (Join-Path $root "docs\engineering\results") -Filter ($SourceTaskId + "-result-*.md") -File -ErrorAction SilentlyContinue |
     Sort-Object Name -Descending |
@@ -329,6 +376,11 @@ $promptLines = @(
     "Implementation authorization must be explicit in the referenced DECISION.",
     "Do not silently resolve open product, architecture, security or operational decisions.",
     "IMPLEMENTATION items must be narrow enough for one specialist to execute and verify.",
+    "Every IMPLEMENTATION objective must state the concrete repository/product change to make; never use generic orchestration boilerplate.",
+    "Every IMPLEMENTATION item must include at least one concrete behavioral acceptance criterion tied to that change.",
+    "Testing requirements must be evidence-based from the approved source task, report, or canonical execution plan.",
+    "Never invent test modules, test files, package scripts, commands, or verification targets that are not supported by the approved source evidence.",
+    "For IMPLEMENTATION work with no concrete verifier documented in approved source evidence, use git diff --check instead of inventing a command.",
     "VALIDATION items should depend on the implementation they validate.",
     "Acceptance criteria must be behavioral and testable.",
     "Do not duplicate findings that can be closed by the same tightly-scoped change.",
@@ -346,6 +398,9 @@ $context = @(
     "",
     "===== APPROVED ENGINEERING MANAGER REPORT =====",
     $report,
+    "",
+    "===== CANONICAL EXECUTION PLAN =====",
+    $executionPlanText,
     "",
     "===== LATEST RESULT =====",
     $resultText
@@ -370,7 +425,7 @@ if ($ReuseExistingOutput) {
 }
 else {
     Write-Host "Generating structured engineering backlog from $SourceTaskId..." -ForegroundColor Cyan
-    $execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $outputPath -Model $Model
+    $execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $outputPath -Model $Model -Role "engineering-manager" -Workload "analysis" -SemanticValidatorPath $semanticValidatorPath
 
     if (-not (Test-Path $outputPath)) {
         throw "Backlog provider did not produce structured output: $outputPath"
@@ -379,6 +434,10 @@ else {
 
 $backlog = Get-Content $outputPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $backlog = Repair-MojibakeObject -Value $backlog
+
+# ReuseExistingOutput bypasses provider routing. Revalidate all structured
+# output here so fresh and reused paths enforce the same semantic contract.
+& $semanticValidatorPath -JsonPath $outputPath | Out-Null
 
 # Canonicalize dependency arrays. Empty/null/whitespace entries mean no dependency.
 foreach ($item in @($backlog.items)) {
