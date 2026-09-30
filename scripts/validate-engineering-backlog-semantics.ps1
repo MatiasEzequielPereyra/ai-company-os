@@ -192,7 +192,16 @@ foreach ($item in $items) {
     }
 }
 
-$sourceEvidence = @($task,$report,$executionPlanText) -join [Environment]::NewLine
+$latestResult = Get-ChildItem (Join-Path $root "docs\engineering\results") -Filter ($sourceTaskId + "-result-*.md") -File -ErrorAction SilentlyContinue |
+    Sort-Object Name -Descending |
+    Select-Object -First 1
+
+$resultText = ""
+if ($null -ne $latestResult) {
+    $resultText = Get-Content $latestResult.FullName -Raw -Encoding UTF8
+}
+
+$sourceEvidence = @($task,$report,$executionPlanText,$resultText) -join [Environment]::NewLine
 $authorizationKey = [string]$backlog.implementation_authorization_key
 
 if ([string]::IsNullOrWhiteSpace($authorizationKey)) {
