@@ -38,15 +38,14 @@ exit 1
             [Parameter(Position = 0)]
             [string]$Path,
             [switch]$Force,
-            [switch]$Recurse,
-            [System.Management.Automation.ActionPreference]$ErrorAction = [System.Management.Automation.ActionPreference]::Continue
+            [switch]$Recurse
         )
 
         if ([string]$Path -like "*-prompt.txt") {
             throw "No existe ningún objeto en la ruta de acceso especificada, C:\Users\LANAVE~1."
         }
 
-        Microsoft.PowerShell.Management\Remove-Item -LiteralPath $Path -Force:$Force -Recurse:$Recurse -ErrorAction $ErrorAction
+        Microsoft.PowerShell.Management\Remove-Item -LiteralPath $Path -Force:$Force -Recurse:$Recurse -ErrorAction SilentlyContinue
     }
 
     $quotaPreserved = $false
