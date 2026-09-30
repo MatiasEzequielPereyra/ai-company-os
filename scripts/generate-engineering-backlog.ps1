@@ -144,8 +144,45 @@ function Repair-MojibakeObject {
     return $Value
 }
 
+function Test-IsExplicitImplementationAuthorizationDecision {
+    param([object]$Item)
+
+    if ($null -eq $Item -or [string]$Item.kind -ne "DECISION") {
+        return $false
+    }
+
+    $haystack = @(
+        [string]$Item.key,
+        [string]$Item.title,
+        [string]$Item.objective,
+        [string]$Item.context,
+        (@($Item.acceptance_criteria) -join " ")
+    ) -join " "
+
+    return (
+        $haystack -match
+        '(?i)(\b(?:authori[sz]e(?:d|s)?|approv(?:e|ed|es|ing))\s+(?:the\s+)?implementation(?:\s+scope)?\b|\bimplementation(?:\s+scope)?\s+(?:is\s+)?(?:explicitly\s+)?(?:authori[sz]ed|approved)\b|\bimplementation\s+(?:authorization|approval)\b)'
+    )
+}
+
+function Test-SourceExplicitlyRequiresNoImplementationAuthorization {
+    param([string]$SourceEvidence)
+
+    if ([string]::IsNullOrWhiteSpace($SourceEvidence)) {
+        return $false
+    }
+
+    return (
+        $SourceEvidence -match
+        '(?i)\b(?:requires? no implementation authorization|no implementation authorization (?:is )?required|implementation authorization (?:is )?not required|does not require implementation authorization)\b'
+    )
+}
+
 function Resolve-ImplementationAuthorizationKey {
-    param([object]$Backlog)
+    param(
+        [object]$Backlog,
+        [string]$SourceEvidence = ""
+    )
 
     $requested = [string]$Backlog.implementation_authorization_key
     if ([string]::IsNullOrWhiteSpace($requested)) {
@@ -153,6 +190,13 @@ function Resolve-ImplementationAuthorizationKey {
     }
 
     if ($requested -eq "NONE") {
+        if (-not (Test-SourceExplicitlyRequiresNoImplementationAuthorization -SourceEvidence $SourceEvidence)) {
+            throw (
+                "implementation_authorization_key NONE is not supported by approved source evidence. " +
+                "Use NONE only when the approved source explicitly requires no implementation authorization."
+            )
+        }
+
         return "NONE"
     }
 
@@ -162,6 +206,14 @@ function Resolve-ImplementationAuthorizationKey {
         if ([string]$exact[0].kind -ne "DECISION") {
             throw "Implementation authorization item '$requested' must be a DECISION."
         }
+
+        if (-not (Test-IsExplicitImplementationAuthorizationDecision -Item $exact[0])) {
+            throw (
+                "Implementation authorization item '" + $requested +
+                "' does not explicitly authorize implementation."
+            )
+        }
+
         return [string]$exact[0].key
     }
 
@@ -175,7 +227,9 @@ function Resolve-ImplementationAuthorizationKey {
     $requestedNormalized = & $normalizeKey $requested
     $identityCandidates = @(
         $items | Where-Object {
-            if ([string]$_.kind -ne "DECISION") { return $false }
+            if (-not (Test-IsExplicitImplementationAuthorizationDecision -Item $_)) {
+                return $false
+            }
 
             $candidateKey = [string]$_.key
             $candidateNormalized = & $normalizeKey $candidateKey
@@ -202,16 +256,7 @@ function Resolve-ImplementationAuthorizationKey {
     # Fall back only to a single, semantically clear authorization decision.
     $candidates = @(
         $items | Where-Object {
-            if ([string]$_.kind -ne "DECISION") { return $false }
-
-            $haystack = @(
-                [string]$_.key,
-                [string]$_.title,
-                [string]$_.objective,
-                [string]$_.context
-            ) -join " "
-
-            return ($haystack -match '(?i)implement.*authori[sz]|authori[sz].*implement|approve.*implement|implementation scope|implementation approval')
+            return (Test-IsExplicitImplementationAuthorizationDecision -Item $_)
         }
     )
 
@@ -281,6 +326,8 @@ $promptLines = @(
     "Create explicit DECISION items for unresolved PM/CTO/CEO decisions before dependent implementation work.",
     "If implementation authorization is required, include an explicit DECISION task near the root of the graph and set implementation_authorization_key to that item key.",
     "Use implementation_authorization_key = NONE only when the approved source plan explicitly requires no implementation authorization.",
+    "Do not use an unresolved-blockers decision or unrelated DECISION as implementation authorization.",
+    "Implementation authorization must be explicit in the referenced DECISION.",
     "Do not silently resolve open product, architecture, security or operational decisions.",
     "IMPLEMENTATION items must be narrow enough for one specialist to execute and verify.",
     "VALIDATION items should depend on the implementation they validate.",
@@ -354,7 +401,8 @@ if (-not [string]::IsNullOrWhiteSpace($workRequestId) -and [string]$backlog.work
     throw "Backlog work_request_id mismatch. Expected $workRequestId, got $($backlog.work_request_id)"
 }
 
-$authorizationKey = Resolve-ImplementationAuthorizationKey -Backlog $backlog
+$sourceEvidence = @($context,$executionPlanText) -join [Environment]::NewLine
+$authorizationKey = Resolve-ImplementationAuthorizationKey -Backlog $backlog -SourceEvidence $sourceEvidence
 $backlog.implementation_authorization_key = $authorizationKey
 
 $keys = @{}
