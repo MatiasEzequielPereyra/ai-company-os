@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from rich import box
 from rich.console import Group
 from rich.panel import Panel
 from rich.table import Table
@@ -14,11 +15,27 @@ from textual.screen import Screen
 from textual.widgets import Input
 from textual.widgets import Footer, Header, Label, ListItem, ListView, Static
 
+from company_os.cli.widgets import CircularListView
 from company_os.application.config_service import ConfigService
 from company_os.cli.screens.projects import ProjectManagerScreen
 from company_os.cli.screens.work_requests import WorkRequestsScreen
 from company_os.cli.screens.help import HelpScreen
-from company_os.cli.i18n import navigation_label
+from company_os.cli.i18n import navigation_label, ui_text
+from company_os.cli.interface_settings import InterfaceSettingsService
+from company_os.cli.theme import (
+    HACKER_INTERFACE_THEME,
+    HACKER_NEON,
+    HACKER_TEXTUAL_THEME_NAME,
+    HACKER_THEME,
+    interface_theme_label,
+    is_hacker_interface,
+    next_interface_theme,
+    terminal_content_title,
+    terminal_header_title,
+    terminal_navigation_label,
+    terminal_section_title,
+    terminal_sub_title,
+)
 from company_os.cli.screens.command_center import CommandCenterScreen
 from company_os.application.project_service import ProjectService
 from company_os.application.provider_service import ProviderService
@@ -48,6 +65,7 @@ NAVIGATION = [
     ("Quality Gates", "gates"),
     ("Doctor", "doctor"),
     ("Diagnostics", "diagnostics"),
+    ("Settings", "settings"),
     ("Help / Guide", "help"),
 ]
 
@@ -953,12 +971,46 @@ class AICompanyTUI(App):
             "toggle_language",
             "ES / EN",
         ),
+        Binding(
+            "f3",
+            "toggle_theme",
+            "Tema / Theme",
+        ),
+        Binding(
+            "left",
+            "go_back",
+            "Atras / Back",
+            priority=True,
+        ),
+        Binding(
+            "right",
+            "activate_focused",
+            "Abrir / Open",
+            priority=True,
+        ),
     ]
 
     def __init__(self, project: Path) -> None:
         super().__init__()
 
-        self.language = "es"
+        self.interface_settings = (
+            InterfaceSettingsService()
+        )
+
+        self.language = (
+            self.interface_settings
+            .load_language()
+        )
+
+        self.interface_theme = (
+            self.interface_settings
+            .load_theme()
+        )
+
+        self._default_textual_theme = (
+            self.theme
+        )
+
         self.current_view = "overview"
 
         self.project = project
@@ -974,10 +1026,14 @@ class AICompanyTUI(App):
         yield Header()
 
         with Horizontal(id="main"):
-            yield ListView(
+            yield CircularListView(
                 *[
                     ListItem(
-                        Label(self._nav_label(view)),
+                        Label(
+                            self._nav_display_label(
+                                view
+                            )
+                        ),
                         id=f"nav-{view}",
                     )
                     for label, view in NAVIGATION
@@ -998,6 +1054,12 @@ class AICompanyTUI(App):
         yield Footer()
 
     def on_mount(self) -> None:
+        self.register_theme(
+            HACKER_THEME
+        )
+
+        self._apply_interface_theme()
+
         self._load_data()
 
         nav = self.query_one(
@@ -1032,7 +1094,7 @@ class AICompanyTUI(App):
         self.handoff_records = HandoffService().get_handoffs(self.project)
         self.runtime_source = RuntimeService().get_runtime_source(self.project)
 
-        self.sub_title = self.project.name
+        self._refresh_terminal_chrome()
 
     def on_list_view_selected(
         self,
@@ -1103,16 +1165,13 @@ class AICompanyTUI(App):
     ) -> None:
         self.current_view = view
 
-        titles = {
-            key: self._nav_label(key)
-            for _label, key in NAVIGATION
-        }
-
         self.query_one(
             "#content-title",
             Static,
         ).update(
-            titles.get(view, view)
+            self._content_display_title(
+                view
+            )
         )
 
         renderers = {
@@ -1126,6 +1185,7 @@ class AICompanyTUI(App):
             "gates": self._render_gates,
             "doctor": self._render_doctor,
             "diagnostics": self._render_diagnostics,
+            "settings": self._render_settings,
         }
 
         renderer = renderers.get(view)
@@ -1510,6 +1570,104 @@ class AICompanyTUI(App):
 
         return table
 
+    def _render_settings(self):
+        language_name = (
+            "Espanol"
+            if self.language == "es"
+            else "English"
+        )
+
+        theme_name = interface_theme_label(
+            self.interface_theme
+        )
+
+        settings_title = ui_text(
+            self.language,
+            "settings_title",
+        )
+
+        table = Table(
+            title=(
+                terminal_section_title(
+                    settings_title
+                )
+                if self._hacker_mode()
+                else settings_title
+            ),
+            show_header=False,
+            box=(
+                box.ASCII
+                if self._hacker_mode()
+                else None
+            ),
+        )
+
+        table.add_column()
+        table.add_column()
+
+        table.add_row(
+            ui_text(
+                self.language,
+                "settings_language",
+            ),
+            language_name,
+        )
+
+        table.add_row(
+            ui_text(
+                self.language,
+                "settings_theme",
+            ),
+            theme_name,
+        )
+
+        table.add_row(
+            ui_text(
+                self.language,
+                "settings_file",
+            ),
+            str(
+                self.interface_settings.path
+            ),
+        )
+
+        return Group(
+            table,
+            Text(""),
+            Panel(
+                ui_text(
+                    self.language,
+                    "settings_change_language",
+                ),
+                title="F2",
+                **self._hacker_panel_options(),
+            ),
+            Text(""),
+            Panel(
+                ui_text(
+                    self.language,
+                    "settings_change_theme",
+                ),
+                title="F3",
+                **self._hacker_panel_options(),
+            ),
+            Text(""),
+            Panel(
+                ui_text(
+                    self.language,
+                    "settings_scope",
+                ),
+                title=(
+                    terminal_section_title(
+                        settings_title
+                    )
+                    if self._hacker_mode()
+                    else settings_title
+                ),
+                **self._hacker_panel_options(),
+            ),
+        )
+
     def _nav_label(
         self,
         view: str,
@@ -1517,6 +1675,156 @@ class AICompanyTUI(App):
         return navigation_label(
             self.language,
             view,
+        )
+
+    def _hacker_mode(self) -> bool:
+        return is_hacker_interface(
+            self.interface_theme
+        )
+
+    def _nav_display_label(
+        self,
+        view: str,
+    ) -> str:
+        label = self._nav_label(view)
+
+        if not self._hacker_mode():
+            return label
+
+        index = next(
+            (
+                position
+                for position, (_label, key)
+                in enumerate(
+                    NAVIGATION,
+                    start=1,
+                )
+                if key == view
+            ),
+            0,
+        )
+
+        return terminal_navigation_label(
+            index,
+            label,
+        )
+
+    def _hacker_panel_options(
+        self,
+    ) -> dict:
+        if not self._hacker_mode():
+            return {}
+
+        return {
+            "box": box.ASCII,
+            "border_style": HACKER_NEON,
+        }
+
+    def _content_display_title(
+        self,
+        view: str,
+    ) -> str:
+        label = self._nav_label(view)
+
+        if self._hacker_mode():
+            return terminal_content_title(
+                label
+            )
+
+        return label
+
+    def _refresh_terminal_chrome(
+        self,
+    ) -> None:
+        screens = list(
+            getattr(
+                self,
+                "screen_stack",
+                [],
+            )
+        )
+
+        if not screens:
+            screens = [self.screen]
+
+        if self._hacker_mode():
+            for screen in screens:
+                screen.add_class(
+                    "hacker-mode"
+                )
+
+            self.title = (
+                terminal_header_title()
+            )
+
+            self.sub_title = (
+                terminal_sub_title(
+                    self.project.name
+                )
+            )
+
+            return
+
+        for screen in screens:
+            screen.remove_class(
+                "hacker-mode"
+            )
+
+        self.title = "AI Company OS"
+        self.sub_title = self.project.name
+
+    def _apply_interface_theme(
+        self,
+    ) -> None:
+        if (
+            self.interface_theme
+            == HACKER_INTERFACE_THEME
+        ):
+            self.theme = (
+                HACKER_TEXTUAL_THEME_NAME
+            )
+
+        elif (
+            self.theme
+            == HACKER_TEXTUAL_THEME_NAME
+        ):
+            self.theme = (
+                self._default_textual_theme
+            )
+
+        self._refresh_terminal_chrome()
+
+    def action_toggle_theme(self) -> None:
+        self.interface_theme = (
+            next_interface_theme(
+                self.interface_theme
+            )
+        )
+
+        try:
+            self.interface_settings.save_theme(
+                self.interface_theme
+            )
+
+        except Exception as exc:
+            self.notify(
+                f"Theme save failed: {exc}",
+                severity="warning",
+            )
+
+        self._apply_interface_theme()
+        self._refresh_navigation_language()
+
+        if self.current_view == "settings":
+            self._show_view(
+                "settings"
+            )
+
+        self.notify(
+            "Theme: "
+            + interface_theme_label(
+                self.interface_theme
+            )
         )
 
     def action_open_help(self) -> None:
@@ -1539,6 +1847,17 @@ class AICompanyTUI(App):
             else "es"
         )
 
+        try:
+            self.interface_settings.save_language(
+                self.language
+            )
+
+        except Exception as exc:
+            self.notify(
+                f"Settings save failed: {exc}",
+                severity="warning",
+            )
+
         self._refresh_navigation_language()
 
         current = self.screen
@@ -1555,7 +1874,7 @@ class AICompanyTUI(App):
         language_name = (
             "English"
             if self.language == "en"
-            else "Espa?ol"
+            else "Espanol"
         )
 
         self.notify(
@@ -1574,7 +1893,9 @@ class AICompanyTUI(App):
 
             if matches:
                 matches[0].update(
-                    self._nav_label(view)
+                    self._nav_display_label(
+                        view
+                    )
                 )
 
         titles = list(
@@ -1585,10 +1906,76 @@ class AICompanyTUI(App):
 
         if titles:
             titles[0].update(
-                self._nav_label(
+                self._content_display_title(
                     self.current_view
                 )
             )
+
+        self._show_view(
+            self.current_view
+        )
+
+    def action_go_back(self) -> None:
+        focused = getattr(
+            self.screen,
+            "focused",
+            None,
+        )
+
+        if isinstance(focused, Input):
+            action = getattr(
+                focused,
+                "action_cursor_left",
+                None,
+            )
+
+            if callable(action):
+                action()
+
+            return
+
+        current = self.screen
+
+        action = getattr(
+            current,
+            "action_back",
+            None,
+        )
+
+        if callable(action):
+            action()
+
+    def action_activate_focused(self) -> None:
+        focused = getattr(
+            self.screen,
+            "focused",
+            None,
+        )
+
+        if focused is None:
+            return
+
+        if isinstance(focused, Input):
+            action = getattr(
+                focused,
+                "action_cursor_right",
+                None,
+            )
+
+            if callable(action):
+                action()
+
+            return
+
+        if isinstance(focused, ListView):
+            action = getattr(
+                focused,
+                "action_select_cursor",
+                None,
+            )
+
+            if callable(action):
+                action()
 
     def action_refresh_data(self) -> None:
         try:
