@@ -340,18 +340,25 @@ foreach ($candidate in $attempts) {
     } -WarningPrefix "Provider start metrics could not be recorded"
 
     try {
-        if ($candidateName -eq "Codex") {
-            $result = & $providerScript -ProjectPath $root -Prompt $Prompt -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel -TimeoutSeconds $providerTimeoutSeconds
+        $invokeCandidate = {
+            param([string]$EffectivePrompt)
+
+            if ($candidateName -eq "Codex") {
+                return (& $providerScript -ProjectPath $root -Prompt $EffectivePrompt -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel -TimeoutSeconds $providerTimeoutSeconds)
+            }
+            elseif ($candidateName -eq "Ollama") {
+                $candidateResult = & $providerScript -Prompt $EffectivePrompt -Context $Context -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel -NumCtx ([int]$localRuntime.NumCtx) -NumPredict ([int]$localRuntime.NumPredict) -TimeoutSeconds $providerTimeoutSeconds
+                $candidateResult | Add-Member -NotePropertyName HardwareProfile -NotePropertyValue ([string]$localRuntime.Profile) -Force
+                $candidateResult | Add-Member -NotePropertyName NumCtx -NotePropertyValue ([int]$localRuntime.NumCtx) -Force
+                $candidateResult | Add-Member -NotePropertyName NumPredict -NotePropertyValue ([int]$localRuntime.NumPredict) -Force
+                return $candidateResult
+            }
+            else {
+                return (& $providerScript -Prompt $EffectivePrompt -Context $Context -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel -TimeoutSeconds $providerTimeoutSeconds)
+            }
         }
-        elseif ($candidateName -eq "Ollama") {
-            $result = & $providerScript -Prompt $Prompt -Context $Context -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel -NumCtx ([int]$localRuntime.NumCtx) -NumPredict ([int]$localRuntime.NumPredict) -TimeoutSeconds $providerTimeoutSeconds
-            $result | Add-Member -NotePropertyName HardwareProfile -NotePropertyValue ([string]$localRuntime.Profile) -Force
-            $result | Add-Member -NotePropertyName NumCtx -NotePropertyValue ([int]$localRuntime.NumCtx) -Force
-            $result | Add-Member -NotePropertyName NumPredict -NotePropertyValue ([int]$localRuntime.NumPredict) -Force
-        }
-        else {
-            $result = & $providerScript -Prompt $Prompt -Context $Context -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel -TimeoutSeconds $providerTimeoutSeconds
-        }
+
+        $result = & $invokeCandidate $Prompt
 
         if (-not (Test-Path $OutputPath)) {
             throw "$candidateName returned without creating the structured output file."
@@ -360,7 +367,59 @@ foreach ($candidate in $attempts) {
         & $validatorPath -JsonPath $OutputPath -SchemaPath $SchemaPath | Out-Null
 
         if (-not [string]::IsNullOrWhiteSpace($SemanticValidatorPath)) {
-            & $SemanticValidatorPath -JsonPath $OutputPath | Out-Null
+            try {
+                & $SemanticValidatorPath -JsonPath $OutputPath | Out-Null
+            }
+            catch {
+                $semanticError = Sanitize-ProviderError -Message $_.Exception.Message
+                $previousOutput = ""
+
+                if (Test-Path $OutputPath -PathType Leaf) {
+                    $previousOutput = Get-Content $OutputPath -Raw -Encoding UTF8
+                    if ($previousOutput.Length -gt 20000) {
+                        $previousOutput = $previousOutput.Substring(0,20000) + [Environment]::NewLine + "[TRUNCATED]"
+                    }
+                }
+
+                Write-Host (
+                    "Semantic validation failed for " + $candidateName +
+                    ". Retrying the same provider once with corrective feedback."
+                ) -ForegroundColor DarkYellow
+
+                Write-ProviderEvent -Event @{
+                    event_type = "provider_semantic_retry"
+                    provider = $candidateName
+                    model = $providerModel
+                    success = $false
+                    error_category = "contract"
+                } -WarningPrefix "Provider semantic retry metrics could not be recorded"
+
+                if (Test-Path $OutputPath) {
+                    Remove-Item $OutputPath -Force -ErrorAction SilentlyContinue
+                }
+
+                $repairPrompt = @(
+                    $Prompt,
+                    "",
+                    "CORRECTION REQUIRED:",
+                    "The previous structured output failed local semantic validation.",
+                    ("Validation error: " + $semanticError),
+                    ("Previous structured output: " + $previousOutput),
+                    "",
+                    "Regenerate the complete structured result from the same authoritative evidence.",
+                    "Do not weaken, bypass, reinterpret, or omit the validation requirement.",
+                    "Return only JSON matching the supplied schema."
+                ) -join [Environment]::NewLine
+
+                $result = & $invokeCandidate $repairPrompt
+
+                if (-not (Test-Path $OutputPath)) {
+                    throw "$candidateName semantic retry returned without creating the structured output file."
+                }
+
+                & $validatorPath -JsonPath $OutputPath -SchemaPath $SchemaPath | Out-Null
+                & $SemanticValidatorPath -JsonPath $OutputPath | Out-Null
+            }
         }
 
         $durationMs = [int][math]::Round(((Get-Date) - $attemptStarted).TotalMilliseconds)
