@@ -346,6 +346,7 @@ class PlanControlScreen(Screen):
         relevant_terms = (
             "__aico_gate__|",
             "building",
+            "backlog",
             "context",
             "provider",
             "model",
@@ -490,6 +491,7 @@ class PlanControlScreen(Screen):
 
         relevant_terms = (
             "building",
+            "backlog",
             "context",
             "provider",
             "model",
@@ -908,7 +910,7 @@ class PlanControlScreen(Screen):
             )
 
     def action_engineering_backlog(self) -> None:
-        if self.busy:
+        if self._reject_if_busy():
             return
 
         pending = self.engineering_backlog.pending_sources(
@@ -924,17 +926,23 @@ class PlanControlScreen(Screen):
             )
             return
 
-        self.busy = True
+        tasks = self._tasks()
+        source_ids = [
+            source.task_id
+            for source in pending
+        ]
 
-        self._working(
-            "Generating and materializing engineering "
-            "backlog from:\n\n"
-            + "\n".join(
-                source.task_id
-                for source in pending
+        if not self._begin_progress(
+            kind="engineering-backlog",
+            title="ENGINEERING BACKLOG",
+            task_ids=source_ids,
+            initial_event=(
+                "Starting engineering backlog generation"
             ),
-            "ENGINEERING BACKLOG",
-        )
+            tasks=tasks,
+            provider="Auto",
+        ):
+            return
 
         self.engineering_backlog_worker()
 
@@ -952,6 +960,7 @@ class PlanControlScreen(Screen):
                     self.plan_data.project_root,
                     self._work_request_ids(),
                     provider="Auto",
+                    progress=self._worker_progress,
                 )
             )
 
