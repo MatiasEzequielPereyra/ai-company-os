@@ -402,6 +402,25 @@ The prior writable implementation needs correction.
         throw "Corrective writable execution did not update the existing worktree diff."
     }
 
+    $runnerText = Get-Content (Join-Path $repoRoot "scripts\run-writable-agent.ps1") -Raw -Encoding UTF8
+
+    foreach ($requiredPromptContract in @(
+        "Do not invent test modules, test files, package scripts, commands, or verification targets",
+        "If no project-specific verifier is evidenced, use git diff --check rather than inventing one.",
+        "Exact local verification-command allowlist patterns:"
+    )) {
+        if ($runnerText -notmatch [regex]::Escape($requiredPromptContract)) {
+            throw ("Writable prompt is missing verification-policy guidance: " + $requiredPromptContract)
+        }
+    }
+
+    $preflightIndex = $runnerText.IndexOf('$safeVerificationCommands = @()')
+    $writeIndex = $runnerText.IndexOf('Write-Utf8NoBom -Path $safe.FullPath -Value $contentValue')
+
+    if ($preflightIndex -lt 0 -or $writeIndex -lt 0 -or $preflightIndex -gt $writeIndex) {
+        throw "Writable verification commands are not preflighted before planned file writes."
+    }
+
     Write-Host "PASS: isolated writable agent runtime" -ForegroundColor Green
 }
 finally {
