@@ -54,34 +54,25 @@ if ($routerSource -notmatch 'TimeoutSeconds') {
     throw "Provider router must pass configured timeout values to provider adapters."
 }
 
-$ollamaInvocation = @(
-    $routerSource -split "\r?\n" |
-        Where-Object {
-            $_ -match '\$candidateName -eq "Ollama"' -or
-            ($_ -match '\$result = & \$providerScript' -and $_ -match 'NumCtx')
-        }
-) | Where-Object { $_ -match '\$result = & \$providerScript' } | Select-Object -First 1
-
-if ([string]::IsNullOrWhiteSpace([string]$ollamaInvocation)) {
-    throw "Provider router Ollama invocation could not be located."
-}
-
-$timeoutArgCount = [regex]::Matches(
-    [string]$ollamaInvocation,
-    '(?i)-TimeoutSeconds'
-).Count
-
-if ($timeoutArgCount -ne 1) {
-    throw "Ollama provider invocation must pass -TimeoutSeconds exactly once. Actual: $timeoutArgCount"
-}
-
 $providerInvocationLines = @(
     $routerSource -split "\r?\n" |
-        Where-Object { $_ -match '\$result = & \$providerScript' }
+        Where-Object {
+            $_ -match '& \$providerScript' -and
+            $_ -match '(?i)-TimeoutSeconds'
+        }
 )
 
 if ($providerInvocationLines.Count -ne 3) {
-    throw "Provider router must contain exactly three adapter invocation paths. Actual: $($providerInvocationLines.Count)"
+    throw "Provider router must contain exactly three timeout-bounded adapter invocation paths. Actual: $($providerInvocationLines.Count)"
+}
+
+$ollamaInvocation = @(
+    $providerInvocationLines |
+        Where-Object { $_ -match 'NumCtx' -and $_ -match 'NumPredict' }
+) | Select-Object -First 1
+
+if ([string]::IsNullOrWhiteSpace([string]$ollamaInvocation)) {
+    throw "Provider router Ollama invocation could not be located."
 }
 
 foreach ($invocationLine in $providerInvocationLines) {

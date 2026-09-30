@@ -14,6 +14,7 @@ test("npm package contains required AI Company OS runtime", () => {
     "scripts/update-runtime.ps1",
     "scripts/provider-router.ps1",
     "scripts/validate-engineering-plan-result.ps1",
+    "scripts/validate-engineering-backlog-semantics.ps1",
     "scripts/run-writable-agent.ps1",
     "scripts/providers/invoke-ollama.ps1",
     ".codex/provider-config.json",

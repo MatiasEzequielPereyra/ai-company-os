@@ -4,10 +4,28 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $generator = Join-Path $repoRoot "scripts\generate-engineering-backlog.ps1"
+$semanticValidatorSource = Join-Path $repoRoot "scripts\validate-engineering-backlog-semantics.ps1"
 $schemaSource = Join-Path $repoRoot "schemas\engineering-backlog.schema.json"
 
-foreach ($required in @($generator,$schemaSource)) {
+foreach ($required in @($generator,$semanticValidatorSource,$schemaSource)) {
     if (-not (Test-Path $required)) { throw "Required test input missing: $required" }
+}
+
+$generatorText = Get-Content $generator -Raw -Encoding UTF8
+foreach ($requiredGeneratorContract in @(
+    "Every IMPLEMENTATION objective must state the concrete repository/product change to make",
+    "Every IMPLEMENTATION item must include at least one concrete behavioral acceptance criterion",
+    "Testing requirements must be evidence-based",
+    "Never invent test modules, test files, package scripts, commands, or verification targets",
+    "use git diff --check instead of inventing a command",
+    "===== CANONICAL EXECUTION PLAN =====",
+    "SemanticValidatorPath",
+    'Role "engineering-manager"',
+    'Workload "analysis"'
+)) {
+    if ($generatorText -notmatch [regex]::Escape($requiredGeneratorContract)) {
+        throw ("Engineering backlog generator is missing semantic-quality contract: " + $requiredGeneratorContract)
+    }
 }
 
 $tempRoot = Join-Path $env:TEMP ("aico-backlog-generator-repair-" + [Guid]::NewGuid().ToString("N"))
@@ -22,6 +40,7 @@ try {
     New-Item -ItemType Directory -Force -Path (Join-Path $tempRoot "scripts") | Out-Null
 
     Copy-Item $schemaSource (Join-Path $tempRoot "schemas\engineering-backlog.schema.json") -Force
+    Copy-Item $semanticValidatorSource (Join-Path $tempRoot "scripts\validate-engineering-backlog-semantics.ps1") -Force
     Set-Content (Join-Path $tempRoot "scripts\provider-router.ps1") "throw 'Provider router must not be invoked when ReuseExistingOutput is set.'"
 
     $sourceTask = @(
@@ -60,9 +79,49 @@ try {
         (New-Object System.Text.UTF8Encoding($false))
     )
 
+    $substantiveReport = @(
+        "# Agent Report - AICO-006",
+        "",
+        "Generated: 2026-09-30T00:00:00Z",
+        "Owner: engineering-manager",
+        "Provider: fixture",
+        "Model: fixture",
+        "Outcome: COMPLETED",
+        "",
+        "## Engineering Execution Plan",
+        "",
+        "- Update scripts/build-release.mjs to produce a bootable release artifact.",
+        "- Preserve startup behavior outside the scoped release composition change.",
+        "- Verify the release artifact boots and run git diff --check.",
+        "- Require explicit implementation authorization before writable execution."
+    ) -join [Environment]::NewLine
+
     [System.IO.File]::WriteAllText(
         (Join-Path $tempRoot "docs\engineering\agent-reports\AICO-006.md"),
-        "# Approved engineering plan",
+        $substantiveReport,
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+
+    $executionPlan = @{
+        source_task_id = "AICO-006"
+        work_request_id = "WR-001"
+        executable_work = @(
+            @{
+                key = "RELEASE_BUILD"
+                kind = "IMPLEMENTATION"
+                change = "Update scripts/build-release.mjs to produce a bootable release artifact."
+                owner = "devops"
+                areas = @("scripts/build-release.mjs")
+                depends_on = @()
+                verify = "Run browser smoke test and git diff --check."
+            }
+        )
+    }
+    $executionPlanJson = $executionPlan | ConvertTo-Json -Depth 20
+    $executionPlanPath = Join-Path $tempRoot "docs\engineering\plans\AICO-006-execution-plan.json"
+    [System.IO.File]::WriteAllText(
+        $executionPlanPath,
+        $executionPlanJson,
         (New-Object System.Text.UTF8Encoding($false))
     )
 
@@ -257,6 +316,106 @@ try {
     if ([string]$explicitNonePlan.implementation_authorization_key -ne "NONE") {
         throw "Backlog generator rejected NONE despite explicit no-authorization source evidence."
     }
+
+    # Semantic-quality validation must reject generic implementation work even
+    # when provider routing is bypassed through ReuseExistingOutput.
+    [System.IO.File]::WriteAllText(
+        (Join-Path $tempRoot "docs\engineering\agent-reports\AICO-006.md"),
+        $substantiveReport,
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+
+    $genericImplementationOutput = $runtimeOutput | ConvertFrom-Json
+    $genericImplementation = @(
+        $genericImplementationOutput.items |
+        Where-Object { [string]$_.kind -eq "IMPLEMENTATION" }
+    ) | Select-Object -First 1
+    $genericImplementation.objective = "Produce the role-owned output required by the orchestration plan."
+    $genericImplementation.acceptance_criteria = @("Role-owned deliverable is produced.")
+
+    [System.IO.File]::WriteAllText(
+        (Join-Path $tempRoot ".codex\runtime\AICO-006-engineering-backlog.json"),
+        ($genericImplementationOutput | ConvertTo-Json -Depth 20),
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+
+    $genericImplementationRejected = $false
+    try {
+        & $generator -SourceTaskId "AICO-006" -ProjectPath $tempRoot -ReuseExistingOutput
+    }
+    catch {
+        if ($_.Exception.Message -match "generic/non-executable objective|no concrete acceptance criteria") {
+            $genericImplementationRejected = $true
+        }
+        else {
+            throw
+        }
+    }
+    if (-not $genericImplementationRejected) {
+        throw "Backlog generator accepted generic non-executable IMPLEMENTATION work."
+    }
+
+    $missingVerificationOutput = $runtimeOutput | ConvertFrom-Json
+    $missingVerificationImplementation = @(
+        $missingVerificationOutput.items |
+        Where-Object { [string]$_.kind -eq "IMPLEMENTATION" }
+    ) | Select-Object -First 1
+    $missingVerificationImplementation.testing_requirements = @()
+
+    [System.IO.File]::WriteAllText(
+        (Join-Path $tempRoot ".codex\runtime\AICO-006-engineering-backlog.json"),
+        ($missingVerificationOutput | ConvertTo-Json -Depth 20),
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+
+    $missingVerificationRejected = $false
+    try {
+        & $generator -SourceTaskId "AICO-006" -ProjectPath $tempRoot -ReuseExistingOutput
+    }
+    catch {
+        if ($_.Exception.Message -match "no verification requirement") {
+            $missingVerificationRejected = $true
+        }
+        else {
+            throw
+        }
+    }
+    if (-not $missingVerificationRejected) {
+        throw "Backlog generator accepted IMPLEMENTATION work without a verification requirement."
+    }
+
+    # Canonical structured execution work is the preferred source-quality
+    # signal. Without it, a metadata-only report must fail before provider use.
+    if (Test-Path $executionPlanPath) {
+        Remove-Item $executionPlanPath -Force
+    }
+    [System.IO.File]::WriteAllText(
+        (Join-Path $tempRoot "docs\engineering\agent-reports\AICO-006.md"),
+        "# Agent Report - AICO-006" + [Environment]::NewLine + "Outcome: COMPLETED",
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+
+    $shallowSourceRejected = $false
+    try {
+        & $generator -SourceTaskId "AICO-006" -ProjectPath $tempRoot -ReuseExistingOutput
+    }
+    catch {
+        if ($_.Exception.Message -match "source evidence is not substantive enough") {
+            $shallowSourceRejected = $true
+        }
+        else {
+            throw
+        }
+    }
+    if (-not $shallowSourceRejected) {
+        throw "Backlog generator accepted shallow Engineering Manager source evidence."
+    }
+
+    [System.IO.File]::WriteAllText(
+        $executionPlanPath,
+        $executionPlanJson,
+        (New-Object System.Text.UTF8Encoding($false))
+    )
 }
 finally {
     if (Test-Path $tempRoot) {

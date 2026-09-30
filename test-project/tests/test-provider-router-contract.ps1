@@ -171,6 +171,59 @@ if ([string]$result.summary -ne "SEMANTIC_GOOD") {
         (New-Object System.Text.UTF8Encoding($false))
     )
 
+    $semanticRetryCounter = Join-Path $tempRoot "semantic-retry-count.txt"
+    $semanticRetryAdapter = @'
+param(
+    [string]$Prompt,
+    [string]$Context,
+    [string]$SchemaPath,
+    [string]$OutputPath,
+    [string]$Model,
+    [int]$TimeoutSeconds
+)
+$counterPath = Join-Path (Split-Path -Parent $OutputPath) "semantic-retry-count.txt"
+$count = 0
+if (Test-Path $counterPath) {
+    $count = [int](Get-Content $counterPath -Raw -Encoding UTF8)
+}
+$count++
+[System.IO.File]::WriteAllText($counterPath,[string]$count,(New-Object System.Text.UTF8Encoding($false)))
+
+$summary = if ($count -eq 1) { "SEMANTIC_BAD" } else { "SEMANTIC_GOOD" }
+$payload = @{
+    outcome = "COMPLETED"
+    summary = $summary
+    report_markdown = "# Schema-valid semantic retry fixture"
+    verification = "Fixture"
+    decisions = "NONE"
+    blockers = "NONE"
+    recommended_next = "REVIEW"
+    completion_check = @{
+        substantive_role_deliverable_produced = $true
+        missing_required_outputs = @()
+        evidence = "Schema-valid semantic retry fixture."
+    }
+} | ConvertTo-Json -Depth 10
+[System.IO.File]::WriteAllText($OutputPath,$payload,(New-Object System.Text.UTF8Encoding($false)))
+[PSCustomObject]@{ Provider = "OpenRouter"; Model = $Model }
+'@
+    [System.IO.File]::WriteAllText($adapterPath,$semanticRetryAdapter,(New-Object System.Text.UTF8Encoding($false)))
+    if (Test-Path $semanticRetryCounter) { Remove-Item $semanticRetryCounter -Force }
+
+    $semanticRetryResult = & $router -Provider Auto -ProjectPath $tempRoot -Prompt "fixture" -Context "fixture" -SchemaPath $schema -OutputPath $output -SemanticValidatorPath $semanticValidator
+
+    if ([string]$semanticRetryResult.Provider -ne "OpenRouter") {
+        throw "Provider router did not keep the same provider after a successful semantic corrective retry."
+    }
+    if (-not (Test-Path $semanticRetryCounter)) {
+        throw "Semantic corrective retry counter was not created."
+    }
+    if ([int](Get-Content $semanticRetryCounter -Raw -Encoding UTF8) -ne 2) {
+        throw "Provider router did not perform exactly one semantic corrective retry."
+    }
+
+    [System.IO.File]::WriteAllText($adapterPath,$semanticOpenRouter,(New-Object System.Text.UTF8Encoding($false)))
+
     $semanticResult = & $router -Provider Auto -ProjectPath $tempRoot -Prompt "fixture" -Context "fixture" -SchemaPath $schema -OutputPath $output -SemanticValidatorPath $semanticValidator
 
     if ([string]$semanticResult.Provider -ne "Gemini") {
