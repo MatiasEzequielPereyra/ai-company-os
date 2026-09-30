@@ -130,8 +130,8 @@ try {
 
     $request = Get-Content $capturePath -Raw -Encoding UTF8 | ConvertFrom-Json
 
-    if ([string]$request.messages[0].content -match 'schema_sentinel_9f3e') {
-        throw "Ollama request duplicated the JSON Schema inside the user prompt."
+    if ([string]$request.messages[0].content -notmatch 'schema_sentinel_9f3e') {
+        throw "Ollama structured prompt must retain schema grounding alongside format."
     }
     if ($null -eq $request.format.properties.schema_sentinel_9f3e) {
         throw "Ollama request must supply the structured schema through format."
