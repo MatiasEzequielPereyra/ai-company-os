@@ -1375,60 +1375,100 @@ La corrección correcta es reparar la condición que falta y conservar la trazab
 
 # Actualización del framework
 
-## 58. Actualicé AI Company OS y perdí cambios locales
+## 58. aico update dice que falta managed-files.json
 
-### Riesgo
+### Síntoma
 
-`install-existing-project.ps1 -Force` reemplaza componentes del framework existentes. Si esos archivos tenían personalizaciones locales, pueden aparecer como cambios sobrescritos.
+~~~text
+Runtime update requires an existing AI Company OS managed-files manifest.
+Refusing to guess ownership
+~~~
 
-### Prevención
+### Causa probable
 
-Antes de actualizar:
+El proyecto es una instalación legacy/no administrada o el manifest fue eliminado.
 
-```powershell
-git status --short --branch
-git diff
-```
+### Comprobación
 
-Hacer la actualización en una branch dedicada y con el trabajo previo guardado/commitado de acuerdo con el workflow del proyecto.
+~~~powershell
+Test-Path .\.codex\managed-files.json
+~~~
 
-### Después de actualizar
+### Resolución segura
 
-```powershell
-git diff
-.\scripts\validate-artifacts.ps1
-```
+No fuerces el updater a adivinar ownership.
 
-Revisar especialmente:
+- verificá que estás en el proyecto correcto;
+- recuperá el manifest desde Git si pertenecía a esa instalación;
+- para un legacy project, tratá la migración de ownership como trabajo separado y revisado.
 
-```text
-AGENTS.md
-.codex/
-scripts/
-schemas/
-```
-
-El instalador actual no hace merge semántico de personalizaciones.
+No usar aico install . --force como reemplazo automático.
 
 ---
 
-## 59. Ejecuté el instalador sin -Force y no se actualizaron scripts
+## 59. aico update rechaza un archivo unmanaged
 
-### Comportamiento esperado
+### Síntoma
 
-Sin `-Force`, el instalador muestra `SKIP existing:` para varios componentes y conserva los archivos existentes.
+~~~text
+Runtime update found existing files that are not AI Company OS-managed.
+Refusing to overwrite
+~~~
 
-Eso protege personalizaciones, pero también significa que **no es un mecanismo automático de upgrade**.
+### Causa probable
 
-### Resolución
+Un path que el updater necesita administrar existe, pero el manifest no demuestra ownership.
 
-Si realmente se desea actualizar la copia instalada:
+### Comprobación
 
-1. trabajar sobre una branch limpia;
-2. revisar personalizaciones;
-3. actualizar el checkout fuente de AI Company OS;
-4. ejecutar el instalador con `-Force`;
-5. revisar el diff;
-6. validar artifacts/tests correspondientes.
+~~~powershell
+git status --short
+Get-Content .\.codex\managed-files.json -Raw -Encoding UTF8
+~~~
 
-No usar `-Force` como rutina ciega.
+### Resolución segura
+
+Determinar quién es dueño del archivo antes de tocarlo. Si es project-owned, no permitir que el updater lo sobrescriba. Si el manifest está incorrecto, reparar el contrato mediante una migración revisada, no editando ownership a ciegas.
+
+---
+
+## 60. aico update falla durante apply
+
+El updater mantiene backups temporales de paths afectados e intenta rollback.
+
+No asumir que el proyecto quedó sano solamente porque el rollback fue intentado.
+
+~~~powershell
+git status --short
+git diff
+aico doctor
+.\scripts\validate-artifacts.ps1
+~~~
+
+Si el mensaje reporta también errores de rollback, preservar el working tree y revisar manualmente antes de reintentar.
+
+---
+
+## 61. Actualicé el paquete npm pero el proyecto sigue con runtime viejo
+
+Actualizar el paquete global no reescribe proyectos existentes.
+
+~~~powershell
+npm install -g @pereyram/ai-company-os@latest
+aico version
+aico update .
+~~~
+
+La segunda operación es la que actualiza el runtime administrado del proyecto.
+
+---
+
+## 62. Quiero actualizar agents/policies/protocols/templates/skills
+
+El updater actual no promete sincronizar todos esos assets en proyectos existentes.
+
+No copies el árbol del framework encima del proyecto sin revisar personalizaciones y ownership.
+
+Registrar el gap como migración/product follow-up o realizar una reconciliación explícita y revisada.
+
+Ver [Update and Ownership](./operations/update-ownership.md).

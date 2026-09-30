@@ -223,103 +223,106 @@ ai-company-os/
 
 ## 9. Requisitos
 
-La distribución soportada actualmente usa npm como entrada principal.
+Contrato de paquete:
 
-Requisitos:
-
-- Node.js 20 o superior;
+- Windows-first;
+- Node.js >=20;
 - npm;
-- Python 3.11 o superior;
+- Python >=3.11;
 - PowerShell;
-- Git;
-- Ollama si se quiere usar el runtime local por defecto.
+- Git recomendado y necesario para worktrees writable.
 
-Instalación global:
+Evidencia de CI actual:
 
-```powershell
-npm install -g @pereyram/ai-company-os
-aico version
-aico doctor --system
-```
+- windows-latest;
+- Node 20;
+- Python 3.11 y 3.12;
+- Windows PowerShell para smoke/release;
+- PowerShell 7 para otros pasos.
 
-Providers opcionales adicionales:
+Eso no establece soporte para Linux/macOS, ni una matriz específica de Windows 10/11, ni todos los Node/Python futuros que satisfacen el rango declarado.
 
-- Codex CLI en `PATH` para `Codex`;
-- `OPENROUTER_API_KEY` para OpenRouter;
-- `GEMINI_API_KEY` para Gemini;
-- `DEEPSEEK_API_KEY` para DeepSeek;
-- `XAI_API_KEY` para Grok/xAI.
+Ollama es opcional para instalar. El Auto general actual necesita un Ollama local usable porque auto_order contiene solamente Ollama.
+
+Providers opcionales:
+
+- Codex CLI disponible para Codex;
+- OPENROUTER_API_KEY;
+- GEMINI_API_KEY;
+- DEEPSEEK_API_KEY;
+- XAI_API_KEY.
 
 No guardar API keys dentro del repositorio.
 
 ## 10. Instalar AI Company OS en un proyecto existente
 
-Desde el proyecto target:
-
-```powershell
-cd "C:\ruta\de\mi-proyecto"
+~~~powershell
+Set-Location "C:\ruta\de\mi-proyecto"
 aico install .
 aico use .
 aico doctor
-```
+~~~
 
-El comando `aico install .` utiliza el instalador PowerShell del framework y deja el proyecto seleccionado para la CLI.
+El instalador crea/actualiza su manifest de ownership en:
 
-Luego ejecutar intake cuando corresponda:
-
-```powershell
-.\scripts\initialize-project.ps1
-```
-
-El instalador mantiene un manifest de archivos administrados en:
-
-```text
+~~~text
 .codex/managed-files.json
-```
+~~~
 
-Las detecciones del intake son evidencia inicial, no decisiones aprobadas.
+La instalación normal omite archivos existentes en paths del framework en vez de sobreescribirlos silenciosamente.
+
+Git no es un requisito duro para copiar el framework: si .git falta se emite un warning. Sin Git no está disponible el aislamiento writable por worktrees.
+
+Luego:
+
+~~~powershell
+.\scripts\initialize-project.ps1
+~~~
+
+Las detecciones de intake son evidencia inicial, no decisiones aprobadas.
 
 ## 11. Crear un proyecto nuevo
 
-La CLI expone:
-
-```powershell
+~~~powershell
 aico new MiProyecto C:\Proyectos
-```
+~~~
 
-El comando usa internamente `new-project.ps1`.
+El comando crea el proyecto, instala el framework, bootstrapea Python y lo selecciona como activo.
 
-Para una primera prueba del lifecycle con runtime local, el checklist de First Run usa deliberadamente un repositorio Git vacío más `aico install .`, porque ese camino instala el conjunto completo de componentes administrados del proyecto existente.
+El scaffold actual **no ejecuta git init**. Para usar Git/worktrees:
 
-El script `new-project.ps1` no ejecuta `git init` por sí mismo.
+~~~powershell
+Set-Location "C:\Proyectos\MiProyecto"
+git init
+git add .
+git commit -m "chore: initialize project"
+~~~
 
-## 11.1 Actualizar CLI y runtime instalado
+## 11.1 Actualizar paquete y runtime instalado
 
 Actualizar el paquete global:
 
-```powershell
+~~~powershell
 npm install -g @pereyram/ai-company-os@latest
 aico version
-aico doctor --system
-```
+~~~
 
-Actualizar los componentes administrados dentro de un proyecto es una operación separada.
+Actualizar un proyecto ya administrado:
 
-Sin `--force`, el instalador preserva archivos existentes. Con `--force`, puede reemplazar componentes administrados.
+~~~powershell
+Set-Location "C:\ruta\de\mi-proyecto"
+aico update .
+~~~
 
-Proceso recomendado:
+Son operaciones separadas.
 
-```powershell
-git status --short --branch
+El updater exige .codex/managed-files.json y rechaza ownership ambiguo. Actualiza el runtime soportado (scripts runtime, adapters provider/local-runtime, schemas) y mergea provider-config, local-runtime-config, writable-policy y workflow-profiles.
 
-# trabajar en una branch de actualización
-aico install . --force
+Preserva source, tasks, Work Requests, documentación/evidencia de proyecto y state. Tampoco promete actualizar automáticamente todos los agents, policies, protocols, workflows, templates o skills.
 
-git diff
-.\scripts\validate-artifacts.ps1
-```
+No usar una instalación forzada como sustituto del updater.
 
-No usar `--force` sobre cambios locales no revisados. El manifest administrado ayuda a identificar archivos del framework, pero no realiza merge semántico de personalizaciones.
+Ver [Update and Ownership](./operations/update-ownership.md).
 
 ## 12. Crear un Work Request
 
@@ -488,7 +491,7 @@ No se debe utilizar como mecanismo para que múltiples agentes editen simultáne
 
 Los runners de análisis y gates soportan:
 
-```text
+~~~text
 Auto
 Codex
 Ollama
@@ -496,42 +499,80 @@ OpenRouter
 Gemini
 DeepSeek
 Grok
-```
+~~~
+
+### Auto general
+
+Configuración por defecto:
+
+~~~text
+Auto → Ollama
+~~~
+
+No existe fallback cloud general automático en main.
+
+### Engineering Manager
+
+El análisis de Engineering Manager tiene una política específica:
+
+~~~text
+OpenRouter → Gemini → Ollama → Codex → DeepSeek → Grok
+~~~
+
+Es una lista de candidatos, no una garantía de ejecución.
+
+- faltan keys: se omite el provider correspondiente;
+- LOCAL_CPU_LOW: Ollama se omite para Engineering Manager;
+- Codex no disponible: se omite;
+- allow_paid_fallback=false: DeepSeek/Grok se omiten como fallback automático.
 
 ### Ollama
 
-Es el provider local por defecto del `main` actual cuando se usa `Auto`.
+La selección local usa hardware detection, perfiles y preferencias de rol. AI Company OS no auto-pullea modelos.
 
-La selección local utiliza perfiles de hardware y límites de contexto definidos en `.codex/local-runtime-config.json`. Verificar el entorno con:
-
-```powershell
+~~~powershell
 aico doctor --system
 ollama list
-```
+~~~
 
 ### Codex
 
-Requiere Codex CLI disponible en `PATH`.
-
-El runner estándar lo usa para análisis/read-only y evita convertir automáticamente una falta de cuota en consumo de OpenAI API pago.
+Requiere Codex CLI disponible en PATH y usa la autenticación/cuota del CLI. El runner estándar lo usa dentro de su boundary read-only.
 
 ### OpenRouter
 
-Requiere `OPENROUTER_API_KEY`. El modelo configurado puede ser `openrouter/free`, pero la compatibilidad de modelos externos con structured output puede variar. El runtime valida el resultado antes de aceptarlo.
+Requiere OPENROUTER_API_KEY. El modelo general configurado es openrouter/free; Engineering Manager/writable pueden usar el override configurado qwen/qwen3.8-27b:free.
+
+Una ruta marcada free sigue sujeta a disponibilidad, compatibilidad, cuota y política del provider.
 
 ### Gemini
 
-Requiere `GEMINI_API_KEY`.
+Requiere GEMINI_API_KEY. El modelo configurado actual es gemini-3.5-flash-lite.
 
 ### DeepSeek
 
-Requiere `DEEPSEEK_API_KEY`.
+Requiere DEEPSEEK_API_KEY. Tratar la API como potencialmente paga.
 
 ### Grok / xAI
 
-Requiere `XAI_API_KEY`.
+Requiere XAI_API_KEY. Tratar la API como potencialmente paga.
 
-Los providers distintos de Codex reciben un Repository Context Pack acotado. Los resultados deben validar contra los schemas locales antes de convertirse en evidencia del workflow.
+### Timeouts
+
+Configuración actual:
+
+~~~text
+Codex      180 s
+OpenRouter 240 s
+Gemini     240 s
+Ollama    1800 s
+DeepSeek   300 s
+Grok       300 s
+~~~
+
+El router elimina outputs parciales fallidos y valida schema antes de aceptar un resultado.
+
+Para detalles y writable Auto, ver [Provider Runtime](./operations/provider-runtime.md).
 
 ## 19. Trabajo con escritura y aislamiento
 
@@ -690,21 +731,22 @@ Reglas principales:
 
 ## 23. Qué ocurre cuando falla un provider
 
-Posibles fallos incluyen:
+Posibles fallos:
 
-- provider no instalado;
-- cuota agotada;
+- provider/CLI no disponible;
 - API key faltante;
-- error HTTP transitorio;
-- JSON inválido;
-- resultado que no cumple el schema;
-- contexto insuficiente.
+- rate limit/cuota;
+- timeout;
+- transporte/red;
+- JSON/schema/contrato inválido;
+- validación semántica fallida;
+- Ollama no reachable o sin modelo elegible.
 
-El sistema intenta mantener el fallo dentro del límite del provider y evita aceptar resultados estructuralmente inválidos.
+Los timeouts son consumidos por el router actual. Un intento fallido elimina el output parcial para evitar que se use como evidencia válida.
 
-Con `Provider Auto`, el router puede utilizar el orden de providers configurado.
+Auto continúa únicamente si quedan candidatos reales en el orden aplicable. En el Auto general por defecto solamente existe Ollama, por lo que un fallo local no produce fallback cloud automático.
 
-Los adapters API mantienen sus propios contratos de timeout/retry. No asumir que una propiedad `provider_timeout_seconds` en `.codex/provider-config.json` sea el contrato canónico salvo que el runtime actual la consuma explícitamente.
+No avanzar lifecycle ni fabricar artifacts manualmente para ocultar un fallo de provider.
 
 ## 24. Recuperación entre sesiones
 
@@ -865,3 +907,5 @@ autorización
 - [Command Reference](./COMMAND-REFERENCE.md)
 - [FAQ](./FAQ.md)
 - [Documentation Status](./DOCUMENTATION-STATUS.md)
+- [Provider Runtime](./operations/provider-runtime.md)
+- [Update and Ownership](./operations/update-ownership.md)

@@ -1,107 +1,64 @@
-# AI Company OS Documentation
+# AI Company OS — Documentación
 
-Esta carpeta contiene documentación de producto, arquitectura, ingeniería, operaciones y uso del framework.
+Esta carpeta contiene la documentación pública detallada de AI Company OS.
 
-## Para usuarios
+La regla principal es simple: **la documentación describe el comportamiento que existe en main; no convierte intenciones, ramas históricas o features planeadas en capacidades soportadas.**
 
-### 1. Empezar rápido
+## Empezar
 
-[QUICKSTART.md](./QUICKSTART.md)
+1. [Quick Start](./QUICKSTART.md) — instalación y primer flujo.
+2. [First Run Checklist](./FIRST-RUN-CHECKLIST.md) — aceptación descartable y mayormente offline.
+3. [Manual de Usuario](./USER-GUIDE.md) — conceptos, roles, lifecycle, providers, gates, writable execution y recovery.
+4. [Command Reference](./COMMAND-REFERENCE.md) — CLI público y tooling PowerShell avanzado.
+5. [Troubleshooting](./TROUBLESHOOTING.md) — diagnóstico por síntomas.
 
-Instalación y primer flujo con el mínimo contexto necesario.
+## Operación
 
-### 2. Manual completo
+- [Provider Runtime](./operations/provider-runtime.md) — autenticación, routing, modelos, timeouts, costos y límites.
+- [Hardware-Aware Local Runtime](./operations/local-runtime.md) — detección, perfiles y selección de Ollama.
+- [Update and Ownership](./operations/update-ownership.md) — managed-files, preservación, conflictos y alcance real de aico update.
+- [End-to-End Walkthrough](./END-TO-END-WALKTHROUGH.md) — del objetivo a planning, ejecución, gates y completion.
+- [FAQ](./FAQ.md) — respuestas breves.
+- [Documentation Status](./DOCUMENTATION-STATUS.md) — qué está validado, limitado o no establecido.
 
-[USER-GUIDE.md](./USER-GUIDE.md)
+## Contexto del sistema
 
-Conceptos, roles, states, profiles, providers, gates, aislamiento, seguridad y operación.
+- [Project Brief](./PROJECT-BRIEF.md)
+- [System Architecture](./architecture/system-architecture.md)
+- product/ — requisitos y contexto de producto.
+- architecture/ — decisiones y contexto técnico.
+- engineering/ — work requests, planes, dispatch, resultados y evidencia.
+- operations/ — contexto operativo.
 
-### 3. Recorrido end-to-end
+## Documentación pública en la raíz
 
-[END-TO-END-WALKTHROUGH.md](./END-TO-END-WALKTHROUGH.md)
-
-Explica cómo un objetivo se transforma en Work Request, planning tasks, engineering backlog y lifecycle hasta DONE.
-
-### 4. Primera ejecución controlada
-
-[FIRST-RUN-CHECKLIST.md](./FIRST-RUN-CHECKLIST.md)
-
-Checklist para comprobar que una instalación nueva es comprensible y funcional.
-
-### 5. Problemas y recuperación
-
-[TROUBLESHOOTING.md](./TROUBLESHOOTING.md)
-
-Errores de instalación, readiness, providers, gates, artifacts, Git/worktrees, encoding y recuperación de estado.
-
-### 6. Referencia de comandos
-
-[COMMAND-REFERENCE.md](./COMMAND-REFERENCE.md)
-
-Parámetros verificados de los scripts PowerShell principales, con distinción entre comandos seguros, apply, provider, Git y avanzados.
-
-### 7. Preguntas frecuentes
-
-[FAQ.md](./FAQ.md)
-
-Respuestas cortas sobre autonomía, Work Requests, tasks, providers, gates, worktrees y límites del sistema.
-
-### 8. Estado de cobertura
-
-[DOCUMENTATION-STATUS.md](./DOCUMENTATION-STATUS.md)
-
-Matriz de qué está documentado como estable, parcial, pendiente o no soportado implícitamente.
-
-### 9. Revisión de usabilidad
-
-[DOCUMENTATION-USABILITY-REVIEW.md](./DOCUMENTATION-USABILITY-REVIEW.md)
-
-Resultado de la prueba de onboarding v0.1, hallazgos corregidos, CI y limitaciones pendientes.
-
-## Documentación del sistema
-
-- [PROJECT-BRIEF.md](./PROJECT-BRIEF.md) — alcance, visión, usuarios objetivo, restricciones y criterios de éxito.
-- [architecture/system-architecture.md](./architecture/system-architecture.md) — arquitectura canónica.
-- `product/` — fuentes de producto.
-- `architecture/` — arquitectura e intake técnico.
-- `engineering/` — planes, results, reviews, QA, security y handoffs.
-- `operations/` — operación y observabilidad.
-
-## Orden recomendado para un usuario nuevo
-
-```text
-README.md
-   ↓
-docs/QUICKSTART.md
-   ↓
-docs/FIRST-RUN-CHECKLIST.md
-   ↓
-docs/USER-GUIDE.md
-   ↓
-docs/END-TO-END-WALKTHROUGH.md
-   ↓
-docs/TROUBLESHOOTING.md
-```
-
-## Política de documentación
-
-La documentación distingue cuatro estados:
-
-- **estable** — comportamiento integrado y verificable en la branch documentada;
-- **experimental** — existe pero puede cambiar;
-- **en desarrollo** — todavía no debe tratarse como contrato de usuario;
-- **conceptual** — describe intención/arquitectura, no una capacidad operativa.
-
-Una feature no debe presentarse como estable solo porque existe en una branch.
+- [README](../README.md)
+- [Security](../SECURITY.md)
+- [Contributing](../CONTRIBUTING.md)
+- [Changelog](../CHANGELOG.md)
+- [License](../LICENSE)
 
 ## Fuente de verdad
 
-Cuando documentación y runtime discrepan:
+Orden de autoridad para una afirmación operativa:
 
-1. no ocultar la discrepancia;
-2. verificar la branch y commit;
-3. comprobar scripts/schemas/tests;
-4. corregir documentación o implementación;
-5. no inventar un comportamiento intermedio.
+1. implementación de main;
+2. tests/contracts de main;
+3. comportamiento del CLI/runtime;
+4. configuración;
+5. CI;
+6. documentación.
 
-La documentación es una interfaz del producto y debe mantenerse con el mismo criterio que el código.
+Si código y documentación discrepan, no se debe modificar silenciosamente el producto solo para hacer verdadera la documentación. Primero se documenta el comportamiento real y se registra cualquier gap del producto.
+
+## Plataforma y madurez
+
+AI Company OS es actualmente **Windows-first y pre-beta**.
+
+El CI prueba Windows, Node 20 y Python 3.11/3.12. El paquete declara Node >=20 y Python >=3.11, pero Linux/macOS y todas las versiones posteriores no forman parte de una matriz de compatibilidad probada.
+
+La documentación evita describir el proyecto como production-ready, enterprise-ready, fully autonomous, fully cross-platform o self-healing.
+
+## Historial documental
+
+[DOCUMENTATION-USABILITY-REVIEW.md](./DOCUMENTATION-USABILITY-REVIEW.md) se conserva únicamente como nota histórica. No es fuente de verdad operativa y no debe usarse para recuperar comandos o configuración actuales.

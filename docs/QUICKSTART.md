@@ -1,287 +1,203 @@
 # AI Company OS — Quick Start
 
-> Guía mínima para pasar de cero a un primer workflow real sin asumir IDs ni saltar dependencias.
+Guía mínima para pasar de cero a un proyecto reconocido por AI Company OS y a un primer Work Request preparado, sin asumir IDs y sin requerir un provider pago.
 
-## 0. Requisitos
+## 1. Requisitos
 
-Instalación soportada:
+Contrato actual:
 
-- Node.js 20 o superior;
+- Windows como plataforma primaria;
+- Node.js >=20 (CI: Node 20);
 - npm;
-- Python 3.11 o superior;
+- Python >=3.11 (CI: 3.11 y 3.12);
 - PowerShell;
-- Git.
+- Git recomendado.
 
-Instalar el CLI:
+Ollama es opcional para instalar, pero el Auto general actual intenta solamente Ollama.
 
-```powershell
+## 2. Instalar y verificar el CLI
+
+~~~powershell
 npm install -g @pereyram/ai-company-os
 aico version
+aico --help
 aico doctor --system
-```
+~~~
 
-Para el runtime local por defecto también necesitás Ollama. El `main` actual configura `Auto` como local-first y su `auto_order` por defecto contiene `Ollama`.
+En la primera operación que necesita el CLI Python, el launcher npm crea un virtualenv privado dentro del paquete instalado.
 
-## 1. Instalarlo sobre un proyecto existente
+## 3. Elegir un camino
 
-Desde el repositorio que querés administrar:
+### Proyecto existente
 
-```powershell
-Set-Location "C:\ruta\de\mi-proyecto"
+~~~powershell
+Set-Location "C:\ruta\a\mi-proyecto"
 aico install .
 aico use .
+~~~
+
+La instalación normal preserva archivos existentes en paths del framework en vez de sobrescribirlos silenciosamente y crea **.codex/managed-files.json**.
+
+Si el repositorio no tiene .git, la instalación puede continuar, pero el installer emite un warning y el aislamiento writable por worktrees no estará disponible correctamente.
+
+### Proyecto nuevo
+
+~~~powershell
+aico new mi-proyecto C:\Proyectos
+Set-Location "C:\Proyectos\mi-proyecto"
+~~~
+
+aico new crea la estructura y selecciona el proyecto, pero **no ejecuta git init**.
+
+~~~powershell
+git init
+git add .
+git commit -m "chore: initialize project"
+~~~
+
+## 4. Confirmar el proyecto
+
+~~~powershell
+aico current
 aico doctor
-```
+aico status
+aico tasks
+aico workflow
+~~~
 
-El target debería ser un repositorio Git si vas a usar aislamiento por worktrees.
+El objetivo es confirmar que el proyecto activo es el correcto y que el framework puede leer su estado.
 
-El instalador mantiene un manifest de archivos administrados bajo `.codex/managed-files.json`. Una actualización con `--force` puede reemplazar componentes administrados: hacela sobre una branch revisable y comprobá el diff.
+## 5. Ejecutar intake
 
-## 2. Inicializar el proyecto
-
-```powershell
+~~~powershell
 .\scripts\initialize-project.ps1
-```
+~~~
 
-Revisá:
+Revisá los artefactos de intake bajo docs/product, docs/architecture, docs/engineering y docs/operations.
 
-```text
-docs/engineering/project-intake.md
-docs/product/product-intake.md
-docs/architecture/architecture-intake.md
-docs/operations/operations-intake.md
-```
+El intake es evidencia automática. No convierte una detección en un requisito o decisión aprobada.
 
-El intake es evidencia automática. No convierte detecciones en decisiones aprobadas.
+## 6. Crear el primer Work Request en PREPARE
 
-## 3. Elegir provider para la sesión
+~~~powershell
+.\scripts\orchestrate.ps1 -Objective "Revisar el proyecto y definir el próximo cambio" -Type FEATURE -Priority P1
+~~~
 
-Comprobar el runtime local recomendado:
+Sin -Apply:
 
-```powershell
-aico doctor --system
-ollama list
-```
-
-Si Ollama está disponible y configurado:
-
-```powershell
-$AicoProvider = "Auto"
-```
-
-También podés usar explícitamente un provider soportado:
-
-```text
-Codex
-OpenRouter
-Gemini
-Ollama
-DeepSeek
-Grok
-```
-
-Ejemplo:
-
-```powershell
-$AicoProvider = "OpenRouter"
-```
-
-Los providers externos requieren sus credenciales correspondientes. `DeepSeek` y `Grok` no se usan como fallback pago automático cuando `allow_paid_fallback` está deshabilitado; siguen pudiendo elegirse explícitamente si están configurados.
-
-## 4. Crear un objetivo en modo PREPARE
-
-Ejemplo:
-
-```powershell
-.\scripts\orchestrate.ps1 `
-  -Objective "Revisar el proyecto y definir el cambio que necesito" `
-  -Type FEATURE `
-  -Priority P1
-```
-
-Sin `-Apply`, el orchestrator:
-
-```text
+~~~text
 crea Work Request
 → genera plan
 → materializa planning tasks
 → evalúa readiness
 → prepara dispatch
-→ NO activa tasks
-```
+→ no activa agentes
+~~~
 
-## 5. Obtener el Work Request real
+Este paso no llama a un provider.
 
-No asumir que siempre será `WR-001`.
+## 7. Resolver el ID real
 
-```powershell
-$CurrentObjective = Get-Content .\.codex\state\current-objective.md -Raw
+No asumas WR-001.
 
+~~~powershell
+$CurrentObjective = Get-Content .\.codex\state\current-objective.md -Raw -Encoding UTF8
 if ($CurrentObjective -match 'Work request:\s+docs/engineering/work-requests/(WR-\d+)\.md') {
-  $WorkRequestId = $Matches[1]
+    $WorkRequestId = $Matches[1]
 }
 else {
-  throw "No pude resolver el Work Request actual."
+    throw "No se pudo resolver el Work Request actual."
 }
-
 $WorkRequestId
-```
+~~~
 
-Revisar el plan:
+Inspeccionar:
 
-```powershell
-Get-Content ".\docs\engineering\plans\$WorkRequestId-plan.md"
-```
-
-Y las tasks:
-
-```powershell
+~~~powershell
+Get-Content ".\docs\engineering\work-requests\$WorkRequestId.md" -Encoding UTF8
+Get-Content ".\docs\engineering\plans\$WorkRequestId-plan.md" -Encoding UTF8
 .\scripts\list-tasks.ps1
-```
+~~~
 
-## 6. Aplicar el primer lote elegible
+## 8. Activar solamente trabajo elegible
 
-Cuando el plan sea correcto:
-
-```powershell
-.\scripts\orchestrate.ps1 `
-  -WorkRequestId $WorkRequestId `
-  -Apply
-```
-
-Ver las activas:
-
-```powershell
+~~~powershell
+.\scripts\orchestrate.ps1 -WorkRequestId $WorkRequestId -Apply
 .\scripts\list-tasks.ps1 -Status ACTIVE
-```
+aico workflow
+~~~
 
-Solo las tasks cuyas dependencias estén satisfechas deberían estar `ACTIVE`.
+Las dependencias deben estar satisfechas antes de activar una task.
 
-## 7. Ejecutar los agentes activos
+## 9. Provider: solo cuando vayas a ejecutar IA
 
-```powershell
-.\scripts\run-active-agents.ps1 -Provider $AicoProvider
-```
+~~~powershell
+aico doctor --system
+ollama list
+~~~
 
-Una entrega `COMPLETED` pasa normalmente:
+Configuración general por defecto:
 
-```text
-ACTIVE → REVIEW
-```
+~~~text
+Auto → Ollama
+~~~
 
-## 8. Ejecutar Review, QA y Security
+Ejecutar tasks de análisis activas:
 
-```powershell
-.\scripts\run-pending-gates.ps1 -Provider $AicoProvider
-```
+~~~powershell
+.\scripts\run-active-agents.ps1 -Provider Auto
+~~~
 
-Con gates satisfactorios, la task queda normalmente en:
+No ejecutes este paso si no querés consumir compute/cuota. Un provider cloud explícito requiere su credencial y puede estar sujeto a cuota o costo.
 
-```text
-SECURITY
-```
+Engineering Manager tiene routing de análisis específico; no asumas que su Auto es idéntico al Auto general. Ver [Provider Runtime](./operations/provider-runtime.md).
 
-No llega sola a `DONE`.
+## 10. Gates y finalización
 
-## 9. Revisar evidencia y aprobar explícitamente
+Después de un resultado COMPLETED:
 
-Ver qué tasks están esperando decisión final:
+~~~text
+REVIEW → QA → SECURITY → final approval → DONE
+~~~
 
-```powershell
-.\scripts\list-tasks.ps1 -Status SECURITY
-```
+~~~powershell
+.\scripts\run-pending-gates.ps1 -Provider Auto
+~~~
 
-Elegí una task y revisá sus artifacts antes de aprobarla.
+Security puede concluir NOT_APPLICABLE en perfiles que no exigen un PASS de seguridad. La task sigue necesitando final approval.
 
-Ejemplo, reemplazando el ID por el real:
+Después de revisar evidencia:
 
-```powershell
-Get-Content .\tasks\AICO-123.md
-Get-Content .\docs\engineering\qa\AICO-123-qa.md
-Get-Content .\docs\engineering\security\AICO-123-security.md
-```
+~~~powershell
+.\scripts\finalize-task.ps1 -Id AICO-XXX -Decision APPROVE -Verification "Reviewed objective, result and applicable gate evidence."
+~~~
 
-Si corresponde aprobar:
+No automatices aprobaciones masivas.
 
-```powershell
-.\scripts\finalize-task.ps1 `
-  -Id AICO-123 `
-  -Decision APPROVE `
-  -Verification "Original objective and applicable gate evidence reviewed."
-```
+## 11. Actualizar más adelante
 
-La aprobación final es una decisión. No automatices un `APPROVE` masivo sin inspeccionar la evidencia.
+~~~powershell
+npm install -g @pereyram/ai-company-os@latest
+aico update .
+~~~
 
-## 10. Repetir el lifecycle mientras aparezca trabajo nuevo
+Son operaciones distintas. Ver [Update and Ownership](./operations/update-ownership.md).
 
-Después de una task `DONE`, sus dependientes pueden pasar automáticamente de `BACKLOG` a `READY`.
+## 12. Qué significa éxito
 
-Comprobar:
+Al terminar esta guía deberías saber:
 
-```powershell
-.\scripts\list-tasks.ps1
-```
-
-Si aparecen nuevas tasks `READY`:
-
-```powershell
-.\scripts\dispatch-ready-tasks.ps1 -Apply
-.\scripts\run-active-agents.ps1 -Provider $AicoProvider
-.\scripts\run-pending-gates.ps1 -Provider $AicoProvider
-```
-
-Después volver a revisar y finalizar cada task que corresponda.
-
-El ciclo real es:
-
-```text
-READY
-  ↓
-ACTIVE
-  ↓
-RESULT
-  ↓
-REVIEW
-  ↓
-QA
-  ↓
-SECURITY
-  ↓
-FINAL APPROVAL
-  ↓
-DONE
-  ↓
-desbloquea dependencias
-  ↓
-nuevas READY
-  ↺
-```
-
-## 11. Validar y sincronizar
-
-Cuando termines una ronda:
-
-```powershell
-.\scripts\sync-company-state.ps1
-.\scripts\validate-artifacts.ps1
-.\scripts\summarize-metrics.ps1
-```
-
-## 12. Si la task necesita modificar código
-
-El runner compartido de agents es de análisis/read-only.
-
-Para una task con escritura explícitamente autorizada:
-
-```powershell
-.\scripts\new-agent-workspace.ps1 -Id AICO-123
-```
-
-Eso crea aislamiento. No autoriza automáticamente merge, push o deployment.
+- qué proyecto está activo;
+- dónde están sus tasks y Work Requests;
+- cómo diagnosticarlo;
+- qué hace Auto por defecto;
+- qué diferencia hay entre planning e implementation authorization;
+- qué evidencia exige el lifecycle;
+- cómo actualizar sin reemplazar archivos arbitrarios.
 
 ## Siguiente lectura
 
-- [First Run Checklist](./FIRST-RUN-CHECKLIST.md) — demo controlado sin usar IDs fijos.
-- [User Guide](./USER-GUIDE.md) — manual completo.
-- [End-to-End Walkthrough](./END-TO-END-WALKTHROUGH.md) — modelo profundo del workflow.
-- [Troubleshooting](./TROUBLESHOOTING.md) — errores y recuperación.
+- [First Run Checklist](./FIRST-RUN-CHECKLIST.md)
+- [User Guide](./USER-GUIDE.md)
+- [Command Reference](./COMMAND-REFERENCE.md)
+- [Troubleshooting](./TROUBLESHOOTING.md)

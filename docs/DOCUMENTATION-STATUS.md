@@ -1,185 +1,119 @@
 # AI Company OS — Documentation Status
 
-> Estado de cobertura de la documentación de usuario.
+Status: **pre-beta living documentation / re-audit candidate**
 
-## Versión documental
+This file distinguishes what is documented and validated from what remains limited or unproven.
 
-```text
-Manual: v0.1
-Target documentado: main
-Verified runtime baseline: 816404c51c34e0bc3e7c23ab9772a0b4d8be1753
-Estado: living documentation / review candidate
-```
+## Documented and validated
 
-## Cobertura actual
+| Area | Current evidence |
+| --- | --- |
+| npm package identity and CLI entrypoint | package.json and package tests |
+| Python runtime requirement | pyproject.toml and Python CI |
+| aico new | packaged npm E2E |
+| aico install | packaged npm E2E plus install contract |
+| package-local Python bootstrap | packaged npm E2E |
+| aico update | update contract plus packaged npm E2E |
+| managed-files fail-closed update | update-runtime contract |
+| project-owned file preservation in packaged flows | npm E2E |
+| general Auto = Ollama by default | provider config/router/update contract |
+| Engineering Manager analysis override | provider config/router |
+| writable Auto/local-first safety | writable runtime and policy |
+| task lifecycle and transition guards | protocol and smoke tests |
+| Review/QA/Security/final approval | gate scripts and smoke tests |
+| structured Engineering Manager planning | schema, semantic validator and planning tests |
+| writable worktree isolation | writable protocol and smoke tests |
+| Windows CI | windows-latest workflows |
+| Python 3.11 and 3.12 | Python CI matrix |
+| Node 20 release/package path | smoke/release workflows |
 
-| Área | Estado documental | Nota |
-|---|---|---|
-| Qué es AI Company OS | Cubierto | User Guide + README |
-| Límites / non-goals | Cubierto | README + User Guide + FAQ |
-| Instalación en proyecto existente | Cubierto | Quick Start + User Guide |
-| Proyecto nuevo | Cubierto | User Guide + Command Reference |
-| Intake | Cubierto | User Guide + First Run |
-| Work Requests | Cubierto | User Guide + Walkthrough |
-| Planning | Cubierto | Walkthrough |
-| AICO tasks | Cubierto | User Guide |
-| Prioridades | Cubierto | User Guide |
-| Estados | Cubierto | User Guide + FAQ |
-| Dependencias | Cubierto | Walkthrough + Troubleshooting |
-| Readiness | Cubierto | Quick Start + Troubleshooting |
-| Dispatch | Cubierto | User Guide + Walkthrough |
-| Providers | Cubierto | User Guide + Troubleshooting |
-| Codex | Cubierto | User Guide + FAQ |
-| Ollama / local runtime | Cubierto | Quick Start + User Guide + Troubleshooting |
-| OpenRouter | Cubierto | User Guide + Troubleshooting |
-| Gemini | Cubierto | User Guide + Troubleshooting |
-| DeepSeek | Cubierto | User Guide + FAQ |
-| Grok / xAI | Cubierto | User Guide + FAQ |
-| Auto routing | Cubierto | Local-first por defecto; FAQ + Troubleshooting |
-| Agent results | Cubierto | Walkthrough |
-| Review | Cubierto | User Guide + Walkthrough |
-| QA | Cubierto | User Guide + Walkthrough |
-| Security | Cubierto | User Guide + Walkthrough |
-| Final approval | Cubierto | Quick Start + First Run |
-| Workflow profiles | Cubierto | User Guide |
-| Engineering backlog | Cubierto | Walkthrough |
-| Implementation authorization | Cubierto | Walkthrough + FAQ |
-| Worktrees | Cubierto | User Guide + Troubleshooting |
-| Validación de artifacts | Cubierto | Troubleshooting + Command Reference |
-| State sync | Cubierto | User Guide + Troubleshooting |
-| Métricas | Cubierto | User Guide + Command Reference |
-| Encoding recovery | Cubierto | Troubleshooting |
-| Smoke tests | Cubierto | User Guide + Troubleshooting |
-| E2E real code change | Cubierto | Walkthrough |
-| Command reference | Cubierto | COMMAND-REFERENCE.md |
-| Actualización del runtime instalado | Cubierto con cautela | Installer no es version-aware; requiere branch + diff |
-| FAQ | Cubierto | FAQ.md |
-| CLI / TUI `aico` | Cubierto | Integrada en main y distribuida por npm |
-| Writable runtime autorizado | Cubierto con límites | Worktree + policy + change-set; merge/push/deploy siguen separados |
-| Merge/reconciliation automático | Pendiente | No tratar como estable |
-| Deployment autónomo | No soportado implícitamente | Requiere autoridad externa/expresa |
-| Provider timeout configurable por config | Pendiente | main usa valores en adapters; no contrato provider_timeout_seconds |
-| First-run humano con provider externo | Validado con hallazgos | PM → CTO completado hasta DONE; ver Documentation Usability Review |
+## Documented but limited
 
-## Criterio para actualizar esta tabla
+### Windows support
 
-Una capacidad pasa a **Cubierto** como estable cuando:
+Windows is the primary target and current GitHub Actions evidence runs on windows-latest.
 
-1. está integrada en la branch documentada;
-2. su comportamiento puede verificarse en código/tests;
-3. los comandos publicados corresponden al runtime real;
-4. sus límites están documentados;
-5. no se presenta una branch experimental como contrato general.
+The repository does not currently claim a separately validated Windows 10 client matrix or Windows 11 client matrix.
 
-## Qué no debe bloquear el desarrollo
+### Node versions
 
-La documentación no necesita describir en profundidad una feature que cambia diariamente.
+package.json declares Node >=20. CI currently proves Node 20, not every later Node major.
 
-Sí debe actualizarse inmediatamente cuando cambia alguno de estos contratos:
+### Python versions
 
-- nombre de comandos;
-- parámetros;
-- estados;
-- transiciones;
-- roles;
-- source-of-truth;
-- providers;
-- requisitos de autorización;
-- gates;
-- artifacts generados;
-- comportamiento de instalación;
-- seguridad.
+pyproject.toml declares Python >=3.11. CI currently proves Python 3.11 and 3.12.
 
-## Siguiente actualización prevista
+### Providers
 
-Cuando cambien contratos públicos de CLI, writable runtime, providers o lifecycle en `main`, revisar como mínimo:
+Provider adapters and deterministic contracts are tested. This does not prove live availability, account quota, pricing, or model behavior for every external provider.
 
-```text
-README.md
-docs/QUICKSTART.md
-docs/USER-GUIDE.md
-docs/FIRST-RUN-CHECKLIST.md
-docs/END-TO-END-WALKTHROUGH.md
-docs/TROUBLESHOOTING.md
-docs/COMMAND-REFERENCE.md
-docs/FAQ.md
-```
+### Writable execution
 
-Después ejecutar nuevamente la revisión de consistencia documental.
+The runtime can apply validated change sets in isolated registered worktrees. Commit, merge, rebase, push, deployment, release and publication remain separate authorized actions.
 
+### Project update
 
-## Known runtime limitations discovered during documentation testing
+aico update evolves the current runtime namespace and selected managed configs. It does not currently update every installation-time framework asset such as all agents, policies, protocols, workflows, templates or skills.
 
-### Review independence for engineering-manager-owned tasks
+## Known product/documentation gaps
 
-Current `run-gate-agent.ps1` assigns the `engineering-manager` role to the Review gate.
+### Review independence for Engineering Manager-owned tasks
 
-Therefore, when the original task owner is also `engineering-manager`, independence is not guaranteed **by role identity**.
+The Review gate currently assigns the Engineering Manager role as reviewer. Therefore an Engineering Manager-owned task is not guaranteed role-level reviewer independence.
 
-The documentation does not treat this case as a fully independent review. The First Run demo intentionally uses PM and CTO tasks so the review role differs from the original owner.
+Documentation does not claim otherwise. Changing reviewer policy is a product/architecture decision, not a documentation fix.
 
-Resolving the runtime policy itself requires an explicit architecture/product decision about who should review Engineering Manager-owned work.
+### Wrapper command-specific help
 
+The npm launcher handles new, install/init and update before handing off to the Typer CLI. These wrapper commands do not currently provide the same command-specific help surface as Typer subcommands.
 
-## Windows PowerShell 5.1 / UTF-8
+The command reference is the authoritative syntax reference for them.
 
-Documentación revisada para el caso real de lectura desde Windows PowerShell 5.1. Los Markdown UTF-8 sin BOM pueden verse con caracteres corruptos si se usa `Get-Content` sin `-Encoding UTF8`. La guía de First Run y Quick Start incluyen la instrucción explícita.
+### Legacy unmanaged project migration
 
-## Live first-run validation — 2026-09-29
+Projects without a valid managed-files ownership contract cannot use aico update. A safe automatic legacy migration workflow is not currently established.
 
-Se completó un first-run real en un proyecto descartable siguiendo el flujo documentado:
+### Security private-reporting configuration
 
-```text
-RESEARCH
-→ PM
-→ Review
-→ QA
-→ Security
-→ final approval
-→ CTO
-→ Review
-→ QA
-→ Security
-→ final approval
-→ DONE
-```
+No project-specific security email or private-reporting SLA is documented. SECURITY.md tells reporters to use GitHub private vulnerability reporting when the repository UI exposes it and otherwise request a private channel without publishing sensitive details.
 
-Resultado documental:
+## Platform limitations
 
-```text
-Lifecycle explicado por el manual: VALIDADO
-Dependency unlock PM → CTO: VALIDADO
-Final approval separado de Security: VALIDADO
-Provider externo real: VALIDADO CON HALLAZGOS
-```
+Not established as supported by current CI:
 
-Hallazgos de runtime/provider que no deben confundirse con defectos conceptuales del manual:
+- Linux;
+- macOS;
+- specific Windows 10 client matrix;
+- specific Windows 11 client matrix.
 
-- el baseline actual permite context packs externos demasiado grandes para algunos modelos;
-- `openrouter/free` puede seleccionar un modelo incompatible con el structured-output contract;
-- un provider puede responder HTTP correctamente y aun devolver un root JSON `null`;
-- AI Company OS rechaza correctamente ese resultado inválido;
-- la selección/budget de provider necesita hardening independiente de la documentación.
+Code paths that appear portable are not equivalent to tested support.
 
-El manual remite estos casos a Troubleshooting y no intenta convertir el First Run en una sesión de debugging de providers.
+## Release limitations
 
+The repository has strong release-candidate validation but this documentation does not label the project production-ready.
 
-## Revalidación contra main actual
+No release version is created by this documentation work.
 
-El 2026-09-29 se revalidaron los contratos públicos del manual contra:
+## Intentionally not documented as supported
 
-```text
-main @ 816404c51c34e0bc3e7c23ab9772a0b4d8be1753
-```
+- fully autonomous software company operation;
+- automatic cloud fallback from general Auto;
+- automatic paid provider fallback;
+- automatic merge/push/deploy/release;
+- unrestricted repository mutation;
+- automatic secret retrieval;
+- full cross-platform support;
+- automatic migration of every legacy installation;
+- updating every framework asset in an existing project via aico update.
 
-Cambios absorbidos por la documentación:
+## Documentation consistency
 
-- instalación global por npm;
-- CLI `aico` y `aico shell` como interfaces integradas;
-- runtime local-first con Ollama en `Auto`;
-- providers Codex, Ollama, OpenRouter, Gemini, DeepSeek y Grok;
-- budgets de análisis reducidos/per-role;
-- managed-files manifest;
-- writable runtime autorizado con worktrees y policy.
+Public documentation should be checked for:
 
-El first-run humano con OpenRouter fue realizado sobre el baseline anterior de la rama documental. Sus hallazgos siguen siendo útiles como evidencia de integración, pero no deben interpretarse como una reproducción exacta del routing local-first del `main` actual.
+- broken repository-relative links;
+- stale known Auto fallback claims;
+- hardcoded developer-local paths;
+- force-install-as-updater guidance;
+- missing public command names.
+
+The repository contains a deterministic documentation-contract test for these invariants.

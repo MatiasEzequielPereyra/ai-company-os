@@ -185,9 +185,7 @@ Ese comportamiento está validado por `test-orchestrator.ps1`.
 Después de revisar el plan:
 
 ```powershell
-.\scripts\orchestrate.ps1 `
-  -WorkRequestId WR-001 `
-  -Apply
+.\scripts\orchestrate.ps1 -WorkRequestId WR-XXX -Apply
 ```
 
 Con `-Apply`, el orchestrator ejecuta:
@@ -1023,3 +1021,30 @@ El valor es que pueda responderse, después de una ejecución:
 - ¿qué falló si no llegó?
 
 Eso es lo que convierte una secuencia de prompts en un workflow de ingeniería inspeccionable.
+
+
+---
+
+# Apéndice — Structured Engineering Manager planning
+
+El flujo actual de Engineering Manager no debe describirse como una entrega free-form solamente.
+
+Cuando la task de planning correspondiente produce un plan estructurado válido, el runtime materializa el artefacto canónico:
+
+~~~text
+docs/engineering/plans/AICO-XXX-execution-plan.json
+~~~
+
+La validación semántica exige que el plan contenga trabajo ejecutable coherente antes de aceptar la entrega.
+
+Después de que la planning task llega a DONE, generate-engineering-backlog puede convertir el plan aprobado en:
+
+~~~text
+docs/engineering/plans/AICO-XXX-engineering-backlog.json
+~~~
+
+El backlog usa items lógicos DECISION, IMPLEMENTATION, VALIDATION u OPERATIONS y una implementation_authorization_key explícita cuando corresponde.
+
+materialize-engineering-backlog traduce ese grafo a nuevas tasks AICO en BACKLOG, preserva dependencias y hace que el trabajo dependiente espere decisiones de autorización.
+
+Planning sigue sin equivaler a autorización implícita de implementación.

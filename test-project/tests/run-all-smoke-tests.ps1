@@ -30,6 +30,7 @@ $tests = @(
     "test-provider-timeout.ps1",
     "test-update-runtime-contract.ps1",
     "test-npm-package-contract.ps1",
+    "test-documentation-contract.ps1",
     "test-release-version-contract.ps1",
     "test-gate-artifact-identity.ps1",
     "test-agent-workspace-isolation.ps1",

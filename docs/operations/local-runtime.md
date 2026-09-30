@@ -1,124 +1,118 @@
 # Hardware-Aware Local Runtime
 
-AI Company OS treats Ollama as a local execution pool, not as one fixed model.
+AI Company OS can resolve an installed Ollama model and safe inference budget from local hardware and cached benchmark evidence.
 
-The local runtime combines:
-
-1. hardware detection;
-2. safe capability classification;
-3. installed-model discovery;
-4. role-aware model preference;
-5. optional measured Ollama throughput;
-6. dynamic context and generation budgets.
+This capability supports local execution; it does not make Ollama mandatory for installation.
 
 ## Detection
 
-`scripts/local-runtime/detect-hardware.ps1` detects:
+**scripts/local-runtime/detect-hardware.ps1** gathers the information needed to classify the machine, including RAM, CPU and available GPU/VRAM signals, plus the locally visible Ollama models.
 
-- total RAM;
-- CPU name and logical processor count;
-- discrete GPU when available;
-- NVIDIA VRAM through `nvidia-smi` when available;
-- fallback Windows video-controller information;
-- Ollama reachability;
-- installed Ollama model names and sizes.
-
-It emits a stable hardware fingerprint, a capability profile, and a 0-100 capability score.
+**scripts/local-runtime/resolve-local-runtime.ps1** combines that detection with **.codex/local-runtime-config.json**.
 
 ## Capability profiles
 
-The canonical thresholds live in `.codex/local-runtime-config.json`.
+Current profile names:
 
-| Profile | Intended class | Local behavior |
-| --- | --- | --- |
-| `LOCAL_CPU_LOW` | low-memory / integrated-GPU machines | conservative model size, 8K context |
-| `LOCAL_CPU_HIGH` | high-RAM CPU machines | larger model allowance, moderate context |
-| `LOCAL_GPU_6GB` | entry discrete GPU | small/medium models |
-| `LOCAL_GPU_8GB` | mid local GPU | larger context and output |
-| `LOCAL_GPU_12GB` | strong local GPU | coder 14B-class models can fit when installed |
-| `LOCAL_GPU_16GB_PLUS` | high local GPU memory | largest configured local budgets |
+| Profile | Intended class |
+| --- | --- |
+| LOCAL_CPU_LOW | constrained CPU-only or low local capability |
+| LOCAL_CPU_HIGH | stronger CPU-only class |
+| LOCAL_GPU_6GB | discrete GPU around 6 GB VRAM |
+| LOCAL_GPU_8GB | discrete GPU around 8 GB VRAM |
+| LOCAL_GPU_12GB | discrete GPU around 12 GB VRAM |
+| LOCAL_GPU_16GB_PLUS | discrete GPU at or above the highest current configured class |
 
-These are safety defaults, not claims that every model with a matching file size will perform equally well.
+The exact model-size, context, generation and benchmark thresholds live in **.codex/local-runtime-config.json** and should not be duplicated as informal guesses elsewhere.
 
 ## Role-aware selection
 
-`scripts/local-runtime/resolve-local-runtime.ps1` selects only installed models.
+The resolver uses role preferences before falling back to the largest installed model that fits the detected profile.
 
-General roles such as PM/CEO/QA prefer the configured general model. Technical roles such as backend/frontend/CTO/engineering-manager prefer configured coder models when the detected profile can safely host them.
+General roles prefer the configured general-purpose model order. Technical roles such as CTO, Engineering Manager, Backend, Frontend and DevOps prefer coder-oriented models first.
 
-A model that exceeds the profile's `max_model_bytes` is excluded. Explicit oversized overrides are also rejected unless:
+Only installed models are considered. AI Company OS does not automatically download a model.
 
-```powershell
-$env:AICO_OLLAMA_ALLOW_OVERSIZE = "1"
-```
+## Benchmark cache
 
-## Benchmarking
+Initialization can write machine-local evidence under:
+
+~~~text
+.codex/runtime/local-capability.json
+.codex/runtime/local-benchmarks.json
+~~~
+
+A cached model can be excluded from automatic selection when benchmark evidence reports failure or generation throughput below the profile minimum.
+
+The benchmark cache is hardware-fingerprint-aware and has a configured TTL.
 
 Run:
 
-```powershell
+~~~powershell
 .\scripts\local-runtime\initialize-local-runtime.ps1
-```
-
-Initialization writes:
-
-```text
-.codex/runtime/local-capability.json
-.codex/runtime/local-benchmarks.json
-```
-
-Both are machine-local runtime artifacts and are ignored by Git.
-
-The benchmark uses a short deterministic Ollama generation and records:
-
-- load time;
-- prompt throughput;
-- generation throughput;
-- total elapsed time;
-- success/failure.
-
-Models known to be too large for the detected profile are not benchmarked automatically.
-
-Force a specific safe benchmark:
-
-```powershell
-.\scripts\local-runtime\benchmark-ollama.ps1 -Model "qwen2.5-coder:14b" -Force
-```
-
-A cached model whose generation throughput falls below the profile minimum is excluded from automatic selection even if its file size fits.
+~~~
 
 ## Dynamic execution budgets
 
 The selected profile supplies:
 
-- `NumCtx`;
-- `NumPredict`;
-- analysis repository-context budget;
-- gate base-context budget;
-- gate artifact budget.
+- num_ctx;
+- num_predict;
+- general context budget;
+- gate context budget;
+- gate artifact budget;
+- maximum safe model size;
+- minimum benchmark throughput.
 
-`run-agent-task.ps1`, `run-gate-agent.ps1`, `provider-router.ps1`, and `invoke-ollama.ps1` consume those values.
+This allows the same project to use conservative limits on a CPU-only workstation and larger contexts/models on a stronger GPU machine.
 
-This means the same repository can run conservatively on a 16 GB CPU-only workstation and automatically use larger local models/context on a 32 GB / 12 GB VRAM development PC.
+## Explicit model override
 
-## Fallback behavior
+For explicit Ollama execution, a model can be requested with -Model.
 
-In `-Provider Auto`:
+The resolver still rejects an installed model that exceeds the current safe profile unless the operator deliberately sets:
 
-1. the resolver checks whether a suitable local model exists;
-2. if not, Ollama is skipped cleanly;
-3. routing continues to the configured cloud/free fallbacks;
-4. paid DeepSeek/Grok fallbacks remain disabled unless explicitly allowed.
+~~~powershell
+$env:AICO_OLLAMA_ALLOW_OVERSIZE = "1"
+~~~
 
-If Ollama is usable but later fails during inference, Auto can still continue to the next provider. The repository context for that execution remains bounded to the local profile because context is built before provider fallback.
+That escape hatch is for intentional diagnostics. It can cause severe RAM pressure or timeouts and is not used by automatic resolution.
+
+## Auto behavior
+
+Do not confuse local resolution with provider fallback.
+
+For **general Auto**, current provider configuration contains only:
+
+~~~text
+Ollama
+~~~
+
+If local resolution fails, general Auto has no default cloud candidate to continue to.
+
+For **Engineering Manager analysis**, role-specific provider configuration can place cloud/Codex candidates before or after Ollama. On LOCAL_CPU_LOW, Ollama is explicitly skipped for this role.
+
+For **writable Auto**, the current default is also Ollama. Cloud writable candidates participate automatically only when added to writable_auto_order and accepted by the free-model policy.
+
+See [Provider Runtime](./provider-runtime.md).
+
+## Common unavailable reasons
+
+The resolver reports unavailable when, for example:
+
+- Ollama is not reachable;
+- no installed model fits the detected profile;
+- the requested explicit model is not installed;
+- an explicit model is too large for the profile and the operator did not opt into oversize execution.
+
+Treat these as runtime diagnostics, not as reasons to alter task state manually.
 
 ## Validation
 
-Run:
+Relevant deterministic tests include:
 
-```powershell
+~~~powershell
 .\test-project\tests\test-local-runtime-profile.ps1
-.\test-project\tests\run-all-smoke-tests.ps1
-```
-
-The deterministic profile test simulates both a low-resource integrated-GPU machine and a 32 GB RAM / 12 GB discrete-GPU machine without requiring real Ollama hardware in CI.
+.\test-project\tests\test-hardware-provider-reconcile.ps1
+.\test-project\tests\test-provider-router-contract.ps1
+~~~

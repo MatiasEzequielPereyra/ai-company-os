@@ -7,282 +7,273 @@ Paquete npm:
 Repositorio:
   https://github.com/MatiasEzequielPereyra/ai-company-os
 
+Estado:
+  experimental / pre-beta / Windows-first
+
 
 1. REQUISITOS
 =============
 
-Requisitos mínimos:
+Contrato del paquete:
 
-- Node.js 20 o superior
+- Node.js >= 20
 - npm
-- Python 3.11 o superior
+- Python >= 3.11
 - PowerShell
-- Git
+- Git recomendado; requerido para worktrees de ejecución writable
 
-Para ejecución local automática con IA:
+Evidencia actual de CI:
 
-- Ollama
-- Modelo recomendado por defecto: qwen3:8b
+- GitHub windows-latest
+- Node 20
+- Python 3.11
+- Python 3.12
+- Windows PowerShell para la suite de smoke/release
+- PowerShell 7 en pasos de CI que usan pwsh
 
-Comprobar herramientas:
+Linux y macOS no están establecidos como plataformas soportadas por el CI actual.
 
-  node --version
-  npm --version
-  python --version
-  pwsh --version
-  git --version
-  ollama --version
+Ollama NO es necesario para instalar el framework, pero el Auto general actual
+usa Ollama como única opción por defecto. Para ejecutar IA local con Auto hace
+falta Ollama y un modelo compatible con el hardware detectado.
 
 
-2. INSTALACIÓN GLOBAL
-=====================
-
-Instalar AI Company OS desde npm:
+2. INSTALAR EL CLI
+==================
 
   npm install -g @pereyram/ai-company-os
 
-Actualizar a la última versión:
-
-  npm install -g @pereyram/ai-company-os@latest
-
-Comprobar la instalación:
+Comprobar:
 
   aico version
   aico --help
-
-Diagnóstico del sistema:
-
   aico doctor --system
 
-El diagnóstico comprueba el entorno local, incluyendo Python, Git, Node,
-npm, PowerShell, Ollama y el modelo local recomendado.
+La primera invocación que necesita Python crea un entorno virtual privado dentro
+del paquete instalado y carga ahí el CLI Python incluido.
 
 
-3. INSTALAR AI COMPANY OS EN UN PROYECTO EXISTENTE
-===================================================
+3. PROYECTO EXISTENTE
+=====================
 
-Entrar al proyecto:
+Entrar al repositorio:
 
   cd C:\ruta\a\mi-proyecto
-
-Instalar AI Company OS:
-
-  aico install .
-
-Seleccionar ese proyecto como proyecto activo:
-
-  aico use .
-
-Comprobar:
-
-  aico current
-  aico doctor
-  aico status
-
-
-4. CREAR UN PROYECTO NUEVO
-===========================
-
-Crear un proyecto nuevo:
-
-  aico new mi-proyecto
-
-También se puede indicar una carpeta de destino:
-
-  aico new mi-proyecto C:\ruta\destino
-
-
-5. ABRIR LA INTERFAZ
-====================
-
-Abrir AI Company OS:
-
-  aico
-
-Abrir el cliente interactivo:
-
-  aico shell
-
-Salir del shell:
-
-  exit
-
-o:
-
-  quit
-
-
-6. COMANDOS PRINCIPALES
-=======================
-
-Ver proyecto activo:
-
-  aico current
-
-Cambiar proyecto:
-
-  aico use C:\ruta\al\proyecto
-
-Estado general:
-
-  aico status
-
-Ver tareas:
-
-  aico tasks
-
-Ver flujo/dependencias:
-
-  aico workflow
-
-Ver actividad persistida:
-
-  aico activity
-
-Ver handoffs entre agentes:
-
-  aico handoffs
-
-Diagnóstico del proyecto:
-
-  aico doctor
-
-Diagnóstico de la máquina/runtime:
-
-  aico doctor --system
-
-Salida JSON del diagnóstico del sistema:
-
-  aico doctor --system --json
-
-Ver versión instalada:
-
-  aico version
-
-
-7. SHELL INTERACTIVO
-====================
-
-Abrir:
-
-  aico shell
-
-Ejemplos dentro del shell:
-
-  status
-  tasks
-  tasks --status ACTIVE
-  tasks --owner pm
-  tasks --owner cto
-  tasks --priority P1
-  project
-  help
-  clear
-  exit
-
-
-8. FLUJO RÁPIDO RECOMENDADO
-===========================
-
-Para un repositorio existente:
-
-  cd C:\ruta\a\mi-proyecto
-  aico install .
-  aico use .
-  aico doctor --system
-  aico doctor
-  aico status
-  aico shell
-
-Para volver a abrir el proyecto más tarde:
-
-  cd C:\ruta\a\mi-proyecto
-  aico
-
-
-9. OLLAMA / EJECUCIÓN LOCAL
-===========================
-
-AI Company OS está preparado para trabajar local-first.
-
-Comprobar Ollama:
-
-  ollama list
-
-Instalar el modelo recomendado si no está disponible:
-
-  ollama pull qwen3:8b
-
-Después comprobar:
-
-  aico doctor --system
-
-La configuración automática local utiliza Ollama. Otros proveedores pueden
-permanecer disponibles para selección manual según la configuración del
-proyecto.
-
-
-10. ACTUALIZACIÓN
-=================
-
-Actualizar el paquete global de AI Company OS:
-
-  npm install -g @pereyram/ai-company-os@latest
-
-Comprobar versión:
-
-  aico version
-
-Para cada proyecto que ya tenga AI Company OS instalado, actualizar solamente
-el runtime administrado por el framework:
-
-  cd C:\ruta\a\mi-proyecto
-  aico update .
-
-aico update . requiere .codex/managed-files.json. Actualiza scripts, providers,
-schemas y configuración de runtime administrada, preserva archivos propios del
-proyecto y rechaza conflictos no administrados en lugar de sobrescribirlos.
-
-Después de actualizar, se recomienda:
-
-  aico doctor --system
-  aico doctor
-  aico status
-
-
-11. DESINSTALACIÓN
-==================
-
-Desinstalar el CLI global:
-
-  npm uninstall -g @pereyram/ai-company-os
-
-Esto elimina el paquete global. Los archivos de AI Company OS que ya se hayan
-instalado dentro de proyectos existentes no se eliminan automáticamente.
-
-
-12. RESUMEN
-===========
 
 Instalar:
 
-  npm install -g @pereyram/ai-company-os
-
-Preparar un repo:
-
   aico install .
+
+Seleccionarlo:
+
   aico use .
-
-Actualizar un repo ya administrado:
-
-  aico update .
 
 Comprobar:
 
-  aico doctor --system
+  aico current
+  aico doctor
   aico status
 
-Usar:
+El instalador crea .codex/managed-files.json para registrar ownership de los
+archivos instalados. Si encuentra archivos existentes en paths del framework,
+la instalación normal los omite en lugar de reemplazarlos silenciosamente.
 
+Git no es obligatorio para copiar el framework, pero el instalador avisa si no
+encuentra .git. El runtime writable basado en worktrees sí necesita Git.
+
+aico init es actualmente un alias de aico install.
+
+
+4. PROYECTO NUEVO
+=================
+
+  aico new mi-proyecto
+
+Con destino explícito:
+
+  aico new mi-proyecto C:\Proyectos
+
+El comando instala el framework, crea el manifest administrado, bootstrapea el
+CLI Python y selecciona el nuevo proyecto como activo.
+
+LIMITACIÓN ACTUAL:
+
+aico new NO ejecuta git init. Si el proyecto va a usar Git/worktrees:
+
+  cd C:\Proyectos\mi-proyecto
+  git init
+  git add .
+  git commit -m "chore: initialize project"
+
+
+5. ABRIR Y DIAGNOSTICAR
+=======================
+
+TUI:
   aico
+
+Shell interactivo:
   aico shell
+
+Proyecto activo:
+  aico current
+
+Cambiar proyecto:
+  aico use C:\ruta\al\proyecto
+
+Estado:
+  aico status
+
+Tareas:
+  aico tasks
+
+Flujo/dependencias:
+  aico workflow
+
+Actividad persistida:
+  aico activity
+
+Handoffs:
+  aico handoffs
+
+Fuente de eventos/runtime:
+  aico runtime
+
+Diagnóstico del proyecto:
+  aico doctor
+
+Diagnóstico de la máquina/runtime:
+  aico doctor --system
+
+Versión:
+  aico version
+
+
+6. PRIMER WORK REQUEST
+======================
+
+Desde la raíz del proyecto:
+
+  .\scripts\initialize-project.ps1
+
+Preparar un objetivo sin activar agentes:
+
+  .\scripts\orchestrate.ps1 -Objective "Describir el cambio que necesito" -Type FEATURE -Priority P1
+
+Sin -Apply, el orchestrator crea el Work Request, genera/materializa el plan,
+evalúa readiness y prepara dispatch sin activar tareas.
+
+Inspeccionar:
+
+  .\scripts\list-tasks.ps1
+  aico status
+  aico workflow
+
+Cuando el plan sea correcto:
+
+  .\scripts\orchestrate.ps1 -WorkRequestId WR-XXX -Apply
+
+Reemplazar WR-XXX por el ID real.
+
+
+7. PROVIDERS
+============
+
+Adaptadores actuales:
+
+- Ollama
+- OpenRouter
+- Gemini
+- Codex CLI
+- DeepSeek
+- Grok / xAI
+
+Auto general actual:
+
+  Auto -> Ollama
+
+No existe fallback cloud general automático en la configuración por defecto.
+
+Engineering Manager tiene una política de análisis específica que puede
+considerar otros providers según .codex/provider-config.json. DeepSeek/Grok se
+omiten como fallback automático mientras allow_paid_fallback=false.
+
+Writable Auto es una política separada y también comienza con Ollama por
+defecto.
+
+Credenciales de providers cloud:
+
+  OPENROUTER_API_KEY
+  GEMINI_API_KEY
+  DEEPSEEK_API_KEY
+  XAI_API_KEY
+
+No guardar keys en el repositorio.
+
+
+8. ACTUALIZAR
+=============
+
+A) Actualizar el paquete global:
+
+  npm install -g @pereyram/ai-company-os@latest
+  aico version
+
+B) Actualizar el runtime administrado dentro de cada proyecto:
+
+  cd C:\ruta\a\mi-proyecto
+  aico update .
+
+aico update .:
+
+- exige .codex/managed-files.json válido;
+- rechaza ownership ambiguo;
+- actualiza scripts runtime, providers/local-runtime y schemas;
+- mergea configuración runtime soportada;
+- conserva overrides compatibles;
+- no modifica source, tasks, Work Requests, evidencia ni documentos de proyecto;
+- no promete actualizar automáticamente todos los agents, policies, protocols,
+  workflows, templates o skills;
+- intenta rollback si falla durante la aplicación.
+
+NO usar una instalación forzada como sustituto del updater.
+
+
+9. PRIMER CHECKLIST
+===================
+
+Para validar una instalación sin gastar en providers:
+
+  aico version
+  aico doctor --system
+  aico current
+  aico doctor
+  aico status
+  aico tasks
+  aico workflow
+
+Después seguir:
+
+  https://github.com/MatiasEzequielPereyra/ai-company-os/blob/main/docs/FIRST-RUN-CHECKLIST.md
+
+
+10. DOCUMENTACIÓN
+=================
+
+Quick Start:
+  https://github.com/MatiasEzequielPereyra/ai-company-os/blob/main/docs/QUICKSTART.md
+
+Manual:
+  https://github.com/MatiasEzequielPereyra/ai-company-os/blob/main/docs/USER-GUIDE.md
+
+Referencia:
+  https://github.com/MatiasEzequielPereyra/ai-company-os/blob/main/docs/COMMAND-REFERENCE.md
+
+Troubleshooting:
+  https://github.com/MatiasEzequielPereyra/ai-company-os/blob/main/docs/TROUBLESHOOTING.md
+
+Providers:
+  https://github.com/MatiasEzequielPereyra/ai-company-os/blob/main/docs/operations/provider-runtime.md
+
+Ownership/update:
+  https://github.com/MatiasEzequielPereyra/ai-company-os/blob/main/docs/operations/update-ownership.md

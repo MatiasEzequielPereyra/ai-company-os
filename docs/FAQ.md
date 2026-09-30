@@ -224,8 +224,6 @@ según `.codex/provider-config.json`.
 
 ## ¿Auto garantiza que siempre habrá un provider?
 
-No.
-
 No. Con la configuración por defecto, `Auto` necesita que el runtime local Ollama sea resoluble. Si querés usar otro provider, podés seleccionarlo explícitamente o cambiar `auto_order` de forma consciente.
 
 ---
@@ -546,3 +544,108 @@ El Review gate utiliza `engineering-manager`. Para tasks cuyo owner es PM, CTO, 
 Para una task cuyo owner original también es `engineering-manager`, esa independencia no está garantizada por identidad de rol.
 
 La documentación lo registra como limitación conocida en lugar de afirmar una independencia que el runtime actual no asegura.
+
+
+---
+
+## ¿Necesita cloud AI?
+
+No.
+
+La instalación, diagnóstico, planning determinista y muchas validaciones no requieren un provider cloud.
+
+Para ejecutar IA con el Auto general por defecto, necesitás un Ollama local usable. También podés seleccionar explícitamente un provider cloud configurado.
+
+---
+
+## ¿Auto usa providers pagos automáticamente?
+
+No en la configuración actual.
+
+General Auto usa Ollama solamente. Engineering Manager puede tener candidatos cloud por configuración, pero DeepSeek/Grok se omiten como fallback automático mientras allow_paid_fallback=false.
+
+Eso no convierte todos los demás providers cloud en garantizadamente gratuitos: cuota y costo dependen del provider, cuenta y modelo/ruta.
+
+---
+
+## ¿Cómo actualizo AI Company OS?
+
+Dos pasos distintos:
+
+~~~powershell
+npm install -g @pereyram/ai-company-os@latest
+aico update .
+~~~
+
+El primero actualiza el paquete global. El segundo actualiza el runtime administrado dentro del proyecto.
+
+---
+
+## ¿aico update puede sobrescribir mi proyecto?
+
+El updater está diseñado para no modificar source, tasks, Work Requests, docs/evidence de proyecto o state.
+
+Solo opera sobre su runtime/config administrado y falla si encuentra un conflicto cuyo ownership no puede demostrar.
+
+Eso no elimina la recomendación de usar Git y revisar el diff.
+
+---
+
+## ¿Es seguro usar aico install en un repositorio existente?
+
+La instalación normal preserva archivos existentes en paths del framework mediante SKIP y el packaged E2E comprueba que un archivo source preexistente se conserva.
+
+Sin embargo, AI Company OS agrega un conjunto significativo de archivos/directorios al repositorio. Usá una branch limpia y revisá el diff antes de adoptar el framework.
+
+Force puede reemplazar archivos del framework y no debe usarse como updater rutinario.
+
+---
+
+## ¿Qué versiones de Python y Node están soportadas?
+
+Contrato declarado:
+
+~~~text
+Python >=3.11
+Node >=20
+~~~
+
+Evidencia CI actual:
+
+~~~text
+Python 3.11
+Python 3.12
+Node 20
+~~~
+
+No se debe convertir el rango declarado en una afirmación de que cada versión futura ya fue probada.
+
+---
+
+## ¿Soporta Linux o macOS?
+
+No están establecidos como plataformas soportadas por el CI actual.
+
+El producto es Windows-first. La presencia de algunos code paths portables no equivale a soporte probado.
+
+---
+
+## ¿Windows 10 y Windows 11 están ambos probados?
+
+El CI prueba GitHub windows-latest, no una matriz explícita de clientes Windows 10 y Windows 11.
+
+---
+
+## ¿Está production-ready?
+
+La documentación no lo presenta como production-ready.
+
+Es un framework pre-beta con tests deterministas y release/package validation importantes, pero aún tiene límites conocidos: integración Git posterior a writable execution, plataforma, legacy migrations, provider variability y otras áreas de madurez.
+
+---
+
+## ¿Puede ejecutar varias tareas simultáneamente?
+
+El runner compartido permite -Parallel solo para análisis/read-only.
+
+Trabajo writable concurrente requiere worktrees separados por task. La integración posterior sigue siendo una acción separada.
