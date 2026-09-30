@@ -35,7 +35,7 @@ try {
         New-Item -ItemType Directory -Force -Path (Join-Path $tempRoot $dir) | Out-Null
     }
 
-    foreach ($name in @("run-gate-agent.ps1","task-execution-lock.ps1","review-task.ps1","update-task.ps1","advance-task.ps1")) {
+    foreach ($name in @("run-gate-agent.ps1","validate-gate-result-semantics.ps1","task-execution-lock.ps1","review-task.ps1","update-task.ps1","advance-task.ps1")) {
         Copy-Item (Join-Path $repoRoot ("scripts\" + $name)) (Join-Path $tempRoot ("scripts\" + $name)) -Force
     }
 
@@ -203,8 +203,13 @@ param(
     [string]$OutputPath,
     [string]$Model,
     [string]$Role,
-    [string]$Workload
+    [string]$Workload,
+    [string]$SemanticValidatorPath
 )
+
+if ([string]::IsNullOrWhiteSpace($SemanticValidatorPath) -or -not (Test-Path $SemanticValidatorPath -PathType Leaf)) {
+    throw "Gate artifact fixture did not receive a usable semantic validator."
+}
 
 $canonical = "docs/engineering/agent-reports/AICO-001.md"
 

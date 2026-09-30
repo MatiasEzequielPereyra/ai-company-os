@@ -304,7 +304,7 @@ $scriptNames = @(
     "reconcile-engineering-backlog.ps1",
     "repair-artifact-encoding.ps1",
     "validate-json-contract.ps1",
-    "validate-engineering-plan-result.ps1","validate-engineering-backlog-semantics.ps1",
+    "validate-engineering-plan-result.ps1","validate-engineering-backlog-semantics.ps1","validate-gate-result-semantics.ps1",
     "validate-artifacts.ps1",
     "write-operational-event.ps1",
     "summarize-metrics.ps1",

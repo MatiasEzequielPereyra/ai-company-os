@@ -19,6 +19,7 @@ $tests = @(
     "test-orchestrator.ps1",
     "test-agent-runtime-contract.ps1",
     "test-role-deliverable-gate-validation.ps1",
+    "test-gate-semantic-validator.ps1",
     "test-agent-completion-self-check.ps1",
     "test-task-execution-lock.ps1",
     "test-analysis-context-budget.ps1",
