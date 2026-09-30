@@ -376,6 +376,9 @@ def test_error_finishes_and_refreshes_without_crashing(
         == "ERROR"
     )
     assert refreshes == [True]
+    assert screen.last_error_text == (
+        "Gate execution failed\n\nprovider timeout"
+    )
     assert notifications[-1][1] == "error"
 
 
@@ -491,3 +494,261 @@ def test_run_tui_disables_mouse_reporting(
         "run",
         {"mouse": False},
     )
+
+
+def test_engineering_backlog_action_uses_live_progress(
+    monkeypatch,
+):
+    screen = _screen()
+
+    source = SimpleNamespace(
+        task_id="AICO-500",
+    )
+    task = SimpleNamespace(
+        id="AICO-500",
+        owner="engineering-manager",
+        status="DONE",
+    )
+
+    monkeypatch.setattr(
+        screen.engineering_backlog,
+        "pending_sources",
+        lambda *_args, **_kwargs: [source],
+    )
+    monkeypatch.setattr(
+        screen,
+        "_work_request_ids",
+        lambda: ["WR-500"],
+    )
+    monkeypatch.setattr(
+        screen,
+        "_tasks",
+        lambda: [task],
+    )
+
+    progress_calls = []
+
+    def fake_begin_progress(**kwargs):
+        progress_calls.append(kwargs)
+        return True
+
+    monkeypatch.setattr(
+        screen,
+        "_begin_progress",
+        fake_begin_progress,
+    )
+
+    working_calls = []
+
+    monkeypatch.setattr(
+        screen,
+        "_working",
+        lambda *args, **kwargs:
+            working_calls.append(
+                (args, kwargs)
+            ),
+    )
+
+    worker_calls = []
+
+    monkeypatch.setattr(
+        screen,
+        "engineering_backlog_worker",
+        lambda: worker_calls.append(True),
+    )
+
+    screen.action_engineering_backlog()
+
+    assert working_calls == []
+    assert worker_calls == [True]
+
+    assert len(progress_calls) == 1
+
+    progress_call = progress_calls[0]
+
+    assert (
+        progress_call["kind"]
+        == "engineering-backlog"
+    )
+    assert (
+        progress_call["title"]
+        == "ENGINEERING BACKLOG"
+    )
+    assert progress_call["task_ids"] == [
+        "AICO-500"
+    ]
+    assert (
+        progress_call["initial_event"]
+        == "Starting engineering backlog generation"
+    )
+    assert progress_call["tasks"] == [
+        task
+    ]
+    assert (
+        progress_call["provider"]
+        == "Auto"
+    )
+
+
+def test_engineering_backlog_worker_forwards_live_progress(
+    monkeypatch,
+):
+    screen = _screen()
+
+    generate_calls = []
+    thread_calls = []
+
+    expected_progress = screen._worker_progress
+
+    def fake_generate_and_materialize(
+        *args,
+        **kwargs,
+    ):
+        generate_calls.append(
+            (args, kwargs)
+        )
+        return SimpleNamespace(
+            materialized_source_ids=[
+                "AICO-500"
+            ],
+            skipped_source_ids=[],
+        )
+
+    monkeypatch.setattr(
+        screen.engineering_backlog,
+        "generate_and_materialize",
+        fake_generate_and_materialize,
+    )
+    monkeypatch.setattr(
+        screen,
+        "_work_request_ids",
+        lambda: ["WR-500"],
+    )
+
+    fake_app = SimpleNamespace(
+        call_from_thread=lambda *args:
+            thread_calls.append(args),
+    )
+
+    monkeypatch.setattr(
+        PlanControlScreen,
+        "app",
+        property(
+            lambda self: fake_app
+        ),
+    )
+
+    PlanControlScreen.engineering_backlog_worker.__wrapped__(
+        screen
+    )
+
+    assert len(generate_calls) == 1
+
+    args, kwargs = generate_calls[0]
+
+    assert args == (
+        screen.plan_data.project_root,
+        ["WR-500"],
+    )
+    assert kwargs["provider"] == "Auto"
+
+    assert "progress" in kwargs
+    assert (
+        kwargs["progress"]
+        == expected_progress
+    )
+
+    assert thread_calls
+
+
+def test_worker_progress_forwards_engineering_backlog_events(
+    monkeypatch,
+):
+    screen = _screen()
+
+    forwarded = []
+
+    fake_app = SimpleNamespace(
+        call_from_thread=lambda callback, line:
+            forwarded.append(
+                (callback, line)
+            ),
+    )
+
+    monkeypatch.setattr(
+        PlanControlScreen,
+        "app",
+        property(
+            lambda self: fake_app
+        ),
+    )
+
+    events = [
+        (
+            "Engineering backlog semantic repair retry: "
+            "Ollama / llama3.1:8b"
+        ),
+        (
+            "Engineering backlog semantic fallback: "
+            "OpenRouter"
+        ),
+        "Generating engineering backlog...",
+        "Materializing engineering backlog...",
+        "Engineering backlog materialized.",
+    ]
+
+    for event in events:
+        screen._worker_progress(event)
+
+    assert [
+        line
+        for _callback, line in forwarded
+    ] == events
+
+    assert all(
+        callback == screen._handle_progress_line
+        for callback, _line in forwarded
+    )
+
+
+def test_handle_progress_line_records_engineering_backlog_events(
+    monkeypatch,
+):
+    screen = _screen()
+
+    screen.progress.start(
+        kind="engineering-backlog",
+        title="ENGINEERING BACKLOG",
+        task_ids=["AICO-500"],
+        initial_event="Starting engineering backlog generation",
+        now=1.0,
+    )
+    screen.busy = True
+
+    renders = []
+
+    monkeypatch.setattr(
+        screen,
+        "_render_operation_progress",
+        lambda: renders.append(True),
+    )
+
+    events = [
+        (
+            "Engineering backlog semantic repair retry: "
+            "Ollama / llama3.1:8b"
+        ),
+        (
+            "Engineering backlog semantic fallback: "
+            "OpenRouter"
+        ),
+        "Generating engineering backlog...",
+        "Materializing engineering backlog...",
+        "Engineering backlog materialized.",
+    ]
+
+    for event in events:
+        screen._handle_progress_line(event)
+
+    assert screen.progress.recent_events[-5:] == events
+    assert len(renders) == len(events)
