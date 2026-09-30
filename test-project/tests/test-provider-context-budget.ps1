@@ -23,7 +23,7 @@ try {
     Copy-Item (Join-Path $repoRoot "schemas\agent-result.schema.json") (Join-Path $tempRoot "schemas\agent-result.schema.json") -Force
 
     $config = @{
-        auto_order = @("Ollama")
+        auto_order = @("OpenRouter","Ollama")
         allow_paid_fallback = $false
         models = @{
             Ollama = "qwen3:8b"
@@ -39,6 +39,8 @@ try {
             "engineering-manager" = @("OpenRouter","Ollama","DeepSeek","Grok")
         }
         ollama_context_max_chars = 20000
+        gate_context_max_chars = 180000
+        ollama_gate_context_max_chars = 7000
         provider_timeout_seconds = @{
             OpenRouter = 30
             Ollama = 30
@@ -198,7 +200,38 @@ throw "Grok must not be invoked when paid fallback is disabled."
         }
     }
 
-    Write-Host "PASS: provider-specific context budget and fallback contract" -ForegroundColor Green
+    Remove-Item (Join-Path $tempRoot "openrouter-context-length.txt") -Force -ErrorAction SilentlyContinue
+    Remove-Item (Join-Path $tempRoot "ollama-context-length.txt") -Force -ErrorAction SilentlyContinue
+
+    $gateArgs = @{
+        Provider = "Auto"
+        ProjectPath = $tempRoot
+        Prompt = "P1 gate context budget fixture"
+        Context = ("g" * 30000)
+        SchemaPath = (Join-Path $tempRoot "schemas\agent-result.schema.json")
+        OutputPath = (Join-Path $tempRoot "gate-result.json")
+        Role = "qa"
+        Workload = "gate"
+    }
+
+    $gateResult = & (Join-Path $tempRoot "scripts\provider-router.ps1") @gateArgs
+
+    if ([string]$gateResult.Provider -ne "Ollama") {
+        throw "Expected gate fallback to Ollama after deterministic OpenRouter failure."
+    }
+
+    $gateOpenRouterLength = [int](Get-Content (Join-Path $tempRoot "openrouter-context-length.txt") -Raw -Encoding UTF8)
+    $gateOllamaLength = [int](Get-Content (Join-Path $tempRoot "ollama-context-length.txt") -Raw -Encoding UTF8)
+
+    if ($gateOpenRouterLength -ne 30000) {
+        throw "Cloud gate provider must retain global-bounded evidence. Actual: $gateOpenRouterLength"
+    }
+
+    if ($gateOllamaLength -ne 7000) {
+        throw "Effective Ollama gate context must be min(global, provider, hardware)=7000. Actual: $gateOllamaLength"
+    }
+
+    Write-Host "PASS: provider-specific analysis/gate context budget and fallback contract" -ForegroundColor Green
 }
 finally {
     $env:OPENROUTER_API_KEY = $savedOpenRouterKey
