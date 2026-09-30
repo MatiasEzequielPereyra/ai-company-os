@@ -203,6 +203,7 @@ try {
         "scripts/task-execution-lock.ps1",
         "scripts/validate-engineering-plan-result.ps1",
         "scripts/validate-engineering-backlog-semantics.ps1",
+        "scripts/validate-gate-result-semantics.ps1",
         "scripts/providers/invoke-codex.ps1",
         "scripts/providers/invoke-xai.ps1",
         "scripts/local-runtime/resolve-local-runtime.ps1",
