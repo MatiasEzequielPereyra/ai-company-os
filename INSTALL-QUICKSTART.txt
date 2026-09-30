@@ -225,7 +225,7 @@ proyecto.
 10. ACTUALIZACIÓN
 =================
 
-Actualizar AI Company OS:
+Actualizar el paquete global de AI Company OS:
 
   npm install -g @pereyram/ai-company-os@latest
 
@@ -233,10 +233,21 @@ Comprobar versión:
 
   aico version
 
+Para cada proyecto que ya tenga AI Company OS instalado, actualizar solamente
+el runtime administrado por el framework:
+
+  cd C:\ruta\a\mi-proyecto
+  aico update .
+
+aico update . requiere .codex/managed-files.json. Actualiza scripts, providers,
+schemas y configuración de runtime administrada, preserva archivos propios del
+proyecto y rechaza conflictos no administrados en lugar de sobrescribirlos.
+
 Después de actualizar, se recomienda:
 
   aico doctor --system
   aico doctor
+  aico status
 
 
 11. DESINSTALACIÓN
@@ -261,6 +272,10 @@ Preparar un repo:
 
   aico install .
   aico use .
+
+Actualizar un repo ya administrado:
+
+  aico update .
 
 Comprobar:
 
