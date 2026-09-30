@@ -50,9 +50,9 @@ For the complete installation and usage guide, see [INSTALL-QUICKSTART.txt](./IN
 If this is your first time using the project:
 
 1. Follow [INSTALL-QUICKSTART.txt](./INSTALL-QUICKSTART.txt) for the supported npm/CLI installation path.
-2. Read [Quick Start](docs/QUICKSTART.md) for the first managed workflow.
-3. Run the disposable [First Run Checklist](docs/FIRST-RUN-CHECKLIST.md).
-4. Use the [User Guide](docs/USER-GUIDE.md) for the complete operating model.
+2. Read [Quick Start](https://github.com/MatiasEzequielPereyra/ai-company-os/blob/main/docs/QUICKSTART.md) for the first managed workflow.
+3. Run the disposable [First Run Checklist](https://github.com/MatiasEzequielPereyra/ai-company-os/blob/main/docs/FIRST-RUN-CHECKLIST.md).
+4. Use the [User Guide](https://github.com/MatiasEzequielPereyra/ai-company-os/blob/main/docs/USER-GUIDE.md) for the complete operating model.
 
 The user manual is written in Spanish; command names, role IDs, statuses, and machine contracts keep their canonical English identifiers.
 
@@ -206,11 +206,11 @@ This repository is an engineering workflow framework, not yet a fully autonomous
 
 ## User documentation
 
-- [Quick Start](docs/QUICKSTART.md) — installation-to-first-workflow path.
-- [First Run Checklist](docs/FIRST-RUN-CHECKLIST.md) — disposable acceptance path.
-- [User Guide](docs/USER-GUIDE.md) — complete concepts and operating model.
-- [End-to-End Walkthrough](docs/END-TO-END-WALKTHROUGH.md) — lifecycle walkthrough.
-- [Troubleshooting](docs/TROUBLESHOOTING.md) — symptom-based recovery.
-- [Command Reference](docs/COMMAND-REFERENCE.md) — CLI and PowerShell command contracts.
-- [FAQ](docs/FAQ.md) — concise conceptual answers.
-- [Documentation Status](docs/DOCUMENTATION-STATUS.md) — coverage and known gaps.
+- [Quick Start](https://github.com/MatiasEzequielPereyra/ai-company-os/blob/main/docs/QUICKSTART.md) — installation-to-first-workflow path.
+- [First Run Checklist](https://github.com/MatiasEzequielPereyra/ai-company-os/blob/main/docs/FIRST-RUN-CHECKLIST.md) — disposable acceptance path.
+- [User Guide](https://github.com/MatiasEzequielPereyra/ai-company-os/blob/main/docs/USER-GUIDE.md) — complete concepts and operating model.
+- [End-to-End Walkthrough](https://github.com/MatiasEzequielPereyra/ai-company-os/blob/main/docs/END-TO-END-WALKTHROUGH.md) — lifecycle walkthrough.
+- [Troubleshooting](https://github.com/MatiasEzequielPereyra/ai-company-os/blob/main/docs/TROUBLESHOOTING.md) — symptom-based recovery.
+- [Command Reference](https://github.com/MatiasEzequielPereyra/ai-company-os/blob/main/docs/COMMAND-REFERENCE.md) — CLI and PowerShell command contracts.
+- [FAQ](https://github.com/MatiasEzequielPereyra/ai-company-os/blob/main/docs/FAQ.md) — concise conceptual answers.
+- [Documentation Status](https://github.com/MatiasEzequielPereyra/ai-company-os/blob/main/docs/DOCUMENTATION-STATUS.md) — coverage and known gaps.

@@ -12,6 +12,69 @@ if ($null -eq $npmCommand) {
     throw "npm is required for package validation."
 }
 
+function Assert-PackagedReadmeLinks {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ReadmePath,
+        [Parameter(Mandatory = $true)]
+        [string]$PackageRoot
+    )
+
+    if (-not (Test-Path $ReadmePath -PathType Leaf)) {
+        throw "Packaged README not found: $ReadmePath"
+    }
+
+    $packageRootFull = [System.IO.Path]::GetFullPath($PackageRoot).TrimEnd([char[]]@('\','/'))
+    $packageRootPrefix = $packageRootFull + [System.IO.Path]::DirectorySeparatorChar
+    $readmeDirectory = Split-Path -Parent $ReadmePath
+    $readmeText = Get-Content $ReadmePath -Raw -Encoding UTF8
+    $linkMatches = [regex]::Matches(
+        $readmeText,
+        '(?m)!?\[[^\]]*\]\((?<target><[^>]+>|[^)\s]+)(?:\s+["''][^)]*)?\)'
+    )
+
+    foreach ($match in $linkMatches) {
+        $target = ([string]$match.Groups["target"].Value).Trim()
+        $target = $target.Trim([char[]]@('<','>'))
+
+        if (
+            [string]::IsNullOrWhiteSpace($target) -or
+            $target.StartsWith("#") -or
+            $target.StartsWith("//") -or
+            $target -match '^[A-Za-z][A-Za-z0-9+.-]*:'
+        ) {
+            continue
+        }
+
+        $relativeTarget = ($target -split '[?#]', 2)[0]
+        if ([string]::IsNullOrWhiteSpace($relativeTarget)) {
+            continue
+        }
+
+        $candidate = [System.IO.Path]::GetFullPath(
+            (Join-Path $readmeDirectory $relativeTarget)
+        )
+
+        if (
+            -not [string]::Equals(
+                $candidate,
+                $packageRootFull,
+                [System.StringComparison]::OrdinalIgnoreCase
+            ) -and
+            -not $candidate.StartsWith(
+                $packageRootPrefix,
+                [System.StringComparison]::OrdinalIgnoreCase
+            )
+        ) {
+            throw "Packaged README relative link escapes package root: $target"
+        }
+
+        if (-not (Test-Path $candidate)) {
+            throw "Packaged README relative link does not resolve inside package: $target"
+        }
+    }
+}
+
 Push-Location $repoRoot
 try {
     & $npmCommand.Source test
@@ -64,6 +127,7 @@ try {
         "schemas/agent-result.schema.json",
         "schemas/engineering-plan-result.schema.json",
         "src/company_os/cli/app.py",
+        "README.md",
         "INSTALL-QUICKSTART.txt"
     )) {
         if ($files -notcontains $relative) {
@@ -232,6 +296,30 @@ try {
 
         if (Test-Path (Join-Path $installedPackageRoot "npm-bin\package.test.js")) {
             throw "Installed npm tarball must not contain npm-bin/package.test.js."
+        }
+
+        $packagedReadmePath = Join-Path $installedPackageRoot "README.md"
+        Assert-PackagedReadmeLinks -ReadmePath $packagedReadmePath -PackageRoot $installedPackageRoot
+
+        $brokenReadmeFixture = Join-Path $packageTemp "broken-readme-fixture"
+        New-Item -ItemType Directory -Force -Path $brokenReadmeFixture | Out-Null
+        $brokenReadmePath = Join-Path $brokenReadmeFixture "README.md"
+        [System.IO.File]::WriteAllText(
+            $brokenReadmePath,
+            "[Broken](missing-from-package.md)",
+            (New-Object System.Text.UTF8Encoding($false))
+        )
+
+        $brokenLinkRejected = $false
+        try {
+            Assert-PackagedReadmeLinks -ReadmePath $brokenReadmePath -PackageRoot $brokenReadmeFixture
+        }
+        catch {
+            $brokenLinkRejected = $true
+        }
+
+        if (-not $brokenLinkRejected) {
+            throw "README package-link regression guard accepted a missing relative target."
         }
 
         $installedPackageJson = Get-Content (

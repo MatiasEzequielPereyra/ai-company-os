@@ -34,6 +34,36 @@ $homeRoot = Join-Path $e2eRoot "isolated home"
 $projectsRoot = Join-Path $e2eRoot "external projects"
 $projectName = "release-smoke-project"
 $projectPath = Join-Path $projectsRoot $projectName
+$existingProjectPath = Join-Path $projectsRoot "existing repository smoke"
+
+$requiredProjectRuntimeArtifacts = @(
+    ".codex\managed-files.json",
+    ".codex\provider-config.json",
+    ".codex\local-runtime-config.json",
+    ".codex\workflow-profiles.json",
+    ".codex\writable-policy.json",
+    "scripts\provider-router.ps1",
+    "scripts\validate-engineering-plan-result.ps1",
+    "scripts\providers\invoke-codex.ps1",
+    "scripts\providers\invoke-ollama.ps1",
+    "schemas\agent-result.schema.json",
+    "schemas\engineering-plan-result.schema.json"
+)
+
+function Assert-ManagedProjectRuntime {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ProjectPath,
+        [Parameter(Mandatory = $true)]
+        [string]$Scenario
+    )
+
+    foreach ($relative in $requiredProjectRuntimeArtifacts) {
+        if (-not (Test-Path (Join-Path $ProjectPath $relative) -PathType Leaf)) {
+            throw "$Scenario is missing required managed runtime artifact: $relative"
+        }
+    }
+}
 
 $oldHome = $env:HOME
 $oldUserProfile = $env:USERPROFILE
@@ -95,23 +125,7 @@ try {
         throw "Packaged aico new did not create the expected project: $projectPath"
     }
 
-    foreach ($relative in @(
-        ".codex\managed-files.json",
-        ".codex\provider-config.json",
-        ".codex\local-runtime-config.json",
-        ".codex\workflow-profiles.json",
-        ".codex\writable-policy.json",
-        "scripts\provider-router.ps1",
-        "scripts\validate-engineering-plan-result.ps1",
-        "scripts\providers\invoke-codex.ps1",
-        "scripts\providers\invoke-ollama.ps1",
-        "schemas\agent-result.schema.json",
-        "schemas\engineering-plan-result.schema.json"
-    )) {
-        if (-not (Test-Path (Join-Path $projectPath $relative) -PathType Leaf)) {
-            throw "Packaged project creation is missing required runtime artifact: $relative"
-        }
-    }
+    Assert-ManagedProjectRuntime -ProjectPath $projectPath -Scenario "Packaged aico new"
 
     $installedPackageJson = Get-Content (
         Join-Path $installedPackageRoot "package.json"
@@ -157,6 +171,61 @@ try {
     & $installedPython -c "from company_os.cli.tui import AICompanyTUI; print(AICompanyTUI.__name__)"
     if ($LASTEXITCODE -ne 0) {
         throw "Installed package TUI import failed with exit code $LASTEXITCODE."
+    }
+
+    New-Item -ItemType Directory -Force -Path $existingProjectPath | Out-Null
+    $existingUserDir = Join-Path $existingProjectPath "src"
+    New-Item -ItemType Directory -Force -Path $existingUserDir | Out-Null
+
+    $existingUserPath = Join-Path $existingUserDir "existing-user-file.txt"
+    [System.IO.File]::WriteAllText(
+        $existingUserPath,
+        "This file predates AI Company OS installation.",
+        (New-Object System.Text.UTF8Encoding($false))
+    )
+    $existingUserHashBefore = (Get-FileHash $existingUserPath -Algorithm SHA256).Hash
+
+    Push-Location $existingProjectPath
+    try {
+        git init --quiet
+        if ($LASTEXITCODE -ne 0) {
+            throw "Could not initialize existing-repository E2E Git repository."
+        }
+
+        & $aicoCommand install .
+        if ($LASTEXITCODE -ne 0) {
+            throw "Packaged aico install failed with exit code $LASTEXITCODE."
+        }
+    }
+    finally {
+        Pop-Location
+    }
+
+    $existingUserHashAfter = (Get-FileHash $existingUserPath -Algorithm SHA256).Hash
+    if ($existingUserHashAfter -ne $existingUserHashBefore) {
+        throw "Packaged aico install modified a pre-existing project-owned file."
+    }
+
+    Assert-ManagedProjectRuntime -ProjectPath $existingProjectPath -Scenario "Packaged aico install"
+
+    $existingManifest = Get-Content (
+        Join-Path $existingProjectPath ".codex\managed-files.json"
+    ) -Raw -Encoding UTF8 | ConvertFrom-Json
+
+    foreach ($managedEntry in @(
+        ".codex/provider-config.json",
+        "scripts/provider-router.ps1",
+        "scripts/validate-engineering-plan-result.ps1",
+        "schemas/engineering-plan-result.schema.json"
+    )) {
+        if (@($existingManifest.managed_files) -notcontains $managedEntry) {
+            throw "Packaged aico install manifest is missing ownership entry: $managedEntry"
+        }
+    }
+
+    & $aicoCommand status --project $existingProjectPath --json
+    if ($LASTEXITCODE -ne 0) {
+        throw "Installed aico status failed for existing project with exit code $LASTEXITCODE."
     }
 
     $userOwnedDir = Join-Path $projectPath "src"
@@ -222,8 +291,8 @@ try {
     }
 
     Write-Host (
-        "PASS: installed tarball created and inspected an isolated project, " +
-        "bootstrapped Python/TUI, and safely updated managed runtime."
+        "PASS: installed tarball validated aico new and aico install ., " +
+        "bootstrapped Python/TUI, preserved user files, and safely updated managed runtime."
     ) -ForegroundColor Green
 }
 finally {

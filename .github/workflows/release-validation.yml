@@ -70,9 +70,24 @@ jobs:
         shell: powershell
         run: .\test-project\tests\run-all-smoke-tests.ps1
 
-      - name: Verify clean diff
+      - name: Verify clean source checkout
         shell: pwsh
-        run: git diff --check
+        run: |
+          git diff --check
+          if ($LASTEXITCODE -ne 0) {
+            throw "git diff --check failed."
+          }
+
+          $dirty = @(git status --porcelain --untracked-files=all)
+          if ($LASTEXITCODE -ne 0) {
+            throw "git status failed."
+          }
+
+          if ($dirty.Count -gt 0) {
+            Write-Host "Release validation left the checkout dirty:"
+            $dirty | ForEach-Object { Write-Host $_ }
+            throw "Release validation must package a clean source checkout."
+          }
 
       - name: Build release tarball
         id: pack
