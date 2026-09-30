@@ -1,401 +1,172 @@
 # AI Company OS — First Run Checklist
 
-> **Windows PowerShell 5.1:** este repositorio usa UTF-8 sin BOM para documentación. Si `Get-Content` muestra caracteres como `Ã¡` o `â€”`, el archivo no está necesariamente corrupto: usá `Get-Content -Encoding UTF8`. PowerShell 7 no necesita este ajuste para UTF-8 sin BOM.
+Checklist descartable para responder:
 
-> Prueba controlada para aprender el lifecycle sin tocar primero un proyecto importante.
+> ¿AI Company OS quedó instalado e inicializado de forma coherente?
 
-Esta prueba usa un **repositorio Git descartable** y un Work Request `RESEARCH` con dos planning tasks dependientes:
+El camino principal evita providers pagos y no requiere ejecutar una tarea de IA.
 
-```text
-PM → CTO
-```
+> Windows PowerShell 5.1 puede mostrar incorrectamente Markdown UTF-8 sin BOM si se usa Get-Content sin encoding. Para documentación, preferí Get-Content -Encoding UTF8.
 
-Eso permite comprobar creación de Work Request, dependencias, dispatch, ejecución, Review, QA, Security, final approval y dependency refresh sin convertir esta guía en una prueba de implementación con escritura.
+## 1. CLI disponible
 
-## 1. Comprobar la instalación
-
-```powershell
+~~~powershell
 aico version
+aico --help
+~~~
+
+## 2. Diagnóstico de sistema
+
+~~~powershell
 aico doctor --system
-```
+~~~
 
-Si `aico` no existe:
+Comprobar especialmente Python >=3.11, PowerShell disponible, información de Git/Node/npm y estado de Ollama.
 
-```powershell
-npm install -g @pereyram/ai-company-os
-```
+Ollama solo es necesario para ejecución local automática.
 
-## 2. Crear un repositorio descartable
+## 3. Crear un repositorio demo
 
-```powershell
+~~~powershell
 $DemoRoot = Join-Path $env:TEMP "aico-first-run"
-
 if (Test-Path -LiteralPath $DemoRoot) {
-    throw "El demo ya existe: $DemoRoot. Revisalo antes de borrarlo o elegí otra ruta."
+    throw "El demo ya existe: $DemoRoot. Elegí otra ruta o revisalo antes de borrarlo."
 }
-
 New-Item -ItemType Directory -Path $DemoRoot | Out-Null
 Set-Location $DemoRoot
 git init
-```
+Set-Content -Path ".\user-owned.txt" -Value "preserve me"
+$Before = (Get-FileHash ".\user-owned.txt" -Algorithm SHA256).Hash
+~~~
 
-## 3. Instalar AI Company OS en el demo
+## 4. Instalar AI Company OS
 
-```powershell
+~~~powershell
 aico install .
+~~~
+
+Verificar ownership:
+
+~~~powershell
+Test-Path ".\.codex\managed-files.json"
+Get-Content ".\.codex\managed-files.json" -Raw -Encoding UTF8 | ConvertFrom-Json
+~~~
+
+Verificar preservación:
+
+~~~powershell
+$After = (Get-FileHash ".\user-owned.txt" -Algorithm SHA256).Hash
+if ($Before -ne $After) { throw "El archivo del usuario fue modificado." }
+~~~
+
+## 5. Proyecto activo
+
+~~~powershell
+aico current
 aico use .
-```
+aico current
+~~~
 
-Este camino usa el instalador de proyecto existente, que en el `main` actual copia también configuración y componentes de runtime local administrados.
+## 6. Estado y doctor del proyecto
 
-## 4. Ejecutar intake y validar
+~~~powershell
+aico status
+aico doctor
+aico tasks
+aico workflow
+~~~
 
-```powershell
+En un proyecto vacío pueden aparecer warnings como ausencia de tasks; eso no equivale a una instalación corrupta.
+
+## 7. Runtime administrado
+
+~~~powershell
+$Required = @(
+    ".\.codex\provider-config.json",
+    ".\.codex\local-runtime-config.json",
+    ".\.codex\workflow-profiles.json",
+    ".\.codex\writable-policy.json",
+    ".\scripts\provider-router.ps1",
+    ".\scripts\run-agent-task.ps1",
+    ".\schemas\agent-result.schema.json"
+)
+foreach ($Path in $Required) {
+    if (-not (Test-Path $Path)) { throw "Falta runtime administrado: $Path" }
+}
+~~~
+
+## 8. Intake
+
+~~~powershell
 .\scripts\initialize-project.ps1
 .\scripts\validate-artifacts.ps1
-```
+~~~
 
-Que el intake detecte `UNKNOWN` en un repositorio vacío es esperable.
+En un repositorio demo sin stack real, valores UNKNOWN pueden ser correctos.
 
-## 5. Elegir provider
+## 9. Planning sin provider
 
-El `main` actual es local-first. Si `aico doctor --system` confirma Ollama disponible:
-
-```powershell
-$AicoProvider = "Auto"
-```
-
-Si querés usar otro provider configurado, elegilo explícitamente:
-
-```powershell
-$AicoProvider = "OpenRouter"
-```
-
-Providers soportados por el runner actual:
-
-```text
-Codex
-OpenRouter
-Gemini
-Ollama
-DeepSeek
-Grok
-```
-
-> Si un provider devuelve `structured result root must be an object`, `invalid JSON` o un error de schema, no avances estados ni artifacts a mano. Conservá el estado real de la task y consultá `docs/TROUBLESHOOTING.md`.
-
-## 6. Crear un Work Request de RESEARCH
-
-```powershell
-.\scripts\orchestrate.ps1 `
-  -Objective "Assess the project structure and identify the next technical decision." `
-  -Type RESEARCH `
-  -Priority P3
-```
-
-El plan de RESEARCH utiliza:
-
-```text
-PM
- ↓
-CTO
-```
-
-## 7. Capturar el Work Request real
-
-```powershell
-$CurrentObjective = Get-Content .\.codex\state\current-objective.md -Raw
-
-if ($CurrentObjective -match 'Work request:\s+docs/engineering/work-requests/(WR-\d+)\.md') {
-  $WorkRequestId = $Matches[1]
-}
-else {
-  throw "No pude resolver el Work Request actual."
-}
-
-$WorkRequestId
-```
-
-No asumir `WR-001`.
-
-## 8. Inspeccionar tasks antes de aplicar
-
-```powershell
-.\scripts\list-tasks.ps1
-```
-
-Deberías ver dos tasks en `BACKLOG`:
-
-- PM;
-- CTO.
-
-La task de CTO debe depender de la de PM.
-
-## 9. Aplicar readiness y dispatch
-
-```powershell
-.\scripts\orchestrate.ps1 `
-  -WorkRequestId $WorkRequestId `
-  -Apply
-```
-
-Ahora:
-
-```powershell
-.\scripts\list-tasks.ps1
-```
-
-Resultado conceptual esperado:
-
-```text
-PM   → ACTIVE
-CTO  → BACKLOG
-```
-
-CTO no debe activarse porque depende de PM.
-
-## 10. Capturar el ID de la task PM
-
-```powershell
-$PmTask = Get-ChildItem .\tasks -Filter "AICO-*.md" |
-  Where-Object {
-    $content = Get-Content $_.FullName -Raw
-    $content -match "(?m)^Work request:\s*$([regex]::Escape($WorkRequestId))\s*$" -and
-    $content -match "(?m)^Owner:\s*pm\s*$"
-  } |
-  Select-Object -First 1
-
-if ($null -eq $PmTask) {
-  throw "No se encontró la task PM para $WorkRequestId."
-}
-
-$PmTaskId = $PmTask.BaseName
-$PmTaskId
-```
-
-## 11. Inspeccionar dispatch PM
-
-```powershell
-Get-Content ".\docs\engineering\dispatch\$PmTaskId.md"
-```
-
-Confirmar:
-
-- owner `pm`;
-- objetivo;
-- acceptance criteria;
-- contexto;
-- restricciones.
-
-## 12. Ejecutar PM
-
-```powershell
-.\scripts\run-agent-task.ps1 `
-  -Id $PmTaskId `
-  -Provider $AicoProvider
-```
-
-Si completa correctamente:
-
-```text
-ACTIVE → REVIEW
-```
-
-## 13. Ejecutar sus gates
-
-```powershell
-.\scripts\run-pending-gates.ps1 -Provider $AicoProvider
-```
-
-Después:
-
-```powershell
-.\scripts\list-tasks.ps1
-```
-
-PM debería quedar en `SECURITY` si todos los gates fueron satisfactorios.
-
-## 14. Revisar evidencia PM
-
-```powershell
-Get-Content ".\tasks\$PmTaskId.md"
-Get-Content ".\docs\engineering\qa\$PmTaskId-qa.md"
-Get-Content ".\docs\engineering\security\$PmTaskId-security.md"
-```
-
-Revisá el contenido. No apruebes por costumbre.
-
-## 15. Finalizar PM
-
-Si la evidencia corresponde:
-
-```powershell
-.\scripts\finalize-task.ps1 `
-  -Id $PmTaskId `
-  -Decision APPROVE `
-  -Verification "Reviewed PM deliverable and applicable gate evidence."
-```
+~~~powershell
+.\scripts\orchestrate.ps1 -Objective "Assess the demo and define the next engineering decision." -Type RESEARCH -Priority P3
+~~~
 
 Esperado:
 
-```text
-PM: DONE
-```
+- se crea un WR;
+- existe un plan;
+- existen planning tasks;
+- no se ejecutó ningún provider;
+- no se activó trabajo porque no se usó -Apply.
 
-El finalizer también refresca dependencies cuando el script está disponible.
+## 10. Aplicar readiness/dispatch sin ejecutar IA
 
-## 16. Comprobar que CTO se desbloqueó
-
-```powershell
-.\scripts\list-tasks.ps1
-```
-
-Esperado conceptualmente:
-
-```text
-PM   → DONE
-CTO  → READY
-```
-
-Esto demuestra que una dependencia necesita `DONE`, no simplemente REVIEW o QA.
-
-## 17. Capturar CTO y despacharlo
-
-```powershell
-$CtoTask = Get-ChildItem .\tasks -Filter "AICO-*.md" |
-  Where-Object {
-    $content = Get-Content $_.FullName -Raw
-    $content -match "(?m)^Work request:\s*$([regex]::Escape($WorkRequestId))\s*$" -and
-    $content -match "(?m)^Owner:\s*cto\s*$"
-  } |
-  Select-Object -First 1
-
-if ($null -eq $CtoTask) {
-  throw "No se encontró la task CTO para $WorkRequestId."
+~~~powershell
+$CurrentObjective = Get-Content ".\.codex\state\current-objective.md" -Raw -Encoding UTF8
+if ($CurrentObjective -notmatch 'Work request:\s+docs/engineering/work-requests/(WR-\d+)\.md') {
+    throw "No se pudo resolver el Work Request."
 }
-
-$CtoTaskId = $CtoTask.BaseName
-
-.\scripts\dispatch-ready-tasks.ps1 -Apply
-```
-
-Comprobar:
-
-```powershell
+$WorkRequestId = $Matches[1]
+.\scripts\orchestrate.ps1 -WorkRequestId $WorkRequestId -Apply
 .\scripts\list-tasks.ps1
-```
+~~~
 
-CTO debería estar `ACTIVE`.
+Esto valida planning, readiness y dispatch. Todavía no requiere provider.
 
-## 18. Ejecutar CTO y gates
+## 11. Update seguro
 
-```powershell
-.\scripts\run-agent-task.ps1 `
-  -Id $CtoTaskId `
-  -Provider $AicoProvider
+~~~powershell
+aico update .
+$AfterUpdate = (Get-FileHash ".\user-owned.txt" -Algorithm SHA256).Hash
+if ($Before -ne $AfterUpdate) {
+    throw "El updater modificó un archivo project-owned."
+}
+~~~
 
-.\scripts\run-pending-gates.ps1 -Provider $AicoProvider
-```
+Esperado: reconoce managed-files, preserva user-owned.txt y termina con un resumen de runtime.
 
-## 19. Revisar y finalizar CTO
+## 12. TUI
 
-```powershell
-Get-Content ".\tasks\$CtoTaskId.md"
-Get-Content ".\docs\engineering\qa\$CtoTaskId-qa.md"
-Get-Content ".\docs\engineering\security\$CtoTaskId-security.md"
-```
+~~~powershell
+aico
+~~~
 
-Si corresponde:
+Comprobar manualmente que la interfaz abre y reconoce el proyecto.
 
-```powershell
-.\scripts\finalize-task.ps1 `
-  -Id $CtoTaskId `
-  -Decision APPROVE `
-  -Verification "Reviewed CTO deliverable and applicable gate evidence."
-```
+## 13. Ollama opcional
 
-## 20. Validar estado final
+~~~powershell
+ollama list
+aico doctor --system
+~~~
 
-```powershell
-.\scripts\sync-company-state.ps1
-.\scripts\validate-artifacts.ps1
-.\scripts\summarize-metrics.ps1
-.\scripts\list-tasks.ps1
-```
+El doctor busca el modelo recomendado qwen3:8b. El resolver hardware-aware puede elegir otro modelo instalado que cumpla el perfil.
 
-Esperado:
+No hace falta ejecutar un provider para aprobar este checklist.
 
-```text
-PM   → DONE
-CTO  → DONE
-```
+## 14. Qué NO valida
 
-## 21. Qué acabás de probar
-
-```text
-User objective
-  ↓
-Work Request
-  ↓
-Plan
-  ↓
-PM BACKLOG
-  ↓
-PM READY / ACTIVE
-  ↓
-Result
-  ↓
-Review
-  ↓
-QA
-  ↓
-Security
-  ↓
-Final approval
-  ↓
-PM DONE
-  ↓
-dependency refresh
-  ↓
-CTO READY / ACTIVE
-  ↓
-same gated lifecycle
-  ↓
-CTO DONE
-```
-
-## 22. Qué NO probaste
-
-Este demo no prueba:
-
-- modificación autónoma de código;
-- worktree de escritura;
-- merge;
-- push;
-- deployment;
-- TUI.
-
-Esas capacidades tienen contratos y madurez diferentes.
+No demuestra disponibilidad en vivo de cloud providers, calidad de una respuesta LLM, merge/push/deploy automáticos, Windows 10/11 específicos, Linux/macOS, performance de modelos ni producción.
 
 ## Criterio de éxito
 
-La primera ejecución se considera comprendida cuando podés explicar:
-
-```text
-por qué PM se activó antes que CTO
-por qué CTO necesitó PM = DONE
-qué produjo el provider
-por qué Review/QA/Security son gates separados
-por qué Security no significó DONE
-qué aprobó finalize-task
-por qué hubo que despachar CTO después
-qué artifacts conservaron la evidencia
-```
-
-Si alguno de esos puntos no está claro, consultar:
-
-- `docs/USER-GUIDE.md`;
-- `docs/END-TO-END-WALKTHROUGH.md`;
-- `docs/TROUBLESHOOTING.md`.
-
-Los documentos de usuario viven en el repositorio fuente de AI Company OS y en GitHub. El runtime instalado en un proyecto target no copia necesariamente toda la documentación de usuario.
+El first run es satisfactorio cuando CLI/bootstrap funcionan, el proyecto se reconoce, doctor/status/tasks/workflow funcionan, existe el manifest, un archivo project-owned se conserva, intake/planning deterministas funcionan, aico update acepta el proyecto administrado y la TUI abre sin requerir gasto en un provider pago.

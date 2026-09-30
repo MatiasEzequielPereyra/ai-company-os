@@ -20,48 +20,220 @@ Los IDs `WR-XXX` y `AICO-XXX` son placeholders. Reemplazarlos por IDs reales ant
 
 ---
 
-# CLI `aico`
+# CLI aico
 
-La instalación soportada del usuario final se distribuye por npm:
+The supported user-facing installation is distributed through npm:
 
-```powershell
+~~~powershell
 npm install -g @pereyram/ai-company-os
-```
+~~~
 
-Comandos principales:
+The npm launcher owns project-install/scaffold/update commands and delegates the remaining CLI to the bundled Python/Typer application.
 
-```powershell
-aico version
-aico --help
-aico doctor --system
-aico install .
-aico use .
-aico current
-aico status
-aico tasks
-aico workflow
-aico activity
-aico handoffs
-aico doctor
+## Public commands
+
+### aico
+
+Syntax:
+
+~~~powershell
 aico
+~~~
+
+Purpose: launch the TUI for the configured project.
+
+TUI shortcuts: `F2` switches ES/EN interface language and `F3` toggles the Default/Hacker theme. Interface preferences persist across sessions; the TUI also exposes a Settings view.
+
+Side effect: may bootstrap/update the package-local Python environment when the installed package version changed.
+
+Common failure: Python >=3.11 or PowerShell is unavailable.
+
+### aico shell
+
+~~~powershell
 aico shell
-```
+~~~
 
-Crear un proyecto:
+Opens the interactive text shell. Shell commands are status, tasks, use, project, help, clear, exit and quit.
 
-```powershell
-aico new MiProyecto C:\Proyectos
-```
+### aico version
 
-Actualizar el paquete:
+~~~powershell
+aico version
+~~~
 
-```powershell
-npm install -g @pereyram/ai-company-os@latest
-```
+Prints the installed Python package version.
 
-Los comandos PowerShell siguientes son el contrato operativo de bajo nivel y siguen siendo necesarios para lifecycle completo y operaciones avanzadas.
+### aico --help
 
----
+~~~powershell
+aico --help
+~~~
+
+Shows the Typer command surface.
+
+Current limitation: the npm-wrapper commands new, install/init and update are intercepted before Typer and do not expose an equivalent command-specific Typer help surface. Their syntax is documented below.
+
+### aico new
+
+~~~powershell
+aico new <project-name> [destination]
+~~~
+
+Purpose: create a new AI Company OS project.
+
+Side effects:
+
+- creates destination/project-name;
+- installs project scaffolding/runtime;
+- creates the managed-files manifest;
+- bootstraps the Python CLI;
+- selects the new project as current.
+
+It does not run git init.
+
+Common failures: missing project name, destination/project already exists, PowerShell missing, Python bootstrap failure.
+
+### aico install / aico init
+
+~~~powershell
+aico install [target]
+aico init [target]
+~~~
+
+Target defaults to the current directory.
+
+Optional explicit reinstall flag:
+
+~~~text
+--force
+~~~
+
+Purpose: install AI Company OS into an existing directory and select that project.
+
+Normal installation skips existing framework-path files. Skipped pre-existing scripts are not used as post-install executable code; derived-state synchronization runs through the package-owned sync implementation. Force can replace framework-path files and is not the project-upgrade mechanism.
+
+Common failures: invalid target, PowerShell missing, existing malformed managed manifest, Python bootstrap failure.
+
+### aico update
+
+~~~powershell
+aico update [target]
+~~~
+
+Target defaults to the current directory.
+
+Purpose: update only the supported managed runtime namespace from the currently installed npm package.
+
+Requires a valid .codex/managed-files.json. It refuses unmanaged runtime conflicts and does not change active-project selection.
+
+Common failures: missing/unsupported manifest, unrecognized ownership contract, unmanaged target conflict, unsafe reparse/path, malformed managed config.
+
+### aico use
+
+~~~powershell
+aico use <project>
+~~~
+
+Validates a project snapshot and records it as the default project.
+
+Common failure: the path is not a recognizable AI Company OS project.
+
+### aico current
+
+~~~powershell
+aico current
+~~~
+
+Prints the configured project. Exits non-zero when none is configured.
+
+### aico status
+
+~~~powershell
+aico status [--project PATH] [--json]
+~~~
+
+Shows the current project snapshot.
+
+### aico tasks
+
+~~~powershell
+aico tasks [--project PATH] [--status STATUS] [--owner OWNER] [--priority PRIORITY] [--json]
+~~~
+
+Lists tasks with optional filters.
+
+### aico workflow
+
+~~~powershell
+aico workflow [--project PATH] [--json]
+~~~
+
+Shows task dependencies and execution flow.
+
+### aico activity
+
+~~~powershell
+aico activity [--project PATH] [--limit N] [--json]
+~~~
+
+Shows persisted project activity. Default limit: 50.
+
+### aico handoffs
+
+~~~powershell
+aico handoffs [--project PATH] [--json]
+~~~
+
+Shows declared/observed agent handoffs.
+
+### aico runtime
+
+~~~powershell
+aico runtime [--project PATH] [--json]
+~~~
+
+Inspects the available runtime/event source used by the CLI.
+
+### aico doctor
+
+Project consistency:
+
+~~~powershell
+aico doctor [--project PATH] [--json]
+~~~
+
+Local dependency/runtime diagnosis:
+
+~~~powershell
+aico doctor --system [--json]
+~~~
+
+The system doctor checks Python, platform information, Git, Node, npm, PowerShell and Ollama. Python >=3.11 and PowerShell are runtime requirements; several other entries are reported as warnings when absent.
+
+## Interactive shell commands
+
+Inside aico shell:
+
+~~~text
+status
+status --json
+tasks
+tasks --status ACTIVE
+tasks --owner pm
+tasks --priority P1
+tasks --json
+use "C:\path\project"
+project
+help
+clear
+exit
+quit
+~~~
+
+# Advanced / internal PowerShell tooling
+
+The PowerShell commands below are the lower-level workflow contract. They are not additional npm CLI subcommands and should not be used to bypass lifecycle or authorization guards.
 
 # Instalación y proyecto
 
@@ -103,9 +275,7 @@ Parámetros:
 -Force           reemplaza componentes existentes cuando el instalador lo permite
 ```
 
-Usar `-Force` con cuidado: puede reemplazar archivos administrados ya presentes en el proyecto target. El instalador mantiene `.codex/managed-files.json`, pero no realiza merge semántico. Hacerlo sobre una branch limpia y revisar `git diff`.
-
-Para usuarios del paquete npm, el equivalente recomendado es `aico install .` y `aico install . --force`.
+Usar -Force solamente para una reinstalación explícita y revisada: puede reemplazar archivos del framework existentes. Para usuarios del paquete npm, aico install . es la instalación normal. **No usar aico install . --force como sustituto de aico update .** Ver operations/update-ownership.md para el contrato de upgrade.
 
 ---
 
