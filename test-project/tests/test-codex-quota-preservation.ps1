@@ -2,7 +2,7 @@ param()
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$baseTemp = $env:TEMP
+$baseTemp = [System.IO.Path]::GetTempPath()
 $tempRoot = Join-Path $baseTemp ("aico codex p1 spaces " + [Guid]::NewGuid().ToString("N"))
 $binPath = Join-Path $tempRoot "fake bin"
 $runtimeTemp = Join-Path $tempRoot "runtime temp"
@@ -31,7 +31,10 @@ exit 1
 '@
 
     $env:PATH = $binPath + [System.IO.Path]::PathSeparator + $savedPath
-    $env:TEMP = $runtimeTemp
+    # Keep the process TEMP representation when invoking Codex.
+    # On Windows this may legitimately be an 8.3 alias (for example LANAVE~1).
+    # The provider must preserve the primary quota failure despite that environment.
+    $env:TEMP = $savedTemp
 
     function Remove-Item {
         param(

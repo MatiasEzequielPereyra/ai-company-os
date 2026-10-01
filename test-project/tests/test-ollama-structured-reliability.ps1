@@ -2,7 +2,7 @@ param()
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$tempRoot = Join-Path $env:TEMP ("aico-ollama-structured-p1-" + [Guid]::NewGuid().ToString("N"))
+$tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("aico-ollama-structured-p1-" + [Guid]::NewGuid().ToString("N"))
 $savedCapture = $env:AICO_P1_OLLAMA_CAPTURE
 $savedMode = $env:AICO_P1_OLLAMA_MODE
 

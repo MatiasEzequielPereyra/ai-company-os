@@ -2,7 +2,7 @@ param()
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$tempRoot = Join-Path $env:TEMP ("aico-gemini-schema-p1-" + [Guid]::NewGuid().ToString("N"))
+$tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("aico-gemini-schema-p1-" + [Guid]::NewGuid().ToString("N"))
 $savedKey = $env:GEMINI_API_KEY
 $savedCapture = $env:AICO_P1_GEMINI_CAPTURE
 
