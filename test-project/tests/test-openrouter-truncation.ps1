@@ -3,7 +3,7 @@ param()
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$tempRoot = Join-Path $env:TEMP ("aico-openrouter-length-" + [Guid]::NewGuid().ToString("N"))
+$tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("aico-openrouter-length-" + [Guid]::NewGuid().ToString("N"))
 $previousKey = $env:OPENROUTER_API_KEY
 
 try {

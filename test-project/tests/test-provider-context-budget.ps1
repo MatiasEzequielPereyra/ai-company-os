@@ -2,7 +2,7 @@ param()
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$tempRoot = Join-Path $env:TEMP ("aico-provider-context-p1-" + [Guid]::NewGuid().ToString("N"))
+$tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("aico-provider-context-p1-" + [Guid]::NewGuid().ToString("N"))
 $savedOpenRouterKey = $env:OPENROUTER_API_KEY
 $savedDeepSeekKey = $env:DEEPSEEK_API_KEY
 $savedXaiKey = $env:XAI_API_KEY
