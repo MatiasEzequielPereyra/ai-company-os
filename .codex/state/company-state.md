@@ -42,3 +42,18 @@ Implement task completion endpoint
 ## Operational Metrics
 
 .codex/runtime/metrics/events.jsonl
+## Provider/runtime/TUI reconciliation checkpoint
+
+Updated (UTC): 2026-10-03T18:11:51Z
+
+This authorized workstream is submitted for Orchestrator review; it does not change unrelated task lifecycle statuses or grant merge permission.
+
+- Base: feb6448943d98863d41e105f84a0d6f8e3c92b51
+- Implementation: 701b7b446b1768dc541ba2babefbabd8d30de3ab
+- Branch: fix/provider-runtime-tui-reconciliation
+- Current handoff: [provider-runtime-tui-reconciliation-2026-10-03](../../docs/engineering/handoffs/ai-company-os/provider-runtime-tui-reconciliation-2026-10-03.md)
+- PR: https://github.com/MatiasEzequielPereyra/ai-company-os/pull/40
+- Local verification: Python 185 PASS; PowerShell smoke 49/49 PASS; npm 2 PASS; exact packed artifact E2E PASS.
+- Receipt: PENDING; next owner Orchestrator.
+- Architectural follow-up: safe removal of dead writable_allow_paid_fallback; retained for compatibility.
+- Acceptance Run #4: NOT_CREATED / NOT_RUN; merge: NOT_PERFORMED.

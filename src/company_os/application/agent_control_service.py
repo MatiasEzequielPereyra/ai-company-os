@@ -596,20 +596,16 @@ class AgentControlService:
             *arguments,
         ]
 
-        environment = os.environ.copy()
-
         providers = ProviderService()
-
-        environment.update(
-            providers.build_environment(
-                "OpenRouter"
-            )
-        )
-
-        environment.update(
-            providers.build_environment(
-                "Gemini"
-            )
+        requested = "Auto"
+        if "-Provider" in arguments:
+            requested = arguments[arguments.index("-Provider") + 1]
+        execution = script.name == "run-active-agents.ps1"
+        roles = tuple(task.owner for task in self.get_tasks(script.parent.parent)
+                      if task.status == "ACTIVE") if execution else ()
+        environment = providers.build_execution_environment(
+            script.parent.parent, requested,
+            workload="analysis" if execution else "control", roles=roles,
         )
 
         process = run_streamed_process(

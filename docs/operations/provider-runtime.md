@@ -107,6 +107,18 @@ This is a protection against accidental paid fallback. It is not a guarantee tha
 
 Explicit provider selection remains an operator action and may consume provider quota.
 
+Ollama writable execution passes the task role and `Workload=writable` to the
+local resolver. Its effective context limit is the minimum of the writable
+policy budget, a positive configured Ollama provider budget, and the resolver's
+`ContextMaxChars`. Missing, invalid or unavailable runtime information rejects
+execution before the provider adapter runs. Gate evidence compaction remains
+specific to gates.
+
+`writable_allow_paid_fallback` is retained for configuration/migration
+compatibility but has no execution consumer. It does not override the free model
+allowlist or enable additional writable providers; removal requires a separate
+compatibility decision.
+
 ## Ollama and hardware-aware resolution
 
 Ollama selection uses:
@@ -135,6 +147,21 @@ Current profiles are:
 - LOCAL_GPU_16GB_PLUS
 
 AI Company OS does not auto-pull Ollama models.
+
+The Providers TUI manages OpenRouter, Gemini, DeepSeek and Grok/xAI credentials
+through the secure credential store, with masked inputs and no saved-secret
+prefill. Codex is shown as CLI detection; Ollama is shown as resolver availability
+for the selected project's local analysis candidate, including service and model
+usability. CLI detection alone does not assert an authenticated Codex session.
+Plan Control inspects the local candidate for the active role/workload in a
+background worker; it does not claim that every Auto workload selects Ollama.
+
+Python execution services inject credentials only for explicit providers or
+configured workload candidates. Analysis honors role orders and the paid fallback
+switch; writable Auto additionally filters cloud candidates through the free
+model allowlist. Control and local-inspection subprocesses receive no provider
+keys. This filtering does not grant provider eligibility: PowerShell routing and
+writable policy remain authoritative.
 
 Initialize/benchmark the local runtime:
 
