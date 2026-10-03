@@ -202,29 +202,45 @@ DeepSeek
 Grok
 ```
 
-`Auto` usa el orden configurado en `.codex/provider-config.json`.
+`Auto` no tiene un único orden global. El orden aplicable depende del workload y de su política en `.codex/provider-config.json`.
 
 ---
 
 ## ¿Cuál es el orden de Auto?
 
-La configuración actual de `main` es local-first:
+General Auto usa `auto_order`:
 
 ```text
-Auto
-↓
 Ollama
 ```
 
-según `.codex/provider-config.json`.
+Engineering Manager analysis Auto usa `analysis_auto_order_by_role`:
 
-`allow_paid_fallback` está deshabilitado por defecto. DeepSeek y Grok pueden seleccionarse explícitamente, pero no se agregan silenciosamente como fallback pago.
+```text
+OpenRouter -> Gemini -> Ollama -> Codex -> DeepSeek -> Grok
+```
+
+Gate Auto usa `gate_auto_order`:
+
+```text
+Ollama -> OpenRouter -> Gemini -> Codex -> DeepSeek -> Grok
+```
+
+Writable Auto usa `writable_auto_order`:
+
+```text
+Ollama
+```
+
+Los providers sin credenciales requeridas o CLI disponible se omiten. Con `allow_paid_fallback=false`, DeepSeek y Grok se omiten como fallback automático.
+
+La selección explícita de provider no hace cross-provider fallback. Schema validation y, cuando corresponde, semantic validation siguen aplicando antes de aceptar un candidato.
 
 ---
 
 ## ¿Auto garantiza que siempre habrá un provider?
 
-No. Con la configuración por defecto, `Auto` necesita que el runtime local Ollama sea resoluble. Si querés usar otro provider, podés seleccionarlo explícitamente o cambiar `auto_order` de forma consciente.
+No. Cada workload consume solamente los candidatos elegibles de su orden aplicable. General Auto sigue siendo Ollama-only por defecto; Gate Auto puede continuar con otros candidatos configurados cuando están disponibles y habilitados.
 
 ---
 
@@ -562,7 +578,7 @@ Para ejecutar IA con el Auto general por defecto, necesitás un Ollama local usa
 
 No en la configuración actual.
 
-General Auto usa Ollama solamente. Engineering Manager puede tener candidatos cloud por configuración, pero DeepSeek/Grok se omiten como fallback automático mientras allow_paid_fallback=false.
+General Auto usa Ollama solamente. Engineering Manager analysis Auto y Gate Auto pueden tener candidatos cloud por configuración, pero DeepSeek/Grok se omiten como fallback automático mientras `allow_paid_fallback=false`. Writable Auto tiene su propia política separada.
 
 Eso no convierte todos los demás providers cloud en garantizadamente gratuitos: cuota y costo dependen del provider, cuenta y modelo/ruta.
 

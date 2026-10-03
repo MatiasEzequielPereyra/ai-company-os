@@ -467,9 +467,9 @@ Elegir provider:
 .\scripts\run-active-agents.ps1 -Provider Grok
 ```
 
-También existe `Auto`, que utiliza `auto_order` de `.codex/provider-config.json`.
+También existe `Auto`. Para análisis general utiliza `auto_order` de `.codex/provider-config.json`; Engineering Manager analysis puede aplicar `analysis_auto_order_by_role`.
 
-El `main` actual es local-first y configura por defecto:
+El Auto general de `main` actual es local-first y configura por defecto:
 
 ```text
 Auto → Ollama
@@ -525,6 +525,20 @@ Es una lista de candidatos, no una garantía de ejecución.
 - LOCAL_CPU_LOW: Ollama se omite para Engineering Manager;
 - Codex no disponible: se omite;
 - allow_paid_fallback=false: DeepSeek/Grok se omiten como fallback automático.
+
+### Gate Auto
+
+Review, QA y Security usan `gate_auto_order`:
+
+~~~text
+Ollama -> OpenRouter -> Gemini -> Codex -> DeepSeek -> Grok
+~~~
+
+Ollama sigue siendo el primer candidato.
+
+Los providers sin credenciales o CLI disponible se omiten. DeepSeek y Grok se omiten mientras `allow_paid_fallback=false`.
+
+Un provider elegido explícitamente no hace cross-provider fallback. Schema validation y semantic validation siguen siendo obligatorias antes de aceptar un resultado.
 
 ### Ollama
 
@@ -744,7 +758,7 @@ Posibles fallos:
 
 Los timeouts son consumidos por el router actual. Un intento fallido elimina el output parcial para evitar que se use como evidencia válida.
 
-Auto continúa únicamente si quedan candidatos reales en el orden aplicable. En el Auto general por defecto solamente existe Ollama, por lo que un fallo local no produce fallback cloud automático.
+Auto continúa únicamente si quedan candidatos reales en el orden aplicable. En el Auto general por defecto solamente existe Ollama, por lo que un fallo local no produce fallback cloud general. En Gate Auto, el router puede continuar según `gate_auto_order` cuando quedan candidatos elegibles.
 
 No avanzar lifecycle ni fabricar artifacts manualmente para ocultar un fallo de provider.
 

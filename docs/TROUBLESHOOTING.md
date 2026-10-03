@@ -528,19 +528,30 @@ El adapter detectó un mensaje de quota/usage limit de Codex.
 
 Con provider explícito `Codex`, la ejecución termina.
 
-Con `Auto`, el router puede intentar el siguiente provider disponible según:
+Con `Auto`, el router puede intentar el siguiente provider disponible según el orden aplicable al workload en:
 
 ```text
 .codex/provider-config.json
 ```
 
-El `main` actual configura `Auto` como local-first:
+Los órdenes relevantes son:
+
+- `auto_order` para General Auto;
+- `analysis_auto_order_by_role` para overrides de análisis;
+- `gate_auto_order` para Review, QA y Security;
+- `writable_auto_order` para writable execution.
+
+General Auto sigue siendo Ollama-only por defecto.
+
+Gate Auto usa:
 
 ```text
-Ollama
+Ollama -> OpenRouter -> Gemini -> Codex -> DeepSeek -> Grok
 ```
 
-Otros providers pueden elegirse explícitamente o incorporarse conscientemente a `auto_order`.
+Los providers no disponibles se omiten. DeepSeek y Grok se omiten automáticamente mientras `allow_paid_fallback=false`.
+
+Con provider explícito no hay cross-provider fallback.
 
 ---
 
@@ -596,7 +607,7 @@ Test-Path Env:XAI_API_KEY
 Get-Content .\.codex\provider-config.json
 ```
 
-Con la configuración por defecto de `main`, `Auto` intenta Ollama. Si Ollama no está disponible, elegí explícitamente otro provider configurado o ajustá `auto_order`; tener una API key no cambia por sí sola el orden de Auto.
+Revisá el orden correspondiente al workload. General Auto usa `auto_order` y sigue siendo Ollama-only por defecto; Gate Auto usa `gate_auto_order`; Engineering Manager analysis puede usar `analysis_auto_order_by_role`; Writable Auto usa `writable_auto_order`. Tener una API key no agrega por sí sola un provider a otro orden ni habilita fallback pago.
 
 ---
 
