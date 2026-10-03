@@ -3,7 +3,10 @@
   "properties": {
     "outcome": {
       "type": "string",
-      "enum": ["COMPLETED", "BLOCKED"]
+      "enum": [
+        "COMPLETED",
+        "BLOCKED"
+      ]
     },
     "summary": {
       "type": "string",
@@ -27,7 +30,12 @@
           },
           "kind": {
             "type": "string",
-            "enum": ["DECISION", "IMPLEMENTATION", "VALIDATION", "OPERATIONS"]
+            "enum": [
+              "DECISION",
+              "IMPLEMENTATION",
+              "VALIDATION",
+              "OPERATIONS"
+            ]
           },
           "change": {
             "type": "string",
@@ -36,7 +44,17 @@
           },
           "owner": {
             "type": "string",
-            "enum": ["ceo", "pm", "cto", "engineering-manager", "backend", "frontend", "devops", "qa", "security"]
+            "enum": [
+              "ceo",
+              "pm",
+              "cto",
+              "engineering-manager",
+              "backend",
+              "frontend",
+              "devops",
+              "qa",
+              "security"
+            ]
           },
           "areas": {
             "type": "array",
@@ -104,7 +122,8 @@
         "evidence"
       ],
       "additionalProperties": false
-    },    "verification": {
+    },
+    "verification": {
       "type": "string",
       "maxLength": 2000
     },
@@ -119,6 +138,55 @@
     "recommended_next": {
       "type": "string",
       "maxLength": 1500
+    },
+    "execution_blocker": {
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "missing_evidence",
+            "access_denied",
+            "authorization_required",
+            "external_decision",
+            "unsatisfied_dependency",
+            "owned_output_pending"
+          ]
+        },
+        "prerequisite": {
+          "maxLength": 1000,
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence": {
+          "maxLength": 2000,
+          "type": "string",
+          "minLength": 1
+        },
+        "resolution_owner": {
+          "maxLength": 200,
+          "type": "string",
+          "minLength": 1
+        },
+        "role_can_resolve": {
+          "type": "boolean"
+        },
+        "why_role_cannot_resolve": {
+          "maxLength": 1500,
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "kind",
+        "prerequisite",
+        "evidence",
+        "resolution_owner",
+        "why_role_cannot_resolve",
+        "role_can_resolve"
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Required for BLOCKED: evidence of an external prerequisite the assigned role cannot resolve. Pending role-owned outputs are corrective work, not an execution blocker."
     }
   },
   "required": [

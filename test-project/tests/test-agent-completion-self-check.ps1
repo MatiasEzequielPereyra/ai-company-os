@@ -63,6 +63,10 @@ try {
         (Join-Path $tempRoot "scripts\task-execution-lock.ps1") `
         -Force
 
+    foreach ($helper in @("validate-analysis-result-semantics.ps1", "build-corrective-analysis-context.ps1")) {
+        Copy-Item (Join-Path $repoRoot ("scripts\" + $helper)) (Join-Path $tempRoot ("scripts\" + $helper))
+    }
+
     Copy-Item `
         (Join-Path $repoRoot "schemas\agent-result.schema.json") `
         (Join-Path $tempRoot "schemas\agent-result.schema.json") `

@@ -64,6 +64,55 @@
         "evidence"
       ],
       "additionalProperties": false
+    },
+    "execution_blocker": {
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "missing_evidence",
+            "access_denied",
+            "authorization_required",
+            "external_decision",
+            "unsatisfied_dependency",
+            "owned_output_pending"
+          ]
+        },
+        "prerequisite": {
+          "maxLength": 1000,
+          "type": "string",
+          "minLength": 1
+        },
+        "evidence": {
+          "maxLength": 2000,
+          "type": "string",
+          "minLength": 1
+        },
+        "resolution_owner": {
+          "maxLength": 200,
+          "type": "string",
+          "minLength": 1
+        },
+        "role_can_resolve": {
+          "type": "boolean"
+        },
+        "why_role_cannot_resolve": {
+          "maxLength": 1500,
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "kind",
+        "prerequisite",
+        "evidence",
+        "resolution_owner",
+        "why_role_cannot_resolve",
+        "role_can_resolve"
+      ],
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Required for BLOCKED: evidence of an external prerequisite the assigned role cannot resolve. Pending role-owned outputs are corrective work, not an execution blocker."
     }
   },
   "required": [
