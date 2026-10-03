@@ -123,6 +123,82 @@ if ($blocked) {
     return $root
 }
 
+function Test-CorrectiveFailedGate {
+    param([ValidateSet('QA','Security')][string]$Gate)
+    $root = New-AnalysisFixture ('failed-' + $Gate.ToLowerInvariant())
+    $runner = Join-Path $root 'scripts/run-agent-task.ps1'
+    Write-FixtureFile (Join-Path $root 'fake-mode.txt') 'first'
+    & $runner -Id AICO-002 -ProjectPath $root -Provider Ollama | Out-Null
+    & (Join-Path $root 'scripts/review-task.ps1') -Id AICO-002 -Recommendation APPROVE -Reviewer backend -Findings 'Review confirms architecture proposal.' -ProjectPath $root | Out-Null
+    if ($Gate -eq 'Security') {
+        & (Join-Path $root 'scripts/qa-task.ps1') -Id AICO-002 -Outcome PASS -Evidence 'QA accepts architecture testability.' -ProjectPath $root | Out-Null
+    }
+    $findings = "${Gate}_CURRENT_FINDINGS_SENTINEL: Correct the CTO-owned concurrency/validation ADR. " + ('Detailed independent finding. ' * 25) + "${Gate}_FINDINGS_END_SENTINEL"
+    $gateScript = if ($Gate -eq 'QA') { 'qa-task.ps1' } else { 'security-task.ps1' }
+    & (Join-Path $root ("scripts/$gateScript")) -Id AICO-002 -Outcome FAIL -Evidence "${Gate}_CURRENT_EVIDENCE_SENTINEL: actual failing checks." -Findings $findings -ProjectPath $root | Out-Null
+    Assert-True ((Get-Status $root AICO-002) -eq 'READY') "$Gate FAIL did not follow canonical corrective READY path."
+    & (Join-Path $root 'scripts/advance-task.ps1') -Id AICO-002 -Status ACTIVE -Actor cto -Reason "Authorized $Gate corrective analysis" -TasksPath (Join-Path $root 'tasks') | Out-Null
+    Write-FixtureFile (Join-Path $root 'fake-mode.txt') 'gate-corrected'
+    & $runner -Id AICO-002 -ProjectPath $root -Provider Ollama | Out-Null
+    Assert-True ((Get-Status $root AICO-002) -eq 'REVIEW') "$Gate corrective analysis did not return to REVIEW."
+    $calls = @(Get-Content (Join-Path $root 'fake-calls.jsonl') | ForEach-Object { $_ | ConvertFrom-Json })
+    $call = @($calls | Where-Object mode -eq 'gate-corrected')[0]
+    Assert-True ($call.length -le 12000) "$Gate corrective context exceeded Ollama effective budget."
+    Assert-True ($call.context.Contains($findings)) "$Gate complete current failing findings did not reach provider."
+    Assert-True ($call.context.Contains(('LATEST ' + $Gate.ToUpperInvariant() + ' GATE'))) "$Gate current artifact was not explicitly protected."
+    foreach ($sentinel in @('PREVIOUS_DELIVERABLE_SENTINEL','TASK_SENTINEL','ORIGINAL_DISPATCH_SENTINEL',"${Gate}_CURRENT_EVIDENCE_SENTINEL",'END CORRECTIVE ANALYSIS EVIDENCE')) {
+        Assert-True ($call.context.Contains($sentinel)) "$Gate corrective sent context lost $sentinel."
+    }
+    $events = @(Get-Content (Join-Path $root '.codex/runtime/metrics/events.jsonl') | ForEach-Object { $_ | ConvertFrom-Json })
+    Assert-True (@($events | Where-Object { $_.context_input_chars -gt $_.context_chars -and $_.context_chars -eq 12000 }).Count -gt 0) "$Gate regression did not exercise oversized context compaction."
+    # Later successes supersede the gate failure; historical ticket notes must not reactivate it.
+    & (Join-Path $root 'scripts/review-task.ps1') -Id AICO-002 -Recommendation APPROVE -Reviewer backend -Findings 'Corrective ADR accepted.' -ProjectPath $root | Out-Null
+    $afterReview = & (Join-Path $root 'scripts/build-corrective-analysis-context.ps1') -ProjectPath $root -Id AICO-002 -Owner cto
+    Assert-True ([string]::IsNullOrWhiteSpace([string]$afterReview)) "$Gate historical FAIL remained authoritative after a later Review APPROVE before QA PASS."
+    & (Join-Path $root 'scripts/qa-task.ps1') -Id AICO-002 -Outcome PASS -Evidence 'Corrective validation accepted.' -ProjectPath $root | Out-Null
+    & (Join-Path $root 'scripts/security-task.ps1') -Id AICO-002 -Outcome PASS -Evidence 'Corrective security accepted.' -ProjectPath $root | Out-Null
+    $afterSuccess = & (Join-Path $root 'scripts/build-corrective-analysis-context.ps1') -ProjectPath $root -Id AICO-002 -Owner cto
+    Assert-True ([string]::IsNullOrWhiteSpace([string]$afterSuccess)) "$Gate stale failure remained authoritative after later successful gates."
+}
+
+function Test-AmbiguousCorrectiveChronology {
+    $root = New-AnalysisFixture 'ambiguous-chronology'
+    # Legacy artifacts deliberately lack canonical lifecycle provenance. Their
+    # identical second-precision timestamps cannot identify the current stage.
+    Write-FixtureFile (Join-Path $root 'docs/engineering/reviews/AICO-002-review-001.md') @'
+# Review - AICO-002
+Recorded: 2026-10-04T00:00:00Z
+Task: AICO-002
+Task owner: cto
+Reviewer: backend
+Recommendation: APPROVE
+
+## Findings
+
+Legacy review approved.
+'@
+    Write-FixtureFile (Join-Path $root 'docs/engineering/security/AICO-002-security.md') @'
+# Security Gate - AICO-002
+Recorded: 2026-10-04T00:00:00Z
+Outcome: FAIL
+
+## Evidence
+
+Legacy security evidence.
+
+## Findings
+
+Legacy security finding.
+'@
+    $rejected = $false
+    try { & (Join-Path $root 'scripts/build-corrective-analysis-context.ps1') -ProjectPath $root -Id AICO-002 -Owner cto | Out-Null }
+    catch {
+        Assert-True ($_.Exception.Message -match 'Ambiguous current corrective gate') 'Ambiguous chronology failed for an unrelated reason.'
+        $rejected = $true
+    }
+    Assert-True $rejected 'Equal-timestamp mixed legacy gates selected corrective evidence without provenance.'
+}
+
 try {
     $root = New-AnalysisFixture 'corrective'
     $runner = Join-Path $root 'scripts/run-agent-task.ps1'
@@ -189,6 +265,9 @@ try {
     Assert-True ((Get-Status $invalidRoot AICO-002) -eq 'ACTIVE') 'Failed semantic repair mutated lifecycle.'
     Assert-True (-not (Test-Path (Join-Path $invalidRoot 'docs/engineering/agent-reports/AICO-002.md'))) 'Invalid BLOCKED wrote a primary report.'
     Assert-True (@(Get-ChildItem (Join-Path $invalidRoot 'docs/engineering/results') -Filter 'AICO-002-result-*.md' -ErrorAction SilentlyContinue).Count -eq 0) 'Invalid BLOCKED wrote a task result.'
+    Test-CorrectiveFailedGate -Gate QA
+    Test-CorrectiveFailedGate -Gate Security
+    Test-AmbiguousCorrectiveChronology
     Write-Host 'PASS: corrective CTO retry repairs owned-output BLOCKED, preserves evidence under budget, accepts external BLOCKED and rejects exhausted invalid repair.' -ForegroundColor Green
 }
 finally {
