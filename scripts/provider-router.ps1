@@ -259,6 +259,187 @@ function Limit-ProviderContext {
     return $Context.Substring(0,$take) + $marker
 }
 
+function Limit-GateProviderContext {
+    param(
+        [AllowEmptyString()][string]$Context,
+        [int]$MaxChars
+    )
+
+    if ($MaxChars -le 0 -or $Context.Length -le $MaxChars) {
+        return $Context
+    }
+
+    $labels = @(
+        "CANONICAL TASK",
+        "DISPATCH PACKET",
+        "ORIGINAL OWNER ROLE CONTRACT",
+        "PRIMARY AGENT REPORT",
+        "LATEST TASK RESULT",
+        "LATEST INDEPENDENT REVIEW",
+        "QA GATE"
+    )
+
+    $escapedLabels = @(
+        $labels |
+            ForEach-Object { [regex]::Escape($_) }
+    )
+
+    $pattern = (
+        "(?m)^===== (?:" +
+        ($escapedLabels -join "|") +
+        ") =====\r?$"
+    )
+
+    $sectionMatches = [regex]::Matches($Context,$pattern)
+
+    if ($sectionMatches.Count -eq 0) {
+        return Limit-ProviderContext -Context $Context -MaxChars $MaxChars
+    }
+
+    $finalMarker = (
+        [Environment]::NewLine +
+        "[TRUNCATED BY AI COMPANY OS GATE EVIDENCE POLICY]"
+    )
+
+    $separator = (
+        [Environment]::NewLine +
+        [Environment]::NewLine
+    )
+
+    $separatorBudget = $separator.Length * $sectionMatches.Count
+    $available = [Math]::Max(
+        0,
+        $MaxChars - $finalMarker.Length - $separatorBudget
+    )
+
+    # Keep some generic repository context, but reserve most of the
+    # bounded window for explicit gate evidence.
+    $baseBudget = [Math]::Min(
+        1200,
+        [int][Math]::Floor($available * 0.20)
+    )
+
+    $evidenceBudget = [Math]::Max(0,$available - $baseBudget)
+    $perSection = [int][Math]::Floor(
+        $evidenceBudget / $sectionMatches.Count
+    )
+
+    $builder = New-Object System.Text.StringBuilder
+
+    $baseContext = $Context.Substring(0,$sectionMatches[0].Index)
+    $baseTake = 0
+
+    if ($baseBudget -gt 0 -and $baseContext.Length -gt 0) {
+        $baseTake = [Math]::Min($baseContext.Length,$baseBudget)
+        [void]$builder.Append(
+            $baseContext.Substring(0,$baseTake)
+        )
+    }
+
+    for ($i = 0; $i -lt $sectionMatches.Count; $i++) {
+        $sectionStart = $sectionMatches[$i].Index
+        $sectionEnd = if ($i + 1 -lt $sectionMatches.Count) {
+            $sectionMatches[$i + 1].Index
+        }
+        else {
+            $Context.Length
+        }
+
+        $sectionLength = $sectionEnd - $sectionStart
+        $section = $Context.Substring($sectionStart,$sectionLength)
+
+        if ($perSection -le 0) {
+            continue
+        }
+
+        if ($section.Length -le $perSection) {
+            $sectionPiece = $section
+        }
+        else {
+            $sectionMarker = (
+                [Environment]::NewLine +
+                "[GATE EVIDENCE SECTION TRUNCATED]" +
+                [Environment]::NewLine
+            )
+
+            $bodyBudget = [Math]::Max(
+                0,
+                $perSection - $sectionMarker.Length
+            )
+
+            if ($bodyBudget -le 0) {
+                $sectionPiece = $section.Substring(
+                    0,
+                    [Math]::Min($section.Length,$perSection)
+                )
+            }
+            else {
+                $headTake = [int][Math]::Floor(
+                    $bodyBudget * 0.70
+                )
+                $tailTake = $bodyBudget - $headTake
+
+                $sectionPiece = (
+                    $section.Substring(0,$headTake) +
+                    $sectionMarker +
+                    $section.Substring(
+                        $section.Length - $tailTake,
+                        $tailTake
+                    )
+                )
+            }
+        }
+
+        [void]$builder.Append($separator)
+        [void]$builder.Append($sectionPiece)
+    }
+
+    # Reuse any evidence quota that small authoritative sections did not need.
+    # Extend the generic/base context without displacing preserved evidence.
+    $remainingBudget = [Math]::Max(
+        0,
+        $MaxChars - $finalMarker.Length - $builder.Length
+    )
+
+    if (
+        $remainingBudget -gt 0 -and
+        $baseContext.Length -gt $baseTake
+    ) {
+        $additionalBaseAvailable = $baseContext.Length - $baseTake
+        $additionalBaseTake = [Math]::Min(
+            $remainingBudget,
+            $additionalBaseAvailable
+        )
+
+        if ($additionalBaseTake -gt 0) {
+            $additionalBase = $baseContext.Substring(
+                $baseTake,
+                $additionalBaseTake
+            )
+
+            [void]$builder.Insert(
+                $baseTake,
+                $additionalBase
+            )
+
+            $baseTake += $additionalBaseTake
+        }
+    }
+
+    [void]$builder.Append($finalMarker)
+
+    $result = $builder.ToString()
+
+    if ($result.Length -gt $MaxChars) {
+        throw (
+            "Gate evidence compaction exceeded provider context budget. " +
+            "MaxChars=$MaxChars; Actual=$($result.Length)"
+        )
+    }
+
+    return $result
+}
+
 function Write-ProviderEvent {
     param(
         [hashtable]$Event,
@@ -314,6 +495,18 @@ if (
     if ($null -ne $roleOrderProperty -and @($roleOrderProperty.Value).Count -gt 0) {
         $autoOrder = @($roleOrderProperty.Value | ForEach-Object { [string]$_ })
     }
+}
+
+if (
+    $Workload -eq "gate" -and
+    $null -ne $config -and
+    $null -ne $config.gate_auto_order -and
+    @($config.gate_auto_order).Count -gt 0
+) {
+    $autoOrder = @(
+        $config.gate_auto_order |
+            ForEach-Object { [string]$_ }
+    )
 }
 
 $allowPaidFallback = $false
@@ -483,7 +676,16 @@ foreach ($candidate in $attempts) {
         }
         $contextBudget = Get-EffectiveProviderContextBudget @contextBudgetArgs
 
-        $candidateContext = Limit-ProviderContext -Context $Context -MaxChars ([int]$contextBudget.EffectiveMaxChars)
+        if ($Workload -eq "gate") {
+            $candidateContext = Limit-GateProviderContext `
+                -Context $Context `
+                -MaxChars ([int]$contextBudget.EffectiveMaxChars)
+        }
+        else {
+            $candidateContext = Limit-ProviderContext `
+                -Context $Context `
+                -MaxChars ([int]$contextBudget.EffectiveMaxChars)
+        }
 
         Write-Host (
             "Provider context: " + $candidateName +

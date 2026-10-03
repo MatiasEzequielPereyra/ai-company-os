@@ -2,6 +2,14 @@
   "auto_order": [
     "Ollama"
   ],
+  "gate_auto_order": [
+    "Ollama",
+    "OpenRouter",
+    "Gemini",
+    "Codex",
+    "DeepSeek",
+    "Grok"
+  ],
   "allow_paid_fallback": false,
   "context_max_chars": 120000,
   "models": {
