@@ -12,6 +12,8 @@ $tempParent = Join-Path $env:TEMP ("aico-writable-runtime-" + [Guid]::NewGuid().
 $fixtureRepo = Join-Path $tempParent "repo"
 $workspaces = Join-Path $tempParent "worktrees"
 $savedOpenRouter = $env:OPENROUTER_API_KEY
+$savedDeepSeek = $env:DEEPSEEK_API_KEY
+$savedXai = $env:XAI_API_KEY
 
 function Write-NoBom {
     param([string]$Path,[string]$Value)
@@ -112,6 +114,8 @@ function Invoke-Runner {
 }
 
 try {
+    $env:DEEPSEEK_API_KEY = "obviously-fake-deepseek-writable-rejection"
+    $env:XAI_API_KEY = "obviously-fake-xai-writable-rejection"
     foreach ($dir in @(
         "scripts",
         "tasks",
@@ -150,8 +154,12 @@ param(
     [string]$Context,
     [string]$SchemaPath,
     [string]$OutputPath,
-    [string]$Model
+    [string]$Model,
+    [string]$Role,
+    [string]$Workload
 )
+if ($Role -ne "frontend" -or $Workload -ne "writable") { throw "Writable runner must propagate its role/workload" }
+if ($Provider -notin @("Ollama","OpenRouter","Gemini")) { throw "Forbidden writable provider reached router" }
 $source = Join-Path (Split-Path -Parent $PSScriptRoot) ".codex\fake-writable-result.json"
 Copy-Item $source $OutputPath -Force
 [PSCustomObject]@{ Provider = $Provider; Model = $Model }
@@ -160,7 +168,8 @@ Copy-Item $source $OutputPath -Force
 
     $providerConfig = @{
         auto_order = @("OpenRouter","Gemini")
-        writable_auto_order = @("OpenRouter","Gemini")
+        writable_auto_order = @("DeepSeek","Grok","OpenRouter","Gemini")
+        writable_allow_paid_fallback = $true
         context_max_chars = 50000
         models = @{
             OpenRouter = "openrouter/free"
@@ -425,6 +434,8 @@ The prior writable implementation needs correction.
 }
 finally {
     $env:OPENROUTER_API_KEY = $savedOpenRouter
+    $env:DEEPSEEK_API_KEY = $savedDeepSeek
+    $env:XAI_API_KEY = $savedXai
 
     if (Test-Path $fixtureRepo) {
         foreach ($id in @("AICO-001","AICO-002","AICO-003","AICO-004")) {

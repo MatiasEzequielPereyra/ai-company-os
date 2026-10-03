@@ -209,14 +209,13 @@ que exista un proceso vivo ejecutandose en ese instante.""",
 La interfaz no decide que providers existen.
 ProviderService es la fuente para disponibilidad y configuracion.
 
-La politica operativa prioriza opciones gratuitas cuando el core
-las habilita para Auto.
+OpenRouter, Gemini, DeepSeek y Grok / xAI permiten guardar y
+eliminar credenciales mediante el almacen seguro del sistema.
+Eliminar una credencial guardada no elimina variables de entorno.
 
-OpenRouter y Gemini tienen configuracion de credenciales visible
-en la TUI actual.
-
-DeepSeek, Grok / xAI y Ollama podran aparecer sin redisenar la
-tabla cuando el core los exponga.
+Codex muestra presencia del CLI; Ollama muestra el runtime local.
+Auto general, analisis por rol, gates y writable usan politicas
+separadas. DeepSeek y Grok / xAI no admiten ejecucion writable.
 
 Ollama debe tratarse como provider local y no como una API key.
 
@@ -465,10 +464,13 @@ An assigned task does not necessarily mean a live process exists.""",
 The UI does not decide which providers exist.
 ProviderService is authoritative for availability/configuration.
 
-OpenRouter and Gemini currently expose credential inputs.
+OpenRouter, Gemini, DeepSeek and Grok / xAI support saving and
+deleting credentials through the operating system secure store.
+Deleting a stored credential does not remove environment variables.
 
-DeepSeek, Grok / xAI and Ollama can be added without redesigning
-the provider table once the core exposes them.
+Codex displays CLI presence; Ollama displays the local runtime.
+General Auto, role analysis, gates and writable use separate policies.
+DeepSeek and Grok / xAI do not support writable execution.
 
 Ollama should be treated as a local provider, not as an API key.
 
@@ -636,6 +638,10 @@ UI_TEXT = {
         "projects_active_notify": "Proyecto activo",
 
         "providers_title": "Proveedores",
+        "providers_key_placeholder": "{provider} API key - Enter para guardar de forma segura",
+        "providers_delete_key": "Eliminar credencial guardada de {provider}",
+        "providers_deleted_notify": "Credencial guardada eliminada; una variable de entorno puede seguir activa.",
+        "providers_storage_error": "No se pudo actualizar el almacen seguro de credenciales.",
         "providers_provider": "Provider",
         "providers_configured": "Configurado",
         "providers_source": "Origen",
@@ -750,6 +756,10 @@ UI_TEXT = {
         "projects_active_notify": "Active project",
 
         "providers_title": "Providers",
+        "providers_key_placeholder": "{provider} API key - Enter to save securely",
+        "providers_delete_key": "Delete stored {provider} credential",
+        "providers_deleted_notify": "Stored credential deleted; an environment variable may still be active.",
+        "providers_storage_error": "Could not update the secure credential store.",
         "providers_provider": "Provider",
         "providers_configured": "Configured",
         "providers_source": "Source",
@@ -975,6 +985,20 @@ FLOW_TEXT = {
         ),
         "wr_deleted": "eliminado",
 
+        "pc_local_title": "Runtime local / Auto",
+        "pc_local_candidate": "Candidato local; Auto depende del workload y la politica de providers.",
+        "pc_local_role": "Rol / workload",
+        "pc_local_loading": "Consultando runtime local...",
+        "pc_local_available": "Disponible",
+        "pc_local_unavailable": "Runtime local no disponible",
+        "pc_local_profile": "Perfil",
+        "pc_local_score": "Capacidad /100",
+        "pc_local_ram": "RAM (GB)",
+        "pc_local_gpu": "GPU",
+        "pc_local_vram": "VRAM (GB)",
+        "pc_local_ctx": "num_ctx",
+        "pc_local_predict": "num_predict",
+        "pc_local_reason": "Motivo",
         "pc_busy": "Hay una operacion en ejecucion.",
         "pc_reactivated": "Reactivadas",
         "pc_no_backlog_ready": (
@@ -1158,6 +1182,20 @@ FLOW_TEXT = {
         ),
         "wr_deleted": "deleted",
 
+        "pc_local_title": "Local Runtime / Auto",
+        "pc_local_candidate": "Local candidate; Auto depends on workload and provider policy.",
+        "pc_local_role": "Role / workload",
+        "pc_local_loading": "Inspecting local runtime...",
+        "pc_local_available": "Available",
+        "pc_local_unavailable": "Local runtime unavailable",
+        "pc_local_profile": "Profile",
+        "pc_local_score": "Capability /100",
+        "pc_local_ram": "RAM (GB)",
+        "pc_local_gpu": "GPU",
+        "pc_local_vram": "VRAM (GB)",
+        "pc_local_ctx": "num_ctx",
+        "pc_local_predict": "num_predict",
+        "pc_local_reason": "Reason",
         "pc_busy": "An operation is currently running.",
         "pc_reactivated": "Reactivated",
         "pc_no_backlog_ready": (

@@ -8,6 +8,7 @@ from pathlib import Path
 from company_os.application.agent_control_service import (
     AgentControlService,
 )
+from company_os.application.provider_service import ProviderService
 from company_os.application.process_stream import (
     ProgressCallback,
     run_streamed_process,
@@ -344,6 +345,13 @@ class GateControlService:
                 f"Required script not found: {script}"
             )
 
+        provider = "Auto"
+        if "-Provider" in arguments:
+            provider = arguments[arguments.index("-Provider") + 1]
+        environment = ProviderService().build_execution_environment(
+            script.parent.parent, provider,
+            workload="gate" if script.name == "run-gate-agent.ps1" else "control",
+        )
         process = run_streamed_process(
             [
                 self._powershell(),
@@ -355,6 +363,7 @@ class GateControlService:
                 *arguments,
             ],
             timeout=timeout,
+            env=environment,
             on_line=progress,
         )
 

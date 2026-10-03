@@ -23,6 +23,7 @@ from textual.widgets import (
 from company_os.application.agent_control_service import (
     AgentControlService,
 )
+from company_os.application.local_runtime_service import LocalRuntimeService, LocalRuntimeStatus
 from company_os.application.engineering_backlog_service import (
     EngineeringBacklogService,
 )
@@ -100,6 +101,10 @@ class PlanControlScreen(Screen):
         self.writable_runner = WritableExecutionAdapter()
         self.corrective = CorrectiveReactivationService()
         self.results = TaskResultService()
+        self.local_runtime = LocalRuntimeService()
+        self._local_runtime_key: tuple[str, str] | None = None
+        self._local_runtime_status: LocalRuntimeStatus | None = None
+        self._local_runtime_generation = 0
 
         self.busy = False
         self.last_error_text = ""
@@ -110,6 +115,7 @@ class PlanControlScreen(Screen):
         yield Header()
 
         with VerticalScroll():
+            yield Static(id="plan-local-runtime")
             yield Static(
                 id="plan-control-content",
             )
@@ -210,7 +216,73 @@ class PlanControlScreen(Screen):
         if self._reject_if_busy():
             return
 
+        self.local_runtime.invalidate(self.plan_data.project_root)
+        self._local_runtime_key = None
         self._refresh_view()
+
+    def _refresh_local_runtime(self, tasks) -> None:
+        active = next((task for task in tasks if task.status == "ACTIVE"), None)
+        role = active.owner if active else "pm"
+        workload = "writable" if active and active.work_kind == "IMPLEMENTATION" else "analysis"
+        if self.progress.busy:
+            workload = {"gates": "gate", "writable": "writable"}.get(self.progress.kind, "analysis")
+            role = self._operation_owners.get(self.progress.current_task, role)
+            if workload == "gate":
+                # Match the independent reviewer contract in run-gate-agent.ps1.
+                gate = self.progress.stage.upper()
+                if gate == "REVIEW":
+                    role = "engineering-manager"
+                elif gate in {"QA", "SECURITY"}:
+                    reviewer = gate.casefold()
+                    role = "engineering-manager" if role.casefold() == reviewer else reviewer
+        key = (role, workload)
+        if key != self._local_runtime_key:
+            self._local_runtime_key = key
+            self._local_runtime_status = None
+            self._local_runtime_generation += 1
+            self._inspect_local_runtime(key, self._local_runtime_generation)
+        self._render_local_runtime()
+
+    @work(thread=True, exclusive=True, group="local-runtime")
+    def _inspect_local_runtime(self, key: tuple[str, str], generation: int) -> None:
+        try:
+            status = self.local_runtime.inspect(self.plan_data.project_root, role=key[0], workload=key[1])
+        except Exception:
+            # A failed diagnostic must never abort the screen or reveal raw errors.
+            status = LocalRuntimeStatus(reason="Local runtime inspection failed.")
+        self.app.call_from_thread(self._apply_local_runtime, key, status, generation)
+
+    def _apply_local_runtime(self, key: tuple[str, str], status: LocalRuntimeStatus, generation: int) -> None:
+        if key == self._local_runtime_key and generation == self._local_runtime_generation and self.is_mounted:
+            self._local_runtime_status = status
+            self._render_local_runtime()
+
+    def _render_local_runtime(self) -> None:
+        status = self._local_runtime_status
+        lines = [_t(self, "pc_local_candidate")]
+        if self._local_runtime_key:
+            role, workload = self._local_runtime_key
+            lines.append(f"{_t(self, 'pc_local_role')}: {role} / {workload}")
+        if status is None:
+            lines.append(_t(self, "pc_local_loading"))
+        else:
+            lines.append(_t(self, "pc_local_available" if status.available else "pc_local_unavailable"))
+            for label, value in (
+                ("pc_local_profile", status.profile),
+                ("pc_local_score", status.capability_score),
+                ("pc_model", status.model),
+                ("pc_local_ram", status.ram_gb),
+                ("pc_local_gpu", status.gpu_name),
+                ("pc_local_vram", status.vram_gb),
+                ("pc_local_ctx", status.num_ctx),
+                ("pc_local_predict", status.num_predict),
+                ("pc_local_reason", status.reason),
+            ):
+                lines.append(f"{_t(self, label)}: {value if value is not None and value != '' else '-'}")
+        self.query_one("#plan-local-runtime", Static).update(Panel(
+            Text("\n".join(lines)), title=self._panel_title(_t(self, "pc_local_title")),
+            **self._panel_options(),
+        ))
 
     def _work_request_ids(self) -> list[str]:
         return [
@@ -329,6 +401,7 @@ class PlanControlScreen(Screen):
                 self.progress.stage = first.status
 
         self.busy = True
+        self._refresh_local_runtime(tasks)
         self._render_operation_progress()
         return True
 
@@ -411,6 +484,7 @@ class PlanControlScreen(Screen):
                     self.progress.add_event(
                         f"Running {gate} gate..."
                     )
+                    self._refresh_local_runtime(())
 
                 elif state == "DONE":
                     self.progress.complete_gate(
@@ -433,6 +507,7 @@ class PlanControlScreen(Screen):
             self.progress.current_task = (
                 task_match.group(1).strip()
             )
+            self._refresh_local_runtime(())
 
         provider_match = re.match(
             (
@@ -1629,6 +1704,7 @@ class PlanControlScreen(Screen):
 
     def _refresh_view(self) -> None:
         tasks = self._tasks()
+        self._refresh_local_runtime(tasks)
 
         finalizable = set(
             self.gates.finalizable_task_ids(

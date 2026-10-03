@@ -679,7 +679,7 @@ try {
                 }
             }
             try {
-                $execution = & $routerPath -Provider $candidate -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $outputPath -Model $candidateModel
+                $execution = & $routerPath -Provider $candidate -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $outputPath -Model $candidateModel -Role $owner -Workload "writable"
                 break
             }
             catch {
@@ -700,7 +700,7 @@ try {
             $selectedModel = Get-ConfiguredModel -Config $config -ProviderName $Provider -CollectionName "models"
         }
 
-        $execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $outputPath -Model $selectedModel
+        $execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $outputPath -Model $selectedModel -Role $owner -Workload "writable"
     }
 
     if (-not (Test-Path $outputPath)) {

@@ -241,6 +241,42 @@ function Get-EffectiveProviderContextBudget {
         }
     }
 
+    if ($Workload -eq "writable" -and $ProviderName -eq "Ollama") {
+        $globalMax = 120000
+        if ($null -ne $Config -and $null -ne $Config.writable_context_max_chars) {
+            $globalMax = [int]$Config.writable_context_max_chars
+        }
+        elseif ($null -ne $Config -and $null -ne $Config.context_max_chars) {
+            $globalMax = [Math]::Min([int]$Config.context_max_chars,120000)
+        }
+
+        $hardwareMax = 0
+        if (
+            $null -eq $LocalRuntime -or
+            -not [bool]$LocalRuntime.Available -or
+            -not [int]::TryParse([string]$LocalRuntime.ContextMaxChars,[ref]$hardwareMax) -or
+            $hardwareMax -le 0 -or $globalMax -le 0
+        ) {
+            throw "Writable Ollama requires a valid positive runtime context budget."
+        }
+
+        $providerMax = 0
+        $effectiveMax = [Math]::Min($globalMax,$hardwareMax)
+        if ($null -ne $Config -and $null -ne $Config.ollama_context_max_chars) {
+            $providerMax = [int]$Config.ollama_context_max_chars
+            if ($providerMax -gt 0) {
+                $effectiveMax = [Math]::Min($effectiveMax,$providerMax)
+            }
+        }
+        return [PSCustomObject]@{
+            GlobalMaxChars = $globalMax
+            RoleMaxChars = $globalMax
+            ProviderMaxChars = $providerMax
+            HardwareMaxChars = $hardwareMax
+            EffectiveMaxChars = $effectiveMax
+        }
+    }
+
     return $null
 }
 
@@ -255,6 +291,7 @@ function Limit-ProviderContext {
     }
 
     $marker = [Environment]::NewLine + "[TRUNCATED BY AI COMPANY OS PROVIDER CONTEXT POLICY]"
+    if ($MaxChars -le $marker.Length) { return $marker.Substring(0,$MaxChars) }
     $take = [Math]::Max(0,$MaxChars - $marker.Length)
     return $Context.Substring(0,$take) + $marker
 }
@@ -666,7 +703,10 @@ foreach ($candidate in $attempts) {
     $candidateContext = $Context
     $contextBudget = $null
 
-    if ($Workload -in @("analysis","gate") -and $candidateName -ne "Codex") {
+    if (
+        ($Workload -in @("analysis","gate") -and $candidateName -ne "Codex") -or
+        ($Workload -eq "writable" -and $candidateName -eq "Ollama")
+    ) {
         $contextBudgetArgs = @{
             Config = $config
             Role = $Role

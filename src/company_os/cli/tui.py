@@ -9,11 +9,13 @@ from rich.table import Table
 from rich.text import Text
 
 from textual.app import App, ComposeResult
+from textual import work
 from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll
 from textual.screen import Screen
-from textual.widgets import Input
+from textual.widgets import Button, Input
 from textual.widgets import Footer, Header, Label, ListItem, ListView, Static
+from textual.worker import get_current_worker
 
 from company_os.cli.widgets import CircularListView
 from company_os.application.config_service import ConfigService
@@ -549,40 +551,47 @@ class LegacyCommandCenterScreen(Screen):
 
 
 class ProvidersScreen(Screen):
+    CREDENTIAL_PROVIDERS = tuple(ProviderService.PROVIDERS)
     BINDINGS = [
         Binding("escape", "back", "Back"),
     ]
 
     def compose(self) -> ComposeResult:
         yield Header()
-
-        yield Static(
-            "",
-            id="providers-content",
-        )
-
-        yield Input(
-            placeholder=(
-                "OpenRouter API key - Enter to save securely"
-            ),
-            password=True,
-            id="openrouter-key",
-        )
-
-        yield Input(
-            placeholder=(
-                "Gemini API key - Enter to save securely"
-            ),
-            password=True,
-            id="gemini-key",
-        )
-
-        yield Static(
-            "Keys are stored through the operating system "
-            "credential store, not inside the repository."
-        )
-
+        with VerticalScroll():
+            yield Static("", id="providers-content")
+            for provider_id in self.CREDENTIAL_PROVIDERS:
+                config = ProviderService.PROVIDERS[provider_id]
+                yield Input(
+                    placeholder=self._text("providers_key_placeholder").format(
+                        provider=config["name"]
+                    ),
+                    password=True,
+                    id=f"{provider_id}-key",
+                )
+                yield Button(
+                    self._text("providers_delete_key").format(provider=config["name"]),
+                    id=f"{provider_id}-delete-key",
+                )
+            yield Static(self._text("providers_security_note"), id="providers-security-note")
         yield Footer()
+
+    def _text(self, key: str) -> str:
+        return ui_text(getattr(self.app, "language", "es"), key)
+
+    def refresh_language(self) -> None:
+        self.query_one("#providers-security-note", Static).update(
+            self._text("providers_security_note")
+        )
+        for provider_id in self.CREDENTIAL_PROVIDERS:
+            name = ProviderService.PROVIDERS[provider_id]["name"]
+            self.query_one(f"#{provider_id}-key", Input).placeholder = (
+                self._text("providers_key_placeholder").format(provider=name)
+            )
+            self.query_one(f"#{provider_id}-delete-key", Button).label = (
+                self._text("providers_delete_key").format(provider=name)
+            )
+        self._refresh()
 
     def on_mount(self) -> None:
         self._refresh()
@@ -590,20 +599,25 @@ class ProvidersScreen(Screen):
     def action_back(self) -> None:
         self.app.pop_screen()
 
+    @work(thread=True, exclusive=True, group="provider-status")
     def _refresh(self) -> None:
-        statuses = (
-            ProviderService()
-            .get_statuses()
-        )
+        worker = get_current_worker()
+        statuses = ProviderService(getattr(self.app, "project", None)).get_statuses()
+        if not worker.is_cancelled:
+            self.app.call_from_thread(self._render_statuses, statuses)
+
+    def _render_statuses(self, statuses) -> None:
+        if not self.is_mounted:
+            return
 
         table = Table(
-            title="Providers"
+            title=self._text("providers_title")
         )
 
-        table.add_column("Provider")
-        table.add_column("Configured")
-        table.add_column("Source")
-        table.add_column("Notes")
+        table.add_column(self._text("providers_provider"))
+        table.add_column(self._text("providers_configured"))
+        table.add_column(self._text("providers_source"))
+        table.add_column(self._text("providers_notes"))
 
         for provider in statuses:
             table.add_row(
@@ -626,10 +640,8 @@ class ProvidersScreen(Screen):
         self,
         event: Input.Submitted,
     ) -> None:
-        mapping = {
-            "openrouter-key": "openrouter",
-            "gemini-key": "gemini",
-        }
+        mapping = {f"{provider_id}-key": provider_id
+                   for provider_id in ProviderService.PROVIDERS}
 
         provider = mapping.get(
             event.input.id
@@ -647,16 +659,32 @@ class ProvidersScreen(Screen):
             event.input.value = ""
 
             self.notify(
-                f"{provider} configured securely."
+                f"{provider} {self._text('providers_configured_notify')}."
             )
 
             self._refresh()
 
-        except Exception as exc:
+        except Exception:
             self.notify(
-                str(exc),
+                self._text("providers_storage_error"),
                 severity="error",
             )
+        finally:
+            event.input.value = ""
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        mapping = {f"{provider_id}-delete-key": provider_id
+                   for provider_id in ProviderService.PROVIDERS}
+        provider = mapping.get(event.button.id)
+        if not provider:
+            return
+        self.query_one(f"#{provider}-key", Input).value = ""
+        try:
+            ProviderService().delete_api_key(provider)
+            self._refresh()
+            self.notify(self._text("providers_deleted_notify"))
+        except Exception:
+            self.notify(self._text("providers_storage_error"), severity="error")
 
 
 class LegacyProjectManagerScreen(Screen):
