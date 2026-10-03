@@ -149,6 +149,7 @@ try {
     # Simulate an older project configuration with explicit user overrides.
     $oldProviderConfig = @{
         auto_order = @("OpenRouter","Gemini")
+        gate_auto_order = @("Gemini")
         allow_paid_fallback = $false
         context_max_chars = 120000
         models = @{
@@ -248,6 +249,16 @@ try {
 
     if ((@($providerConfig.auto_order) -join ",") -ne "Ollama") {
         throw "Runtime update must migrate Auto routing to current Ollama-local-first policy."
+    }
+
+    if (
+        (@($providerConfig.gate_auto_order) -join ",") -ne
+        "Ollama,OpenRouter,Gemini,Codex,DeepSeek,Grok"
+    ) {
+        throw (
+            "Runtime update must migrate gate Auto routing to " +
+            "current framework gate fallback policy."
+        )
     }
 
     if ((@($providerConfig.writable_auto_order) -join ",") -ne "Ollama") {

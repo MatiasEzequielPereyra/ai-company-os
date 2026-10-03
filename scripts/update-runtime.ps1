@@ -434,6 +434,7 @@ Merge-MissingProperties -Target $targetProvider -Source $sourceProvider
 # old cloud fallback semantics cannot survive a runtime upgrade.
 $targetProvider.auto_order = @($sourceProvider.auto_order)
 $targetProvider.writable_auto_order = @($sourceProvider.writable_auto_order)
+$targetProvider.gate_auto_order = @($sourceProvider.gate_auto_order)
 
 $mergedConfigText[".codex/provider-config.json"] = (
     $targetProvider | ConvertTo-Json -Depth 50

@@ -29,6 +29,8 @@ $tests = @(
     "test-provider-context-budget.ps1",
     "test-gemini-compatibility.ps1",
     "test-ollama-structured-reliability.ps1",
+    "test-review-gate-provider-reliability.ps1",
+    "test-gate-evidence-preservation.ps1",
     "test-codex-quota-preservation.ps1",
     "test-provider-planning-focused-e2e.ps1",
     "test-canonical-contracts.ps1",

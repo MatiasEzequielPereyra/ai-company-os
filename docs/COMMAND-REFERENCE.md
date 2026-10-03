@@ -588,9 +588,10 @@ Notas:
 
 - `-Parallel` usa un checkout compartido y está restringido al runner de análisis.
 - `AuthMode ApiKey` legacy está deshabilitado cuando implicaría el flujo OpenAI API anterior.
-- El `Auto` actual es local-first y usa `auto_order` de `.codex/provider-config.json` (por defecto Ollama).
+- Para análisis general, `Auto` usa `auto_order`; Engineering Manager analysis puede usar `analysis_auto_order_by_role`.
+- Los gates usan `gate_auto_order`. Writable Auto usa `writable_auto_order`.
 - OpenRouter, Gemini, DeepSeek y Grok pueden seleccionarse explícitamente cuando sus credenciales están configuradas.
-- `allow_paid_fallback=false` evita que DeepSeek/Grok aparezcan silenciosamente como fallback pago en Auto.
+- `allow_paid_fallback=false` evita que DeepSeek/Grok aparezcan silenciosamente como fallback pago en los órdenes Auto aplicables.
 
 ---
 
@@ -673,6 +674,16 @@ REVIEW → QA → SECURITY
 ```
 
 No realiza final approval.
+
+Con `-Provider Auto`, los gates usan `gate_auto_order`:
+
+```text
+Ollama -> OpenRouter -> Gemini -> Codex -> DeepSeek -> Grok
+```
+
+Los candidatos sin credenciales o CLI disponible se omiten. DeepSeek y Grok se omiten mientras `allow_paid_fallback=false`.
+
+Una selección explícita de provider no hace cross-provider fallback. Schema validation y semantic validation siguen aplicando antes de aceptar un resultado de gate.
 
 ---
 

@@ -86,27 +86,77 @@ foreach ($relative in $publicDocs) {
 $rightArrow = [char]0x2192
 $oldAutoPattern = 'Ollama\s*(?:->|' + [regex]::Escape([string]$rightArrow) + ')\s*OpenRouter'
 
-foreach ($relative in $publicDocs) {
-    $content = Get-Content (Join-Path $root $relative) -Raw -Encoding UTF8
+# Ollama -> OpenRouter is now valid for Gate Auto. Validate routing inside
+# the workload-specific General Auto and Gate Auto documentation sections.
 
-    if ($content -match $oldAutoPattern) {
-        throw "Stale multi-provider general Auto claim found in $relative"
-    }
-}
-
-# Docs must reflect the actual general Auto configuration.
+# Docs must reflect the actual workload-specific Auto configuration.
 $providerConfigPath = Join-Path $root ".codex\provider-config.json"
 $providerConfig = Get-Content $providerConfigPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $autoOrder = @($providerConfig.auto_order | ForEach-Object { [string]$_ })
+$gateAutoOrder = @($providerConfig.gate_auto_order | ForEach-Object { [string]$_ })
 
 if (($autoOrder -join ",") -ne "Ollama") {
     throw "Documentation contract expects current general Auto policy to be Ollama-only; update the docs test with the product change."
 }
 
+if (($gateAutoOrder -join ",") -ne "Ollama,OpenRouter,Gemini,Codex,DeepSeek,Grok") {
+    throw "Documentation contract expects the current Gate Auto fallback order."
+}
+
 $providerDoc = Get-Content (Join-Path $root "docs\operations\provider-runtime.md") -Raw -Encoding UTF8
-$currentAutoPattern = 'Auto\s*(?:->|' + [regex]::Escape([string]$rightArrow) + ')\s*Ollama'
-if (($providerDoc -notmatch 'General Auto') -or ($providerDoc -notmatch $currentAutoPattern)) {
-    throw "Provider runtime documentation does not state the current general Auto policy."
+
+$generalSection = [regex]::Match(
+    $providerDoc,
+    '(?ms)^## General Auto\s*(?<body>.*?)(?=^## |\z)'
+)
+
+if (-not $generalSection.Success) {
+    throw "Provider runtime documentation is missing the General Auto section."
+}
+
+$generalBody = [string]$generalSection.Groups["body"].Value
+
+if (
+    ($generalBody -notmatch '\bauto_order\b') -or
+    ($generalBody -notmatch '\bOllama\b')
+) {
+    throw "Provider runtime documentation does not state the current General Auto policy."
+}
+
+if ($generalBody -match $oldAutoPattern) {
+    throw "Provider runtime documentation contains a stale multi-provider General Auto order."
+}
+
+$gateSection = [regex]::Match(
+    $providerDoc,
+    '(?ms)^## Gate Auto\s*(?<body>.*?)(?=^## |\z)'
+)
+
+if (-not $gateSection.Success) {
+    throw "Provider runtime documentation is missing the Gate Auto section."
+}
+
+$gateBody = [string]$gateSection.Groups["body"].Value
+
+$gatePattern = (
+    'Ollama\s*(?:->|' +
+    [regex]::Escape([string]$rightArrow) +
+    ')\s*OpenRouter\s*(?:->|' +
+    [regex]::Escape([string]$rightArrow) +
+    ')\s*Gemini\s*(?:->|' +
+    [regex]::Escape([string]$rightArrow) +
+    ')\s*Codex\s*(?:->|' +
+    [regex]::Escape([string]$rightArrow) +
+    ')\s*DeepSeek\s*(?:->|' +
+    [regex]::Escape([string]$rightArrow) +
+    ')\s*Grok'
+)
+
+if (
+    ($gateBody -notmatch '\bgate_auto_order\b') -or
+    ($gateBody -notmatch $gatePattern)
+) {
+    throw "Provider runtime documentation does not state the current Gate Auto policy."
 }
 
 # The command reference must contain every public npm/Python CLI command.

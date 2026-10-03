@@ -60,6 +60,28 @@ Important rules:
 
 This role-specific override is why documentation must not describe all Auto execution as identical.
 
+## Gate Auto
+
+Review, QA, and Security gate execution uses a separate routing policy from **.codex/provider-config.json**:
+
+~~~text
+gate_auto_order
+
+Ollama -> OpenRouter -> Gemini -> Codex -> DeepSeek -> Grok
+~~~
+
+Gate Auto rules:
+
+- Ollama remains the first candidate.
+- Providers whose required credentials or CLI are unavailable are skipped.
+- DeepSeek and Grok are skipped automatically while **allow_paid_fallback=false**.
+- Explicit provider selection does not perform cross-provider fallback.
+- JSON-schema validation still applies to every candidate response.
+- When a gate supplies semantic validation, semantic validation also applies before a candidate result can be accepted.
+- Truncated, invalid, or semantically unusable output is a failed candidate.
+
+General Auto continues to use **auto_order**. Engineering Manager analysis can use **analysis_auto_order_by_role**. Writable Auto continues to use **writable_auto_order**.
+
 ## Writable Auto
 
 Writable execution is a separate runtime implemented by **scripts/run-writable-agent.ps1**.
