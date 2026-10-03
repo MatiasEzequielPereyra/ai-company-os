@@ -9,7 +9,8 @@ param(
     [string]$Model = "",
     [string]$Role = "",
     [string]$Workload = "general",
-    [string]$SemanticValidatorPath = ""
+    [string]$SemanticValidatorPath = "",
+    [string]$CorrectiveContext = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -296,6 +297,17 @@ function Limit-ProviderContext {
     return $Context.Substring(0,$take) + $marker
 }
 
+function Limit-CorrectiveAnalysisContext {
+    param([AllowEmptyString()][string]$Context,[AllowEmptyString()][string]$RequiredContext,[int]$MaxChars)
+    if ([string]::IsNullOrWhiteSpace($RequiredContext)) { return Limit-ProviderContext -Context $Context -MaxChars $MaxChars }
+    if ($MaxChars -le 0) { throw 'Corrective analysis requires a finite positive context budget.' }
+    $separator = [Environment]::NewLine
+    if ($RequiredContext.Length -gt $MaxChars) { throw "Required corrective analysis evidence exceeds effective provider context budget ($($RequiredContext.Length) > $MaxChars). No provider call permitted; reconcile evidence or budget." }
+    $remaining = $MaxChars - $RequiredContext.Length - $separator.Length
+    if ($remaining -le 0 -or [string]::IsNullOrEmpty($Context)) { return $RequiredContext }
+    return $RequiredContext + $separator + (Limit-ProviderContext -Context $Context -MaxChars $remaining)
+}
+
 function Limit-GateProviderContext {
     param(
         [AllowEmptyString()][string]$Context,
@@ -494,6 +506,8 @@ function Write-ProviderEvent {
 }
 
 $root = (Resolve-Path $ProjectPath).Path
+$contextInputChars = $Context.Length + $CorrectiveContext.Length
+if (-not [string]::IsNullOrEmpty($Context) -and -not [string]::IsNullOrWhiteSpace($CorrectiveContext)) { $contextInputChars += [Environment]::NewLine.Length }
 $providersRoot = Join-Path $PSScriptRoot "providers"
 $configPath = Join-Path $root ".codex\provider-config.json"
 $validatorPath = Join-Path $PSScriptRoot "validate-json-contract.ps1"
@@ -721,6 +735,18 @@ foreach ($candidate in $attempts) {
                 -Context $Context `
                 -MaxChars ([int]$contextBudget.EffectiveMaxChars)
         }
+        elseif ($Workload -eq "analysis" -and -not [string]::IsNullOrWhiteSpace($CorrectiveContext)) {
+            try {
+                $candidateContext = Limit-CorrectiveAnalysisContext -Context $Context -RequiredContext $CorrectiveContext -MaxChars ([int]$contextBudget.EffectiveMaxChars)
+            }
+            catch {
+                $safeBudgetError = Sanitize-ProviderError -Message $_.Exception.Message
+                if ($Provider -ne "Auto") { throw $safeBudgetError }
+                $errors += ($candidateName + ": " + $safeBudgetError)
+                Write-Host ("Provider skipped: " + $candidateName + "; " + $safeBudgetError) -ForegroundColor DarkYellow
+                continue
+            }
+        }
         else {
             $candidateContext = Limit-ProviderContext `
                 -Context $Context `
@@ -729,7 +755,7 @@ foreach ($candidate in $attempts) {
 
         Write-Host (
             "Provider context: " + $candidateName +
-            "; input_chars=" + $Context.Length +
+            "; input_chars=" + $contextInputChars +
             "; effective_max_chars=" + [int]$contextBudget.EffectiveMaxChars +
             "; sent_chars=" + $candidateContext.Length +
             "; role_max_chars=" + [int]$contextBudget.RoleMaxChars +
@@ -749,7 +775,7 @@ foreach ($candidate in $attempts) {
         model = $providerModel
         timeout_seconds = $providerTimeoutSeconds
         context_chars = $candidateContext.Length
-        context_input_chars = $Context.Length
+        context_input_chars = $contextInputChars
         context_max_chars = $(if ($null -ne $contextBudget) { [int]$contextBudget.EffectiveMaxChars } else { 0 })
         success = $false
         error_category = ""
@@ -760,6 +786,7 @@ foreach ($candidate in $attempts) {
             param([string]$EffectivePrompt)
 
             if ($candidateName -eq "Codex") {
+                if (-not [string]::IsNullOrWhiteSpace($CorrectiveContext)) { $EffectivePrompt += [Environment]::NewLine + $CorrectiveContext }
                 return (& $providerScript -ProjectPath $root -Prompt $EffectivePrompt -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel -TimeoutSeconds $providerTimeoutSeconds)
             }
             elseif ($candidateName -eq "Ollama") {

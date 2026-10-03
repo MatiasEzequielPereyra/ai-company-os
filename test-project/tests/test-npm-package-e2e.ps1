@@ -44,6 +44,8 @@ $requiredProjectRuntimeArtifacts = @(
     ".codex\writable-policy.json",
     "scripts\provider-router.ps1",
     "scripts\validate-engineering-plan-result.ps1",
+    "scripts\validate-analysis-result-semantics.ps1",
+    "scripts\build-corrective-analysis-context.ps1",
     "scripts\validate-engineering-backlog-semantics.ps1",
     "scripts\validate-gate-result-semantics.ps1",
     "scripts\providers\invoke-codex.ps1",

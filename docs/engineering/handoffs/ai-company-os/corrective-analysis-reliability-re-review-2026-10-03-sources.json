@@ -1,0 +1,14 @@
+[
+  {
+    "path": "scripts/build-corrective-analysis-context.ps1",
+    "sha256": "151D2D00DFDD2CE1E8C36F365FB1CE6F5721643F02666587CD0FF1FDB08851D5"
+  },
+  {
+    "path": "test-project/tests/test-corrective-analysis-reliability.ps1",
+    "sha256": "FEC4896C0FF3FEA9B0FE4659C32DFA83622B6D3E934780F7F7A5CCF64643959B"
+  },
+  {
+    "path": "docs/engineering/corrective-analysis-reliability.md",
+    "sha256": "9B0689A77516BA335D12DB0D9C17352B50435DEF73D963268471FBB6E90B41B9"
+  }
+]

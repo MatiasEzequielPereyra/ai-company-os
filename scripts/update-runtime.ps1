@@ -296,6 +296,8 @@ $scriptNames = @(
     "run-agent-task.ps1",
     "run-active-agents.ps1",
     "build-agent-context.ps1",
+    "build-corrective-analysis-context.ps1",
+    "validate-analysis-result-semantics.ps1",
     "provider-router.ps1",
     "run-gate-agent.ps1",
     "run-pending-gates.ps1",

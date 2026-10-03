@@ -92,11 +92,15 @@ $contextBuilderPath = Join-Path $PSScriptRoot "build-agent-context.ps1"
 $localResolverPath = Join-Path $PSScriptRoot "local-runtime\resolve-local-runtime.ps1"
 $localRuntimeConfigPath = Join-Path $root ".codex\local-runtime-config.json"
 $engineeringPlanValidatorPath = Join-Path $PSScriptRoot "validate-engineering-plan-result.ps1"
+$analysisValidatorPath = Join-Path $PSScriptRoot "validate-analysis-result-semantics.ps1"
+$correctiveContextBuilderPath = Join-Path $PSScriptRoot "build-corrective-analysis-context.ps1"
 
 if (-not (Test-Path $dispatchPath)) { throw "Dispatch packet not found: $dispatchPath" }
 if (-not (Test-Path $rolePath)) { throw "Role instructions not found: $rolePath" }
 if (-not (Test-Path $schemaPath)) { throw "Agent result schema not found: $schemaPath" }
 if (-not (Test-Path $routerPath)) { throw "Provider router not found: $routerPath" }
+if (-not (Test-Path $analysisValidatorPath -PathType Leaf)) { throw "Analysis semantic validator not found: $analysisValidatorPath" }
+if (-not (Test-Path $correctiveContextBuilderPath -PathType Leaf)) { throw "Corrective context builder not found: $correctiveContextBuilderPath" }
 if ($requiresConcreteEngineeringPlan -and -not (Test-Path $engineeringPlanValidatorPath -PathType Leaf)) {
     throw "Engineering plan semantic validator not found: $engineeringPlanValidatorPath"
 }
@@ -108,6 +112,10 @@ New-Item -ItemType Directory -Force -Path $reportsDir | Out-Null
 
 $jsonPath = Join-Path $runtimeDir ($Id + "-result.json")
 $reportPath = Join-Path $reportsDir ($Id + ".md")
+
+# Capture authoritative prior delivery before the provider overwrites its fixed
+# runtime JSON/report. Initial attempts have no corrective envelope.
+$correctiveContext = & $correctiveContextBuilderPath -ProjectPath $root -Id $Id -Owner $owner
 
 $promptLines = @(
     "You are executing an AI Company OS task.",
@@ -130,6 +138,9 @@ $promptLines = @(
     "Outcome semantics are strict:",
     "- COMPLETED means you completed the assigned audit, analysis, review or planning deliverable. Use COMPLETED even when you discover P0/P1 defects, release blockers, failed checks or production-readiness issues.",
     "- BLOCKED means you could not complete the assigned agent task itself because evidence, access, authorization or a prerequisite was materially unavailable.",
+    "BLOCKED requires execution_blocker with kind, prerequisite, evidence, resolution_owner, why_role_cannot_resolve and role_can_resolve=false.",
+    "Allowed external kinds: missing_evidence, access_denied, authorization_required, external_decision, unsatisfied_dependency. Cite concrete evidence of the unavailable prerequisite and who can resolve it.",
+    "An output you own but have not produced (including CTO ADRs), product defects, security findings or pending implementation do not establish an external execution blocker. owned_output_pending and role_can_resolve=true are invalid BLOCKED results.",
     "The blockers field is only for execution blockers that prevented task completion. Product defects, release blockers, security findings and QA failures belong in report_markdown/decisions/recommended_next.",
     "If the report contains a substantive completed assessment and no execution prerequisite prevented delivery, outcome must be COMPLETED and blockers should be NONE.",
     "",
@@ -147,6 +158,7 @@ $promptLines = @(
     "verification and decisions must each stay within 2000 characters.",
     "blockers and recommended_next must each stay within 1500 characters.",
     "The report_markdown field must still contain the complete role deliverable within those limits.",
+    $(if ($correctiveContext) { "This is corrective analysis. Address the authoritative corrective findings by revising the previous owner deliverable. Produce the missing role-owned outputs in report_markdown; do not merely repeat their absence as a blocker." } else { "" }),
     "The summary field must be concise.",
     $(if ($requiresConcreteEngineeringPlan) {
         "For Engineering Manager execution planning, populate executable_work using the dedicated JSON schema. report_markdown is narrative context only; the runtime renders the canonical executable work section."
@@ -296,20 +308,22 @@ $routerArgs = @{
     ProjectPath = $root
     Prompt = $prompt
     Context = $context
+    CorrectiveContext = $correctiveContext
     SchemaPath = $schemaPath
     OutputPath = $jsonPath
     Model = $Model
     Role = $owner
     Workload = "analysis"
-}
-
-if ($requiresConcreteEngineeringPlan) {
-    $routerArgs.SemanticValidatorPath = $engineeringPlanValidatorPath
+    SemanticValidatorPath = $analysisValidatorPath
 }
 
 $execution = & $routerPath @routerArgs
 
 if (-not (Test-Path $jsonPath)) { throw "Provider runtime did not produce structured output: $jsonPath" }
+
+# Revalidate before publishing reports/results or changing lifecycle, including
+# alternate routers. The validator also preserves Engineering Manager semantics.
+& $analysisValidatorPath -JsonPath $jsonPath | Out-Null
 
 $result = Get-Content $jsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
 foreach ($field in @("outcome","summary","report_markdown","verification","decisions","blockers","recommended_next","completion_check")) {
@@ -437,7 +451,16 @@ if (-not [string]::IsNullOrWhiteSpace($executionPlanRelative)) {
 }
 
 $changed = $changedParts -join "; "
-& $submit -ProjectPath $root -Id $Id -Outcome $result.outcome -Summary $result.summary -ChangedArtifacts $changed -Verification $result.verification -Decisions $result.decisions -Blockers $result.blockers -RecommendedNext $result.recommended_next
+$submitArgs = @{
+    ProjectPath = $root; Id = $Id; Outcome = $result.outcome
+    Summary = $result.summary; ChangedArtifacts = $changed
+    Verification = $result.verification; Decisions = $result.decisions
+    Blockers = $result.blockers; RecommendedNext = $result.recommended_next
+}
+if ($null -ne $result.execution_blocker) {
+    $submitArgs.ExecutionBlockerJson = $result.execution_blocker | ConvertTo-Json -Depth 10
+}
+& $submit @submitArgs
 
 Write-Host ""
 Write-Host "Agent task completed:" -ForegroundColor Green

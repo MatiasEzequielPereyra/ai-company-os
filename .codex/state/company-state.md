@@ -57,3 +57,26 @@ This authorized workstream is submitted for Orchestrator review; it does not cha
 - Receipt: PENDING; next owner Orchestrator.
 - Architectural follow-up: safe removal of dead writable_allow_paid_fallback; retained for compatibility.
 - Acceptance Run #4: NOT_CREATED / NOT_RUN; merge: NOT_PERFORMED.
+
+## Corrective Analysis Reliability checkpoint
+
+Updated (UTC): 2026-10-03T21:18:05.9171614Z
+
+This isolated authorized workstream is submitted for external review. Unrelated ticket lifecycle statuses are unchanged.
+
+- Base: fd6c187f8c34d72a3da8b63d139b16bb3e6afa40
+- Branch: fix/corrective-analysis-reliability
+- Current handoff: [corrective-analysis-reliability-2026-10-03](../../docs/engineering/handoffs/ai-company-os/corrective-analysis-reliability-2026-10-03.md)
+- Verification: Python 185 PASS; PowerShell 52/52 PASS; npm 2 PASS; installed packed artifact E2E PASS.
+- Run #4: FROZEN_PRESERVED, no execution; receipt PENDING; next owner External Orchestrator.
+- Merge and Run #5: NOT_AUTHORIZED / NOT_PERFORMED.
+
+## Corrective Analysis Reliability minor review successor
+
+Updated (UTC): 2026-10-03T22:06:44.8494388Z
+
+- Current handoff: [minor review successor](../../docs/engineering/handoffs/ai-company-os/corrective-analysis-reliability-re-review-2026-10-03.md)
+- PR41: currently pending Review / QA / Security corrective evidence selection and stale evidence regression coverage.
+- Verification: Python 185 PASS; PowerShell 52/52 PASS; npm 2 PASS; exact installed packed artifact E2E PASS.
+- Run4 FROZEN_PRESERVED; receipt PENDING; next owner External Orchestrator.
+- Merge, real providers and Run5 NOT_PERFORMED.

@@ -17,6 +17,10 @@ param(
 
     [string]$Blockers = "NONE",
 
+    # Analysis runner supplies its validated structured execution impediment.
+    # Optional for existing manual/writable intake callers.
+    [string]$ExecutionBlockerJson = "",
+
     [string]$RecommendedNext = "REVIEW",
 
     [string]$ProjectPath = "."
@@ -91,6 +95,7 @@ $lines=@(
     "## Blockers",
     "",
     $Blockers,
+    $(if ($ExecutionBlockerJson) { "`n## Execution Blocker`n`n" + $ExecutionBlockerJson } else { "" }),
     "",
     "## Recommended Next",
     "",

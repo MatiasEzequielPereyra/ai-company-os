@@ -1,0 +1,58 @@
+[
+  {
+    "path": "npm-bin/package.test.js",
+    "sha256": "C7235E7E9BB32947B9AA2122351EE89709B8286D58D467CC312D14BEEE13469F"
+  },
+  {
+    "path": "schemas/agent-result.schema.json",
+    "sha256": "EE42B2BD93F2E803339895B663D188D2533AC91B522A77B5BF022F0D8A09B60C"
+  },
+  {
+    "path": "schemas/engineering-plan-result.schema.json",
+    "sha256": "128045ADE0661145CF2867409CACE1124B4EAD2AF68D7DD3FEA3F07132590CA6"
+  },
+  {
+    "path": "scripts/build-corrective-analysis-context.ps1",
+    "sha256": "6B8AB772BC405E3219A84EEAB7E76A3B19EA5BB036FF5074A215D6125C29E3FD"
+  },
+  {
+    "path": "scripts/validate-analysis-result-semantics.ps1",
+    "sha256": "368142D828BECEB549C2E879777FB9B8C24F93C70E5C218E002991552997FCFE"
+  },
+  {
+    "path": "scripts/provider-router.ps1",
+    "sha256": "A4E132E214E55F4CE4F826A6575D2E87EF4657623158165EBCEBEDDC5F0994CF"
+  },
+  {
+    "path": "scripts/run-agent-task.ps1",
+    "sha256": "DAC50AFAD9BC38781AFDBCBDC4D57BE8D88C3F60C8D2FFAE0B2FA1529DEE8E33"
+  },
+  {
+    "path": "scripts/submit-task-result.ps1",
+    "sha256": "8833DC32334FAB2E0A25294D60B96C2EDA155151C11F0DAE8923847C0CBC7D7E"
+  },
+  {
+    "path": "scripts/new-project.ps1",
+    "sha256": "86716B74984F165B52B3B5AD8ABF40178ACBA863426C05BA7C94D48F6A9428F8"
+  },
+  {
+    "path": "scripts/install-existing-project.ps1",
+    "sha256": "6C0C3915E9D9ADEB5115FFD1A5B2914E91E5A0E140903982BF4C082091380488"
+  },
+  {
+    "path": "scripts/update-runtime.ps1",
+    "sha256": "FD9283A14CB217F80A6125F667F8B066DF3B0718FE9D7CE0E4F9B53C6CEB3622"
+  },
+  {
+    "path": "test-project/tests/test-analysis-result-semantics.ps1",
+    "sha256": "CD55ADA611DD9D1C1A59A26EA8EE60FC764B2EAD19801CC701A8B5652840CC17"
+  },
+  {
+    "path": "test-project/tests/test-corrective-analysis-context.ps1",
+    "sha256": "3BBC5CF60903BAB3B27AECA683BD436B40B1DCBF08C000DE61810ECEB148667F"
+  },
+  {
+    "path": "test-project/tests/test-corrective-analysis-reliability.ps1",
+    "sha256": "437E06372AB2812B227576BC3D2E2545EA4C729E44308D9DC147ADD929F2460B"
+  }
+]
