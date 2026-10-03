@@ -57,4 +57,3 @@ This authorized workstream is submitted for Orchestrator review; it does not cha
 - Receipt: PENDING; next owner Orchestrator.
 - Architectural follow-up: safe removal of dead writable_allow_paid_fallback; retained for compatibility.
 - Acceptance Run #4: NOT_CREATED / NOT_RUN; merge: NOT_PERFORMED.
-
