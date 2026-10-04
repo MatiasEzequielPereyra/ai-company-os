@@ -68,6 +68,14 @@ function Assert-ManagedProjectRuntime {
         }
     }
 
+    foreach ($relative in @('scripts/providers/invoke-codex.ps1', 'schemas/agent-result.schema.json', 'schemas/engineering-plan-result.schema.json')) {
+        $expectedHash = (Get-FileHash (Join-Path $repoRoot $relative) -Algorithm SHA256).Hash
+        $installedHash = (Get-FileHash (Join-Path $ProjectPath $relative) -Algorithm SHA256).Hash
+        if ($installedHash -ne $expectedHash) {
+            throw "$Scenario has stale Codex schema portability runtime: $relative"
+        }
+    }
+
     $providerConfig = Get-Content (Join-Path $ProjectPath ".codex/provider-config.json") -Raw -Encoding UTF8 | ConvertFrom-Json
     if ((@($providerConfig.analysis_auto_order_by_role.cto) -join ",") -ne "Ollama,OpenRouter,Gemini,Codex,DeepSeek,Grok") {
         throw "$Scenario is missing the canonical CTO analysis fallback policy."
