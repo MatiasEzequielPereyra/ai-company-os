@@ -24,6 +24,7 @@ $tests = @(
     "test-analysis-result-semantics.ps1",
     "test-corrective-analysis-context.ps1",
     "test-corrective-analysis-reliability.ps1",
+    "test-cto-analysis-provider-fallback.ps1",
     "test-task-execution-lock.ps1",
     "test-analysis-context-budget.ps1",
     "test-local-runtime-profile.ps1",

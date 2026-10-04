@@ -34,6 +34,34 @@ If Ollama is unavailable, unreachable, lacks an eligible installed model, or fai
 
 Changing auto_order is an operator/project configuration decision. Do not assume that adding a provider to the config makes it free.
 
+## CTO analysis Auto
+
+CTO analysis has a local-first role override in **.codex/provider-config.json**:
+
+~~~text
+Ollama
+→ OpenRouter
+→ Gemini
+→ Codex
+→ DeepSeek
+→ Grok
+~~~
+
+This follows the existing gate provider order while giving complex architecture analysis a next candidate when local output cannot satisfy the contract. The generic **auto_order** remains Ollama only.
+
+- Ollama is tried first using the existing hardware/role model selection.
+- OpenRouter inherits the configured **openrouter/free** route; no CTO model override is added.
+- Gemini inherits its existing configured model and requires its API key. Its account quota/tier still applies.
+- Codex requires an available authenticated CLI and uses its account quota.
+- Missing credentials, unavailable local runtime, or a missing CLI/adapter are skipped using existing router checks. An unreachable provider fails its attempt; Auto then continues.
+- **allow_paid_fallback=false** continues to skip DeepSeek and Grok in Auto. This existing policy does not guarantee zero cost for Gemini, Codex, or arbitrary operator-selected models.
+- Every candidate must pass JSON-schema and supplied semantic validation. On semantic failure, the router repairs once with the same provider. If that repair also fails, the invalid output is removed and Auto tries the next eligible configured provider.
+- A successful same-provider repair ends routing; explicit provider selection still has no cross-provider fallback. Exhausting every candidate fails closed.
+
+PM analysis deliberately retains the generic local-only order in this scoped CTO correction. PM, QA, Security, and DevOps owner analysis can therefore still exhaust a single local candidate unless the project configures a role override; this is a separate policy decision. Review, QA, and Security **gate** execution already uses the separate multi-provider **gate_auto_order** below. Engineering Manager retains its existing role override.
+
+This configuration changes new installations and explicitly applied configuration updates. It does not alter frozen acceptance fixtures or authorize retrying them.
+
 ## Engineering Manager analysis Auto
 
 Analysis routing can be overridden by role.
@@ -80,7 +108,7 @@ Gate Auto rules:
 - When a gate supplies semantic validation, semantic validation also applies before a candidate result can be accepted.
 - Truncated, invalid, or semantically unusable output is a failed candidate.
 
-General Auto continues to use **auto_order**. Engineering Manager analysis can use **analysis_auto_order_by_role**. Writable Auto continues to use **writable_auto_order**.
+General Auto continues to use **auto_order**. CTO and Engineering Manager analysis use their **analysis_auto_order_by_role** overrides. Writable Auto continues to use **writable_auto_order**.
 
 ## Writable Auto
 

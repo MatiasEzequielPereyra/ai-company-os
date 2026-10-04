@@ -291,6 +291,10 @@ try {
         throw "Runtime update did not add current hardware-aware analysis policy."
     }
 
+    if ((@($providerConfig.analysis_auto_order_by_role.cto) -join ",") -ne "Ollama,OpenRouter,Gemini,Codex,DeepSeek,Grok") {
+        throw "Runtime update must add the missing CTO analysis fallback policy."
+    }
+
     # Local runtime config: preserve project tuning while adding missing profiles.
     $localConfig = Get-Content (Join-Path $tempRoot ".codex\local-runtime-config.json") -Raw -Encoding UTF8 | ConvertFrom-Json
 

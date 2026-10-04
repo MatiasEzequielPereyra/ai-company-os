@@ -99,3 +99,12 @@ Updated (UTC): 2026-10-04T00:05:49.9603430Z
 - taskcli_gitignore_rule explicitly absent; semantic Git preflight and nine new regressions.
 - Baseline5 PASS; preflight PASS; focused19 PASS; full Python204 PASS.
 - Receipt PENDING; next owner External Orchestrator. Runs4/5 preserved; providers NONE; Run6 NOT_CREATED; merge NOT_PERFORMED.
+
+## CTO analysis provider fallback reliability
+
+Updated (UTC): 2026-10-04T05:15:46.2800017Z
+- Base6551d45d38fd1659735f5bf4a4042dce31632166; branch fix/cto-analysis-provider-fallback.
+- Current handoff: [CTO fallback](../../docs/engineering/handoffs/ai-company-os/cto-analysis-provider-fallback-2026-10-04.md)
+- CTO-only role policy fixed; router/validator unchanged; one repair then existing Auto fallback.
+- Local:6 new scenarios PASS; Python204 PASS; PowerShell53 PASS; npm2 PASS; exact installed packed E2E PASS.
+- Receipt PENDING; next owner External Orchestrator. Run6 preserved; providers NONE; no merge or functional acceptance.

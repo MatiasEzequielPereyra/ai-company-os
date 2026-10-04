@@ -42,6 +42,14 @@
     "devops": 90000
   },
   "analysis_auto_order_by_role": {
+    "cto": [
+      "Ollama",
+      "OpenRouter",
+      "Gemini",
+      "Codex",
+      "DeepSeek",
+      "Grok"
+    ],
     "engineering-manager": [
       "OpenRouter",
       "Gemini",
