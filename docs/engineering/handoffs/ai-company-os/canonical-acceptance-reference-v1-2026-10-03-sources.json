@@ -1,0 +1,46 @@
+[
+  {
+    "path": "acceptance/reference-projects/python-task-cli-v1/.gitignore",
+    "sha256": "6E04ADA127A23D3D76B6C16B538D2B02215D3BEEE96CAC38C29DBF9D062FBC31"
+  },
+  {
+    "path": "acceptance/reference-projects/python-task-cli-v1/acceptance-project.json",
+    "sha256": "EBFA72FE4633CB81954A11BD920B9670E3B0CF931963B3A20E186E2281A89E84"
+  },
+  {
+    "path": "acceptance/reference-projects/python-task-cli-v1/preflight.py",
+    "sha256": "6A957A5F2FBDB8019B22050646847CAC13134EB523B17C4CB58505649B317377"
+  },
+  {
+    "path": "acceptance/reference-projects/python-task-cli-v1/pyproject.toml",
+    "sha256": "C92B167D6A89ABD2239E0E5F3C840296F19F9B8C39ECF6ABAE0EAAD7A92E5516"
+  },
+  {
+    "path": "acceptance/reference-projects/python-task-cli-v1/README.md",
+    "sha256": "AD7DEA0B3BAAE3CEB0444441B632C05F2AD1FD35CCC07DC67CF7E2AE434AEA42"
+  },
+  {
+    "path": "acceptance/reference-projects/python-task-cli-v1/taskcli/__init__.py",
+    "sha256": "738826142F32BE4356A098B50538392EDCCB804245B8F559499C083A4855B608"
+  },
+  {
+    "path": "acceptance/reference-projects/python-task-cli-v1/taskcli/__main__.py",
+    "sha256": "68A9C9711327FCC6506B2DD5F0394686FB599776DA43EC6225379C461A170428"
+  },
+  {
+    "path": "acceptance/reference-projects/python-task-cli-v1/tests/test_cli.py",
+    "sha256": "3B29E747E35F392472EBDA396B7C063D17DEB6344212AB6E45073536C24BDA99"
+  },
+  {
+    "path": "acceptance/reference-projects/README.md",
+    "sha256": "6E3EA9746DF5B1BE08193BB19172B32691D3284E0F1109124684CEACA4738D5E"
+  },
+  {
+    "path": "docs/engineering/canonical-acceptance-reference-v1.md",
+    "sha256": "1DCB0B5421B8792808DBEE5D69B4C5F00F8DF546CABAE9CB043FE57B2038AEFF"
+  },
+  {
+    "path": "tests/test_acceptance_reference_project.py",
+    "sha256": "165A7D42A56D09AFA26D7AD0373814AC7E542D817A8969F646098650DB85FE43"
+  }
+]

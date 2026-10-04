@@ -80,3 +80,22 @@ Updated (UTC): 2026-10-03T22:06:44.8494388Z
 - Verification: Python 185 PASS; PowerShell 52/52 PASS; npm 2 PASS; exact installed packed artifact E2E PASS.
 - Run4 FROZEN_PRESERVED; receipt PENDING; next owner External Orchestrator.
 - Merge, real providers and Run5 NOT_PERFORMED.
+
+## Canonical acceptance reference product v1 checkpoint
+
+Updated (UTC): 2026-10-03T23:36:41.8497134Z
+
+- Base: dd2d6b0d114851d4ef7d55687b530c6fd4ca3e1f
+- Branch: test/canonical-acceptance-reference-v1
+- Current handoff: [reference product v1](../../docs/engineering/handoffs/ai-company-os/canonical-acceptance-reference-v1-2026-10-03.md)
+- Delivery: independent list-only Python product, explicit baseline contract and specific deterministic preflight; immutable copies required for future runs.
+- Local verification: baseline5 PASS; preflight PASS; regressions10 PASS; full Python195 PASS; independent product installation PASS; runtime npm payload unchanged217 entries.
+- Receipt PENDING; next owner External Orchestrator. Historical Runs4/5 preserved; provider calls NONE; Run6 NOT_CREATED; merge NOT_PERFORMED.
+
+## Canonical reference v1 PR42 minor review successor
+
+Updated (UTC): 2026-10-04T00:05:49.9603430Z
+- Current handoff: [PR42 minor revision](../../docs/engineering/handoffs/ai-company-os/canonical-acceptance-reference-v1-re-review-2026-10-03.md)
+- taskcli_gitignore_rule explicitly absent; semantic Git preflight and nine new regressions.
+- Baseline5 PASS; preflight PASS; focused19 PASS; full Python204 PASS.
+- Receipt PENDING; next owner External Orchestrator. Runs4/5 preserved; providers NONE; Run6 NOT_CREATED; merge NOT_PERFORMED.

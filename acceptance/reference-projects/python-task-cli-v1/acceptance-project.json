@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "project_id": "python-task-cli-v1",
+  "version": "1.0.0",
+  "root": ".",
+  "language": "python",
+  "python_requires": ">=3.11",
+  "cli": {
+    "argv": [
+      "python",
+      "-B",
+      "-m",
+      "taskcli",
+      "list"
+    ],
+    "expected_stdout": "No tasks.\n",
+    "expected_stderr": "",
+    "expected_exit_code": 0
+  },
+  "baseline_tests": {
+    "argv": [
+      "python",
+      "-B",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tests",
+      "-v"
+    ],
+    "expected_test_count": 5,
+    "expected_exit_code": 0
+  },
+  "capabilities": {
+    "PRESENT": [
+      "list_empty",
+      "argparse_help"
+    ],
+    "INTENTIONALLY_MISSING": [
+      "add",
+      "complete",
+      "remove",
+      "persistence",
+      "stable_ids",
+      "status_persistence",
+      "env_override",
+      "default_storage_file",
+      "taskcli_gitignore_rule"
+    ]
+  },
+  "missing_storage_contract": {
+    "environment_variable": "TASKCLI_DATA_FILE",
+    "default_path": ".taskcli/tasks.json"
+  },
+  "preflight": {
+    "argv": [
+      "python",
+      "-B",
+      "preflight.py"
+    ],
+    "requires": [
+      "Python >=3.11",
+      "Git"
+    ],
+    "required_files": [
+      "acceptance-project.json",
+      "README.md",
+      ".gitignore",
+      "pyproject.toml",
+      "preflight.py",
+      "taskcli/__init__.py",
+      "taskcli/__main__.py",
+      "tests/test_cli.py"
+    ],
+    "forbidden_artifacts": [
+      ".taskcli"
+    ],
+    "product_source_sha256": {
+      "taskcli/__init__.py": "738826142f32be4356a098b50538392edccb804245b8f559499c083a4855b608",
+      "taskcli/__main__.py": "68a9c9711327fcc6506b2dd5f0394686fb599776da43ec6225379c461a170428"
+    },
+    "hash_normalization": "UTF-8 text with CRLF normalized to LF"
+  }
+}
