@@ -190,6 +190,10 @@ Copy-Item $source $OutputPath -Force
     New-FixtureTask -Id "AICO-002" -Status "ACTIVE" -FileName "value2.txt"
     New-FixtureTask -Id "AICO-003" -Status "ACTIVE" -FileName "value3.txt"
     New-FixtureTask -Id "AICO-004" -Status "READY" -FileName "value4.txt"
+    New-FixtureTask -Id "AICO-005" -Status "ACTIVE" -FileName "value5.txt"
+    New-FixtureTask -Id "AICO-006" -Status "ACTIVE" -FileName "value6.txt"
+    Write-NoBom (Join-Path $fixtureRepo 'warn-success.js') "process.stdout.write('NATIVE_STDOUT_SUCCESS\n'); process.stderr.write('NATIVE_STDERR_WARNING_SUCCESS\n'); process.exit(0);"
+    Write-NoBom (Join-Path $fixtureRepo 'warn-failure.js') "process.stdout.write('NATIVE_STDOUT_FAILURE\n'); process.stderr.write('NATIVE_STDERR_WARNING_FAILURE\n'); process.exit(7);"
 
     Write-NoBom (Join-Path $fixtureRepo "docs\engineering\reviews\AICO-004-review-001.md") @"
 # Review
@@ -206,7 +210,7 @@ The prior writable implementation needs correction.
     & git -C $fixtureRepo commit -m "writable runtime fixture" | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "fixture commit failed." }
 
-    foreach ($id in @("AICO-001","AICO-002","AICO-003","AICO-004")) {
+    foreach ($id in @("AICO-001","AICO-002","AICO-003","AICO-004","AICO-005","AICO-006")) {
         & (Join-Path $repoRoot "scripts\new-agent-workspace.ps1") -Id $id -ProjectPath $fixtureRepo -WorkspaceRoot $workspaces | Out-Null
     }
 
@@ -411,6 +415,42 @@ The prior writable implementation needs correction.
         throw "Corrective writable execution did not update the existing worktree diff."
     }
 
+    # Exercise a real native executable under Windows PowerShell ErrorActionPreference=Stop.
+    # A warning on stderr is evidence; only a nonzero exit rejects the change.
+    if ($null -eq (Get-Command node -ErrorAction SilentlyContinue)) { throw 'node is required for native stderr regression.' }
+    foreach ($case in @(
+        @{Id='AICO-005';File='value5.txt';Command='node warn-success.js';Exit=0},
+        @{Id='AICO-006';File='value6.txt';Command='node warn-failure.js';Exit=7}
+    )) {
+        $workspaceFile = Join-Path $workspaces ($case.Id+'\src\'+$case.File)
+        $beforeHash = (Get-FileHash -LiteralPath $workspaceFile -Algorithm SHA256).Hash
+        Set-FakeResult @{
+            outcome='COMPLETED';summary='Native stderr regression';report_markdown='# Native verification fixture'
+            changes=@(@{path=('src/'+$case.File);operation='WRITE';content='native-verified-change';reason='Test native stderr behavior'})
+            verification_commands=@($case.Command);verification='Native verifier';decisions='NONE';blockers='NONE';recommended_next='REVIEW'
+        }
+        $failed = $false
+        try { Invoke-Runner -Id $case.Id } catch {
+            if ($case.Exit -ne 0 -and $_.Exception.Message -match 'exit code 7') { $failed=$true } else { throw }
+        }
+        if ($case.Exit -eq 0) {
+            if ((Get-TaskStatus $case.Id) -ne 'REVIEW') { throw 'Native stderr warning with exit zero must advance to REVIEW.' }
+            $nativeEvidence = Get-Content (Join-Path $fixtureRepo ('docs/engineering/writable-evidence/'+$case.Id+'.md')) -Raw
+            foreach ($marker in @('NATIVE_STDOUT_SUCCESS','NATIVE_STDERR_WARNING_SUCCESS')) {
+                if ($nativeEvidence -notmatch $marker) { throw ('Native output missing from evidence: '+$marker) }
+            }
+            if ((Get-Content -LiteralPath $workspaceFile -Raw) -ne 'native-verified-change') { throw 'Successful native verification lost validated change.' }
+        }
+        else {
+            if (-not $failed) { throw 'Nonzero native verifier must fail with actual exit code.' }
+            if ((Get-FileHash -LiteralPath $workspaceFile -Algorithm SHA256).Hash -ne $beforeHash) { throw 'Native verification failure must restore exact original bytes.' }
+            if ((Get-TaskStatus $case.Id) -ne 'ACTIVE') { throw 'Native verification failure must leave task ACTIVE.' }
+            if (Test-Path (Join-Path $fixtureRepo ('docs/engineering/results/'+$case.Id+'-result-001.md'))) { throw 'Failed native verification must not publish task result.' }
+            if (Test-Path (Join-Path $fixtureRepo ('docs/engineering/agent-reports/'+$case.Id+'.md'))) { throw 'Failed native verification must not publish owner report.' }
+        }
+        if ((Get-Content (Join-Path $fixtureRepo ('src/'+$case.File)) -Raw) -ne 'original') { throw 'Native fixture execution modified primary checkout product file.' }
+    }
+
     $runnerText = Get-Content (Join-Path $repoRoot "scripts\run-writable-agent.ps1") -Raw -Encoding UTF8
 
     foreach ($requiredPromptContract in @(
@@ -438,7 +478,7 @@ finally {
     $env:XAI_API_KEY = $savedXai
 
     if (Test-Path $fixtureRepo) {
-        foreach ($id in @("AICO-001","AICO-002","AICO-003","AICO-004")) {
+        foreach ($id in @("AICO-001","AICO-002","AICO-003","AICO-004","AICO-005","AICO-006")) {
             $workspace = Join-Path $workspaces $id
             if (Test-Path $workspace) {
                 try { & git -C $fixtureRepo worktree remove $workspace --force 2>$null | Out-Null } catch {}
