@@ -213,28 +213,35 @@ foreach ($lineValue in $scanLines) {
         continue
     }
 
-    $actionMatch = [regex]::Match($line,$writeActionPattern)
-    if (-not $actionMatch.Success) {
-        continue
-    }
-
-    $actionTail = $line.Substring($actionMatch.Index + $actionMatch.Length)
-    $boundaryMatch = [regex]::Match($actionTail,$contextBoundaryPattern)
-
-    if ($boundaryMatch.Success) {
-        $actionTail = $actionTail.Substring(0,$boundaryMatch.Index)
-    }
-
-    $lineCandidates = New-Object System.Collections.Generic.List[string]
-    Add-CandidatesFromText -Text $actionTail -TargetList $lineCandidates
-
-    if ($lineCandidates.Count -gt 0) {
-        foreach ($candidate in $lineCandidates) {
-            if (-not $candidates.Contains($candidate)) {
-                [void]$candidates.Add($candidate)
+    # A single requirement may contain several positive write clauses. A
+    # reference boundary ends only its current clause, not later write actions.
+    $actionMatches = @(
+        foreach ($match in [regex]::Matches($line,$writeActionPattern)) {
+            $prefix = $line.Substring(0,$match.Index)
+            # Later actions must start a new imperative clause. Verbs inside a
+            # reference narrative (for example "describes how to modify") do
+            # not reopen the writable target scope after a contextual boundary.
+            if ($prefix -notmatch $contextBoundaryPattern -or
+                $prefix -match '(?i)(?:[.;:]\s*|\b(?:and|then|y|luego)\s+)$') {
+                $match
             }
         }
+    )
+    for ($actionIndex = 0; $actionIndex -lt $actionMatches.Count; $actionIndex++) {
+        $actionMatch = $actionMatches[$actionIndex]
+        $tailStart = $actionMatch.Index + $actionMatch.Length
+        $tailEnd = if ($actionIndex + 1 -lt $actionMatches.Count) {
+            $actionMatches[$actionIndex + 1].Index
+        }
+        else { $line.Length }
+        $actionTail = $line.Substring($tailStart,$tailEnd - $tailStart)
+        $boundaryMatch = [regex]::Match($actionTail,$contextBoundaryPattern)
+        if ($boundaryMatch.Success) {
+            $actionTail = $actionTail.Substring(0,$boundaryMatch.Index)
+        }
+        Add-CandidatesFromText -Text $actionTail -TargetList $candidates
     }
+
 }
 
 $resolved = New-Object System.Collections.Generic.List[object]
