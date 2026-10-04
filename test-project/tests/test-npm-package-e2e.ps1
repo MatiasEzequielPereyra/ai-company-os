@@ -67,6 +67,14 @@ function Assert-ManagedProjectRuntime {
             throw "$Scenario is missing required managed runtime artifact: $relative"
         }
     }
+
+    $providerConfig = Get-Content (Join-Path $ProjectPath ".codex/provider-config.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ((@($providerConfig.analysis_auto_order_by_role.cto) -join ",") -ne "Ollama,OpenRouter,Gemini,Codex,DeepSeek,Grok") {
+        throw "$Scenario is missing the canonical CTO analysis fallback policy."
+    }
+    if ([bool]$providerConfig.allow_paid_fallback) {
+        throw "$Scenario must preserve disabled paid fallback."
+    }
 }
 
 $oldHome = $env:HOME

@@ -1,0 +1,42 @@
+[
+  {
+    "path": ".codex/provider-config.json",
+    "sha256": "F533167C33ED7216CBD26DEA48A5F3FFE4BDFAB77C3CFFA38B5E5B3B75A2DA34"
+  },
+  {
+    "path": "docs/operations/provider-runtime.md",
+    "sha256": "6053D2F21C418143705CCE7C06F0EF92CD6DFADB979C078CA31054221C7686A6"
+  },
+  {
+    "path": "docs/engineering/cto-analysis-provider-fallback.md",
+    "sha256": "A1751AD1146492425473B6D7A910C354CE55BE1A61F83FC923A1DABA4FB62BB0"
+  },
+  {
+    "path": "test-project/tests/test-cto-analysis-provider-fallback.ps1",
+    "sha256": "C2A9AFCEFDBB370F9815F892793CAA08EB9797577E5FECBD330C1211ECCE8E91"
+  },
+  {
+    "path": "test-project/tests/run-all-smoke-tests.ps1",
+    "sha256": "36F6C9C20AFA571C9A78C9AA1E58E0B88A0F75CE6D8C0081FE6F45FCEA4B9ED8"
+  },
+  {
+    "path": "test-project/tests/test-update-runtime-contract.ps1",
+    "sha256": "D067C92819C9BE6DBAB547C59E5BF4FD4E9104F049B08ED66B5A3D05F5BEA8D0"
+  },
+  {
+    "path": "test-project/tests/test-npm-package-e2e.ps1",
+    "sha256": "2C7C64C5D07E5F78D31802E67FF0FCFBB93C05086E026D8771EDAA792E3D5B16"
+  },
+  {
+    "path": "scripts/provider-router.ps1",
+    "sha256": "020E11B39069B3704122646593A81FD3CF3F9FCF4CB316EAF98F38ECFE4E1AD5"
+  },
+  {
+    "path": "scripts/validate-analysis-result-semantics.ps1",
+    "sha256": "948507DBF47E6FD9A3C0AB7A3EC21A927ACAF73C887DF3302C008C2FB57528D5"
+  },
+  {
+    "path": "schemas/agent-result.schema.json",
+    "sha256": "34495AED91DDEF3A1B62706D135841D6DA5F418997DFE215C21532E964106468"
+  }
+]
