@@ -108,14 +108,21 @@ if ($gateRunner -notmatch 'ValidateSet\("Auto","Codex","OpenRouter","Gemini","Ol
 foreach ($needle in @(
     'local-runtime\\resolve-local-runtime\.ps1',
     'local-runtime-config\.json',
-    'GateContextMaxChars',
-    'GateArtifactMaxChars',
     '-Role \$reviewerRole',
     '-Workload "gate"'
 )) {
     if ($gateRunner -notmatch $needle) {
         throw "Gate runner reconciliation contract missing: $needle"
     }
+}
+
+# Candidate budgets are applied centrally, after the complete authoritative
+# envelope has been assembled. Per-artifact clipping would lose gate evidence.
+if ($router -notmatch 'GateContextMaxChars' -or $router -notmatch 'Limit-GateProviderContext') {
+    throw "Provider router must enforce the hardware gate context budget"
+}
+if ($gateRunner -match '\$content\s*=\s*\$content\.Substring') {
+    throw "Gate runner must not truncate authoritative artifacts before routing"
 }
 
 if ($router -notmatch 'localRuntimeConfigPath') {
