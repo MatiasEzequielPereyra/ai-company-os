@@ -44,7 +44,7 @@ The baseline contract and source are checked separately with:
 python -B preflight.py
 ```
 
-Preflight uses only the standard library, runs the actual CLI and baseline tests, and rejects missing files, inconsistent metadata or drift in the v1 source. Its negative checks verify that the deliberately absent capabilities were not introduced. It uses temporary storage outside this product and leaves no runtime artifacts here. A successful run prints JSON with `status: PASS`, `project_id: python-task-cli-v1`, the five baseline tests and zero provider calls.
+Preflight uses Python standard-library code and requires Git. It runs the actual CLI and baseline tests, and rejects missing files, inconsistent metadata or drift in the v1 source. Its negative checks verify that the deliberately absent capabilities were not introduced. Git evaluates the copied `.gitignore` in a temporary isolated repository; an effective ignore rule for `.taskcli` or its task data advances the deliberately absent `taskcli_gitignore_rule` capability and fails preflight. Comments and effective negations follow Git semantics; user/global excludes do not affect this check. It uses temporary storage outside this product and leaves no runtime artifacts here. A successful run prints JSON with `status: PASS`, `project_id: python-task-cli-v1`, the five baseline tests and zero provider calls.
 
 ## Current limitations
 

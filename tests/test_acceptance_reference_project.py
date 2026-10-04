@@ -3,6 +3,8 @@ import importlib.util
 import json
 from pathlib import Path
 import shutil
+import subprocess
+import sys
 
 import pytest
 
@@ -89,3 +91,35 @@ def test_package_version_mismatch_is_rejected(reference_copy):
     metadata.write_text(metadata.read_text(encoding="utf-8").replace('version = "1.0.0"', 'version = "9.0.0"'), encoding="utf-8")
     with pytest.raises(PREFLIGHT.PreflightError, match="metadata contradicts"):
         PREFLIGHT.check(reference_copy)
+
+
+@pytest.mark.parametrize("rule", [".taskcli/", ".taskcli", "/.taskcli/", ".task*/", "*\n!.taskcli/\n"])
+def test_effective_taskcli_ignore_is_rejected(reference_copy, rule):
+    with (reference_copy / ".gitignore").open("ab") as stream:
+        stream.write(("\n" + rule + "\n").encode("utf-8"))
+    result = subprocess.run([sys.executable, "-B", "preflight.py"], cwd=reference_copy,
+                            capture_output=True, timeout=30)
+    assert result.returncode == 1
+    assert b"taskcli_gitignore_rule is implemented" in result.stderr
+    assert not (reference_copy / ".git").exists()
+    assert not (reference_copy / ".taskcli").exists()
+
+
+@pytest.mark.parametrize("rule", ["# .taskcli/", ".taskcli/tasks.json\n!.taskcli/tasks.json", ".task*/\n!.taskcli/"])
+def test_non_effective_ignore_patterns_are_allowed(reference_copy, rule):
+    with (reference_copy / ".gitignore").open("ab") as stream:
+        stream.write(("\n" + rule + "\n").encode("utf-8"))
+    assert PREFLIGHT.check(reference_copy)["status"] == "PASS"
+
+
+def test_ambient_git_configuration_is_not_used(reference_copy, tmp_path, monkeypatch):
+    excludes = tmp_path / "global-ignore"
+    excludes.write_text(".taskcli/\n", encoding="utf-8")
+    config = tmp_path / "global-config"
+    config.write_text('[core]\nexcludesFile = "' + excludes.as_posix() + '"\n', encoding="utf-8")
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(config))
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "core.excludesFile")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", str(excludes))
+    monkeypatch.setenv("GIT_DIR", str(tmp_path / "must-not-be-used"))
+    assert PREFLIGHT.check(reference_copy)["status"] == "PASS"

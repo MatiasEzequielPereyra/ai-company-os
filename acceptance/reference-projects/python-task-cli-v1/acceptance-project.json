@@ -44,7 +44,8 @@
       "stable_ids",
       "status_persistence",
       "env_override",
-      "default_storage_file"
+      "default_storage_file",
+      "taskcli_gitignore_rule"
     ]
   },
   "missing_storage_contract": {
@@ -56,6 +57,10 @@
       "python",
       "-B",
       "preflight.py"
+    ],
+    "requires": [
+      "Python >=3.11",
+      "Git"
     ],
     "required_files": [
       "acceptance-project.json",

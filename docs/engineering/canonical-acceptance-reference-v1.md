@@ -1,12 +1,12 @@
 # Canonical Acceptance Reference Project v1 — design and verification
 
 Project: AI Company OS
-Revision: 1
+Revision: 2
 Updated: 2026-10-03 (UTC)
 Updated by: CODEX-ORCHESTRATOR
 Base: dd2d6b0d114851d4ef7d55687b530c6fd4ca3e1f
 Branch: test/canonical-acceptance-reference-v1
-Status: READY_FOR_EXTERNAL_ORCHESTRATOR_REVIEW
+Status: READY_FOR_EXTERNAL_ORCHESTRATOR_RE_REVIEW
 
 ## Authorization
 
@@ -37,3 +37,8 @@ Final local results: Python reference unittest 5/5 PASS; canonical preflight PAS
 The first focused regression invocation used default TEMP and hit access errors; a fresh authorized --basetemp resolved them, with final green logs preserved. Runtime Python execution used the bundled Python3.12 executable because unqualified python is unavailable in this process. Source/test commands in the portable contract intentionally use the operator's selected Python >=3.11.
 
 External evidence: Z:/repos/ai-company-os/temp-tests/canonical-acceptance-reference-v1-evidence. Protected-state before/after covers acceptance, both historical harnesses and the dirty checkout. No Run6, Company OS product installation, provider inference, TUI E2E or merge performed.
+## PR42 minor review revision
+
+The externally requested taskcli_gitignore_rule capability is now explicitly INTENTIONALLY_MISSING. Preflight requires Git and checks effective ignore semantics in a disposable repository with only the copied product .gitignore, no ambient Git configuration or templates. Either ignored .taskcli/ or .taskcli/tasks.json fails closed with the capability name. Product source, canonical .gitignore and five baseline tests are unchanged.
+
+Verification for this revision: baseline 5/5 PASS; canonical preflight PASS; 19/19 focused preflight regressions PASS; full Python suite 204/204 PASS. Nine added cases cover effective rules (including required .taskcli/ subprocess failure), comments, negations and ambient configuration isolation. Final SHA, GitHub CI and protected Run4/5 evidence are recorded in the successor handoff's external checkpoint.

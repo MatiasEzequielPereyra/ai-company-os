@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -13,7 +14,7 @@ import tomllib
 
 PRESENT = ["list_empty", "argparse_help"]
 MISSING = ["add", "complete", "remove", "persistence", "stable_ids",
-           "status_persistence", "env_override", "default_storage_file"]
+           "status_persistence", "env_override", "default_storage_file", "taskcli_gitignore_rule"]
 # Filled from the reviewed baseline source; changing product behavior requires a new version.
 PRODUCT_SHA256 = {
     "taskcli/__init__.py": "738826142f32be4356a098b50538392edccb804245b8f559499c083a4855b608",
@@ -34,6 +35,7 @@ EXPECTED = {
     "missing_storage_contract": {"environment_variable": "TASKCLI_DATA_FILE", "default_path": ".taskcli/tasks.json"},
     "preflight": {
         "argv": ["python", "-B", "preflight.py"],
+        "requires": ["Python >=3.11", "Git"],
         "required_files": ["acceptance-project.json", "README.md", ".gitignore", "pyproject.toml", "preflight.py",
                            "taskcli/__init__.py", "taskcli/__main__.py", "tests/test_cli.py"],
         "forbidden_artifacts": [".taskcli"],
@@ -45,6 +47,34 @@ EXPECTED = {
 
 class PreflightError(ValueError):
     """The project no longer represents the approved reference baseline."""
+
+
+def check_gitignore(root: Path) -> None:
+    """Use Git's ignore semantics in a disposable repo, never the product repo."""
+    git = shutil.which("git")
+    if not git:
+        raise PreflightError("Git is required for taskcli_gitignore_rule preflight")
+    env = {key: value for key, value in os.environ.items() if not key.upper().startswith("GIT_")}
+    env.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_SYSTEM=os.devnull,
+               GIT_CONFIG_GLOBAL=os.devnull, GIT_TERMINAL_PROMPT="0")
+    with tempfile.TemporaryDirectory(prefix="taskcli-ignore-preflight-") as directory:
+        probe = Path(directory)
+        (probe / ".gitignore").write_bytes((root / ".gitignore").read_bytes())
+        (probe / ".taskcli").mkdir()
+        template = probe / "empty-template"
+        template.mkdir()
+        args = [git, "-c", f"core.excludesFile={os.devnull}"]
+        initialized = subprocess.run([*args, "init", "--quiet", f"--template={template}"],
+                                     cwd=probe, env=env, capture_output=True, timeout=30)
+        if initialized.returncode:
+            raise PreflightError("Cannot initialize isolated taskcli_gitignore_rule probe")
+        for target in (".taskcli/", ".taskcli/tasks.json"):
+            result = subprocess.run([*args, "check-ignore", "--no-index", "--quiet", target],
+                                    cwd=probe, env=env, capture_output=True, timeout=30)
+            if result.returncode == 0:
+                raise PreflightError(f"Intentionally missing capability taskcli_gitignore_rule is implemented: {target} is effectively ignored")
+            if result.returncode != 1:
+                raise PreflightError("Git taskcli_gitignore_rule probe failed")
 
 
 def check(root: Path) -> dict[str, object]:
@@ -74,6 +104,7 @@ def check(root: Path) -> dict[str, object]:
             raise PreflightError(f"Product source drift: {relative}")
     if (root / ".taskcli").exists():
         raise PreflightError("Unexpected persistent .taskcli storage")
+    check_gitignore(root)
     with tempfile.TemporaryDirectory(prefix="taskcli-preflight-") as directory:
         sentinel = Path(directory) / "external-data.json"
         env = os.environ.copy()

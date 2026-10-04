@@ -91,3 +91,11 @@ Updated (UTC): 2026-10-03T23:36:41.8497134Z
 - Delivery: independent list-only Python product, explicit baseline contract and specific deterministic preflight; immutable copies required for future runs.
 - Local verification: baseline5 PASS; preflight PASS; regressions10 PASS; full Python195 PASS; independent product installation PASS; runtime npm payload unchanged217 entries.
 - Receipt PENDING; next owner External Orchestrator. Historical Runs4/5 preserved; provider calls NONE; Run6 NOT_CREATED; merge NOT_PERFORMED.
+
+## Canonical reference v1 PR42 minor review successor
+
+Updated (UTC): 2026-10-04T00:05:49.9603430Z
+- Current handoff: [PR42 minor revision](../../docs/engineering/handoffs/ai-company-os/canonical-acceptance-reference-v1-re-review-2026-10-03.md)
+- taskcli_gitignore_rule explicitly absent; semantic Git preflight and nine new regressions.
+- Baseline5 PASS; preflight PASS; focused19 PASS; full Python204 PASS.
+- Receipt PENDING; next owner External Orchestrator. Runs4/5 preserved; providers NONE; Run6 NOT_CREATED; merge NOT_PERFORMED.
