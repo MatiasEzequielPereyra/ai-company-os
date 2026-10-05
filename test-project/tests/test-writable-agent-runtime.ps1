@@ -15,6 +15,9 @@ $savedOpenRouter = $env:OPENROUTER_API_KEY
 $savedDeepSeek = $env:DEEPSEEK_API_KEY
 $savedXai = $env:XAI_API_KEY
 $savedPath = $env:PATH
+# Resolve the required native test executable before running nested fixture scripts.
+$fixturePython = Get-Command python -ErrorAction SilentlyContinue
+if ($null -eq $fixturePython) { throw 'Python is required for real stdlib unittest regression.' }
 
 function Write-NoBom {
     param([string]$Path,[string]$Value)
@@ -451,13 +454,48 @@ The prior writable implementation needs correction.
             # Historical runner output joined exactly these canonical paths with a space.
             Write-NoBom (Join-Path $fixtureRepo 'docs/engineering/results/AICO-004-result-999.md') "Task: AICO-004`nOwner: frontend`nOutcome: COMPLETED`n## Changed Artifacts`ndocs/engineering/writable-evidence/AICO-004.md docs/engineering/agent-reports/AICO-004.md`n## Verification`nPrevious real verification"
         }
+        $currentPath = Join-Path $workspaces 'AICO-004/src/value4.txt'
+        $currentSource = [IO.File]::ReadAllText($currentPath)
+        $currentHash = (Get-FileHash -LiteralPath $currentPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        $extraPath = Join-Path $workspaces 'AICO-004/src/extra.py'
+        $extraSource = "# UNTRACKED_CURRENT_SOURCE`n" + ('# full corrective source evidence'+"`n")*100
+        Write-NoBom $extraPath $extraSource
+        $extraHash = (Get-FileHash -LiteralPath $extraPath -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($kind -eq 'QA') {
+            $captureGuard = Join-Path $fixtureRepo '.codex/captured-corrective.txt'
+            if (Test-Path $captureGuard) { Remove-Item -LiteralPath $captureGuard }
+            $secretPath = Join-Path $workspaces 'AICO-004/.env'
+            Write-NoBom $secretPath 'SYNTHETIC_SECRET_MUST_NOT_ENTER_CONTEXT'
+            $secretRejected = $false
+            try { Invoke-Runner -Id 'AICO-004' } catch { $secretRejected = $true }
+            Remove-Item -LiteralPath $secretPath
+            if (-not $secretRejected -or (Test-Path $captureGuard)) { throw 'Secret candidate context must fail before provider invocation.' }
+        }
         Set-FakeResult @{outcome='COMPLETED';summary='Gate correction';report_markdown='# Gate correction';changes=@(@{path='src/value4.txt';operation='WRITE';content=('corrected-'+$kind);reason='Current findings'});verification_commands=@('git diff --check');verification='Verified';decisions='NONE';blockers='NONE';recommended_next='REVIEW'}
-        Invoke-Runner -Id 'AICO-004'
+        $policyPathForCapture = Join-Path $fixtureRepo '.codex/writable-policy.json'
+        $originalPolicyForCapture = Get-Content -LiteralPath $policyPathForCapture -Raw -Encoding UTF8
+        if ($kind -eq 'QA') {
+            # A valid corrective write may be tiny even when the protected
+            # candidate + primary comparison evidence is larger. The read
+            # envelope must not be rejected merely by max_total_write_bytes.
+            $tightPolicy = $originalPolicyForCapture | ConvertFrom-Json
+            $tightPolicy.max_total_write_bytes = 100
+            Write-NoBom $policyPathForCapture ($tightPolicy | ConvertTo-Json -Depth 20)
+        }
+        try {
+            Invoke-Runner -Id 'AICO-004'
+        }
+        finally {
+            if ($kind -eq 'QA') { Write-NoBom $policyPathForCapture $originalPolicyForCapture }
+        }
         $resultFiles = @(Get-ChildItem (Join-Path $fixtureRepo 'docs/engineering/results') -Filter 'AICO-004-result-*.md' | Sort-Object { [int]([regex]::Match($_.BaseName,'(\d+)$').Value) })
         $latestResult = [IO.File]::ReadAllText($resultFiles[-1].FullName)
         if (-not $latestResult.Contains('docs/engineering/writable-evidence/AICO-004.md; docs/engineering/agent-reports/AICO-004.md')) { throw 'Writable result did not delimit canonical changed artifacts.' }
         if ((Get-TaskStatus 'AICO-004') -ne 'REVIEW') { throw "$kind corrective writable retry failed." }
         $captured = [IO.File]::ReadAllText((Join-Path $fixtureRepo '.codex/captured-corrective.txt'))
+        foreach ($exact in @($currentSource,$currentHash,$extraSource,$extraHash,'original')) {
+            if (-not $captured.Contains($exact)) { throw 'Protected writable source content, raw-byte hash or primary comparison missing.' }
+        }
         $marker = if ($kind -eq 'QA') {'QA_AUTHORITATIVE'} else {'SECURITY_AUTHORITATIVE'}
         $whole = $marker+'_START'+$(if ($kind -eq 'QA') {'Q'*4000} else {'S'*4000})+$marker+'_END'
         if (-not $captured.Contains($whole)) { throw 'Corrective findings were partially truncated.' }
@@ -509,7 +547,6 @@ The prior writable implementation needs correction.
         if ((Get-Content (Join-Path $fixtureRepo ('src/'+$case.File)) -Raw) -ne 'original') { throw 'Native fixture execution modified primary checkout product file.' }
     }
 
-    if ($null -eq (Get-Command python -ErrorAction SilentlyContinue)) { throw 'Python is required for real stdlib unittest regression.' }
     foreach ($case in @(
         @{Id='AICO-007';File='value7.txt';Tests='tests';Pass=$true},
         @{Id='AICO-008';File='value8.txt';Tests='tests_failure';Pass=$false}

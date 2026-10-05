@@ -241,6 +241,72 @@ function Resolve-SafeChangePath {
     }
 }
 
+function Get-CorrectiveSourceEvidence {
+    param([string]$Workspace,[string]$ProjectRoot,[string[]]$Paths,[object]$Policy)
+
+    $sourcePaths = @($Paths | Sort-Object -Unique)
+    $requiredContextMaxFiles = if ($null -ne $Policy.required_context_max_files) { [int]$Policy.required_context_max_files } else { 8 }
+    $requiredContextMaxTotalBytes = if ($null -ne $Policy.required_context_max_total_bytes) { [long]$Policy.required_context_max_total_bytes } else { 100000L }
+    $captureFileLimit = [int]$Policy.max_changed_files + $requiredContextMaxFiles
+    # Corrective evidence contains both the current candidate and the primary
+    # comparison view. Do not reuse the write-set ceiling as if those reads were
+    # new writes; derive a bounded capture ceiling from both existing policies.
+    $captureBytesLimit = 2L * ([long]$Policy.max_total_write_bytes + $requiredContextMaxTotalBytes)
+    if ($sourcePaths.Count -gt $captureFileLimit) {
+        throw "Corrective source inventory exceeds combined writable/required context file-count limit: $captureFileLimit"
+    }
+    $builder = New-Object Text.StringBuilder
+    [void]$builder.AppendLine("===== BEGIN CORRECTIVE IMPLEMENTATION SOURCE =====")
+    [void]$builder.AppendLine("Provenance: current file captures; hashes identify these bytes, not an immutable owner snapshot.")
+    [void]$builder.AppendLine("CANDIDATE SOURCE is the current isolated task worktree. PRIMARY PROJECT COMPARISON is the current primary project source, provided for comparison only; it is not the candidate or a claimed immutable Git baseline.")
+    $totalBytes = [long]0
+    foreach ($relative in $sourcePaths) {
+        if ($relative -match '[\r\n]') { throw "Corrective source path contains a newline." }
+        foreach ($capture in @(
+            [pscustomobject]@{ Root=$Workspace; Label='CANDIDATE SOURCE' },
+            [pscustomobject]@{ Root=$ProjectRoot; Label='PRIMARY PROJECT COMPARISON' }
+        )) {
+            $safe = Resolve-SafeChangePath -Workspace $capture.Root -RelativePath $relative -Policy $Policy
+            [void]$builder.AppendLine("===== $($capture.Label): $($safe.Relative) =====")
+            if (-not (Test-Path -LiteralPath $safe.FullPath)) {
+                [void]$builder.AppendLine("ABSENT IN THIS CAPTURE (missing or deleted); no file content supplied.")
+                continue
+            }
+            if (-not (Test-Path -LiteralPath $safe.FullPath -PathType Leaf)) {
+                throw "Corrective source path is not a regular file: $($safe.Relative)"
+            }
+            $stream = $null
+            $memory = $null
+            $sha = $null
+            try {
+                $stream = [IO.File]::Open($safe.FullPath,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
+                if ($stream.Length -gt [long]$Policy.max_file_bytes) {
+                    throw "Corrective source exceeds max_file_bytes policy: $($safe.Relative)"
+                }
+                if ($totalBytes + $stream.Length -gt $captureBytesLimit) {
+                    throw "Corrective source inventory exceeds combined writable/required context capture limit."
+                }
+                $memory = New-Object IO.MemoryStream
+                $stream.CopyTo($memory)
+                $bytes = $memory.ToArray()
+                $totalBytes += $bytes.LongLength
+                $sha = [Security.Cryptography.SHA256]::Create()
+                $digest = ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-','').ToLowerInvariant()
+                $utf8 = New-Object Text.UTF8Encoding($false,$true)
+                $text = $utf8.GetString($bytes)
+                [void]$builder.AppendLine("SHA256: $digest; Bytes: $($bytes.LongLength)")
+                [void]$builder.AppendLine($text)
+            } finally {
+                if ($null -ne $sha) { $sha.Dispose() }
+                if ($null -ne $memory) { $memory.Dispose() }
+                if ($null -ne $stream) { $stream.Dispose() }
+            }
+        }
+    }
+    [void]$builder.AppendLine("===== END CORRECTIVE IMPLEMENTATION SOURCE =====")
+    return $builder.ToString()
+}
+
 function Assert-SafeArgument {
     param([string]$Argument)
 
@@ -602,6 +668,14 @@ $requiredSourceText = @(
 ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
 
 $requiredFiles = @(& $requiredResolverPath -ProjectPath $workspace -SourceText $requiredSourceText -PolicyPath $policyPath)
+
+if ($corrective) {
+    # Findings alone cannot support a code repair. Keep the exact required and
+    # already changed product source in the same protected provider envelope.
+    $correctiveSourcePaths = @(@($requiredFiles) + @($baselineChanged) | Sort-Object -Unique)
+    $correctiveSource = Get-CorrectiveSourceEvidence -Workspace $workspace -ProjectRoot $root -Paths $correctiveSourcePaths -Policy $policy
+    $correctiveContext += [Environment]::NewLine + $correctiveSource
+}
 
 if ($requiredFiles.Count -gt 0) {
     Write-Host ("Writable required files: " + ($requiredFiles -join ", ")) -ForegroundColor DarkGray
