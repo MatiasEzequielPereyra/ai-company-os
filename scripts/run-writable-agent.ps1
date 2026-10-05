@@ -88,16 +88,35 @@ function Get-ConfiguredModel {
     return [string]$property.Value
 }
 
+function Invoke-GitOutput {
+    param([string[]]$Arguments,[string]$FailureMessage)
+
+    # Git read commands may emit LF/CRLF warnings while exiting zero.
+    # Keep stdout only and restore strict preferences before checking failure.
+    $savedErrorActionPreference = $ErrorActionPreference
+    $nativePreference = Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue
+    $savedNativePreference = if ($null -ne $nativePreference) { $nativePreference.Value } else { $null }
+    try {
+        $ErrorActionPreference = "Continue"
+        $PSNativeCommandUseErrorActionPreference = $false
+        $output = @(& git @Arguments 2>$null)
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $savedErrorActionPreference
+        if ($null -ne $nativePreference) { $PSNativeCommandUseErrorActionPreference = $savedNativePreference }
+        else { Remove-Variable -Name PSNativeCommandUseErrorActionPreference -Scope Local -ErrorAction SilentlyContinue }
+    }
+    if ($exitCode -ne 0) { throw $FailureMessage }
+    return $output
+}
+
 function Get-ChangedPaths {
     param([string]$Workspace)
 
     $paths = @()
-
-    $tracked = @(& git -C $Workspace diff --name-only -- 2>$null)
-    if ($LASTEXITCODE -ne 0) { throw "git diff --name-only failed in writable workspace." }
-
-    $untracked = @(& git -C $Workspace ls-files --others --exclude-standard 2>$null)
-    if ($LASTEXITCODE -ne 0) { throw "git ls-files --others failed in writable workspace." }
+    $tracked = @(Invoke-GitOutput -Arguments @("-C",$Workspace,"diff","--name-only","--") -FailureMessage "git diff --name-only failed in writable workspace.")
+    $untracked = @(Invoke-GitOutput -Arguments @("-C",$Workspace,"ls-files","--others","--exclude-standard") -FailureMessage "git ls-files --others failed in writable workspace.")
 
     foreach ($path in @($tracked + $untracked)) {
         $value = ([string]$path).Trim().Replace("\","/")
@@ -494,8 +513,7 @@ if ([string]::Equals(
 
 $registered = $false
 $workspaceFull = [System.IO.Path]::GetFullPath($workspace).TrimEnd([char[]]@("\","/"))
-$worktreeLines = @(& git -C $root worktree list --porcelain 2>$null)
-if ($LASTEXITCODE -ne 0) { throw "git worktree list failed." }
+$worktreeLines = @(Invoke-GitOutput -Arguments @("-C",$root,"worktree","list","--porcelain") -FailureMessage "git worktree list failed.")
 
 foreach ($line in $worktreeLines) {
     if (-not $line.StartsWith("worktree ")) { continue }
@@ -649,8 +667,7 @@ $tempRoot = Join-Path (Get-AicoTempPath) "ai-company-os-writable"
 New-Item -ItemType Directory -Force -Path $tempRoot | Out-Null
 $outputPath = Join-Path $tempRoot ($Id + "-" + [Guid]::NewGuid().ToString("N") + ".json")
 
-$primaryStatusBefore = (@(& git -C $root status --porcelain --untracked-files=no 2>$null) -join [Environment]::NewLine)
-if ($LASTEXITCODE -ne 0) { throw "Unable to snapshot primary checkout status." }
+$primaryStatusBefore = (@(Invoke-GitOutput -Arguments @("-C",$root,"status","--porcelain","--untracked-files=no") -FailureMessage "Unable to snapshot primary checkout status.") -join [Environment]::NewLine)
 
 $execution = $null
 $result = $null
@@ -923,15 +940,13 @@ try {
         }
     }
 
-    $primaryStatusAfter = (@(& git -C $root status --porcelain --untracked-files=no 2>$null) -join [Environment]::NewLine)
-    if ($LASTEXITCODE -ne 0) { throw "Unable to verify primary checkout status." }
+    $primaryStatusAfter = (@(Invoke-GitOutput -Arguments @("-C",$root,"status","--porcelain","--untracked-files=no") -FailureMessage "Unable to verify primary checkout status.") -join [Environment]::NewLine)
 
     if ($primaryStatusAfter -cne $primaryStatusBefore) {
         throw "Primary checkout changed during writable source execution. Refusing to submit the result."
     }
 
-    $diffLines = @(& git -C $workspace diff --no-ext-diff -- 2>$null)
-    if ($LASTEXITCODE -ne 0) { throw "Unable to obtain writable git diff." }
+    $diffLines = @(Invoke-GitOutput -Arguments @("-C",$workspace,"diff","--no-ext-diff","--") -FailureMessage "Unable to obtain writable git diff.")
 
     $diffText = $diffLines -join [Environment]::NewLine
     $diffHash = ""

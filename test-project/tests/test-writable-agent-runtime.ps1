@@ -195,6 +195,8 @@ Copy-Item $source $OutputPath -Force
     New-FixtureTask -Id "AICO-006" -Status "ACTIVE" -FileName "value6.txt"
     New-FixtureTask -Id "AICO-007" -Status "ACTIVE" -FileName "value7.txt"
     New-FixtureTask -Id "AICO-008" -Status "ACTIVE" -FileName "value8.txt"
+    New-FixtureTask -Id "AICO-009" -Status "ACTIVE" -FileName "value9.txt"
+    Write-NoBom (Join-Path $fixtureRepo 'src/value9.txt') "original`r`n"
     Write-NoBom (Join-Path $fixtureRepo 'tests/test_native.py') "import unittest`nclass NativeSuccess(unittest.TestCase):`n    def test_actual_product_verification(self):`n        self.assertEqual(2 + 2, 4)`n"
     Write-NoBom (Join-Path $fixtureRepo 'tests_failure/test_native.py') "import unittest`nclass NativeFailure(unittest.TestCase):`n    def test_actual_product_verification(self):`n        self.assertEqual(2 + 2, 5)`n"
     Write-NoBom (Join-Path $fixtureRepo 'warn-success.js') "process.stdout.write('NATIVE_STDOUT_SUCCESS\n'); process.stderr.write('NATIVE_STDERR_WARNING_SUCCESS\n'); process.exit(0);"
@@ -212,10 +214,12 @@ The prior writable implementation needs correction.
     & git -C $fixtureRepo config user.email "aico-test@example.invalid"
     & git -C $fixtureRepo config user.name "AI Company OS Test"
     & git -C $fixtureRepo add .
+    & git -c core.autocrlf=true -C $fixtureRepo add src/value9.txt
     & git -C $fixtureRepo commit -m "writable runtime fixture" | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "fixture commit failed." }
+    & git -C $fixtureRepo config core.autocrlf true
 
-    foreach ($id in @("AICO-001","AICO-002","AICO-003","AICO-004","AICO-005","AICO-006","AICO-007","AICO-008")) {
+    foreach ($id in @("AICO-001","AICO-002","AICO-003","AICO-004","AICO-005","AICO-006","AICO-007","AICO-008","AICO-009")) {
         & (Join-Path $repoRoot "scripts\new-agent-workspace.ps1") -Id $id -ProjectPath $fixtureRepo -WorkspaceRoot $workspaces | Out-Null
     }
 
@@ -505,6 +509,44 @@ The prior writable implementation needs correction.
         try { Get-SafeCommand -Command $command -Policy $verificationPolicy | Out-Null } catch { $rejected=$true }
         if (-not $rejected) { throw ('Unittest authorization weakened command safety: '+$command) }
     }
+    Set-FakeResult @{
+        outcome='COMPLETED';summary='Git warning inventory regression';report_markdown='# Complete validated native inventory'
+        changes=@(
+            @{path='src/value9.txt';operation='WRITE';content="changed-with-LF`n";reason='Tracked LF implementation'},
+            @{path='src/new9.txt';operation='WRITE';content="new-untracked-file`n";reason='New implementation artifact'}
+        )
+        verification_commands=@('node warn-success.js');verification='Native stdout and warning pass';decisions='NONE';blockers='NONE';recommended_next='REVIEW'
+    }
+    Invoke-Runner -Id 'AICO-009'
+    if ((Get-TaskStatus 'AICO-009') -ne 'REVIEW') { throw 'Git newline warning with exit zero must not reject valid writable execution.' }
+    $inventoryWorkspace = Join-Path $workspaces 'AICO-009'
+    $nativeStderr = Join-Path $tempParent 'real-git-newline-warning.txt'
+    $savedPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference='Continue'
+        $realGitPaths = @(& git -C $inventoryWorkspace diff --name-only -- 2> $nativeStderr)
+        $realGitExit = $LASTEXITCODE
+    } finally { $ErrorActionPreference=$savedPreference }
+    $warningText = Get-Content -LiteralPath $nativeStderr -Raw
+    if ($realGitExit -ne 0 -or $warningText -notmatch 'LF.*CRLF|CRLF.*LF') { throw 'Native inventory fixture must produce an actual Git LF/CRLF warning while exiting zero.' }
+    $inventoryFunction=$runnerAst.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Get-ChangedPaths'},$true)
+    $gitOutputFunction=$runnerAst.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Invoke-GitOutput'},$true)
+    Invoke-Expression $gitOutputFunction.Extent.Text
+    Invoke-Expression $inventoryFunction.Extent.Text
+    $nativePreferenceBefore = Get-Variable PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue
+    $inventory=@(Get-ChangedPaths -Workspace $inventoryWorkspace)
+    if ($inventory.Count -ne 2 -or $inventory -notcontains 'src/value9.txt' -or $inventory -notcontains 'src/new9.txt') { throw ('Git inventory must contain exact tracked/untracked paths only: '+($inventory -join ',')) }
+    if ($ErrorActionPreference -ne 'Stop') { throw 'Inventory must restore error preference after successful Git warning.' }
+    $nonRepo=Join-Path $tempParent 'not-a-git-repo'; New-Item -ItemType Directory -Path $nonRepo | Out-Null
+    $failed=$false
+    try { Get-ChangedPaths -Workspace $nonRepo | Out-Null } catch { $failed=$_.Exception.Message -match 'git diff --name-only failed' }
+    if (-not $failed) { throw 'Git inventory failure must throw rather than report empty inventory.' }
+    if ($ErrorActionPreference -ne 'Stop') { throw 'Inventory must restore error preference after Git failure.' }
+    $nativePreferenceAfter = Get-Variable PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue
+    if (($null -eq $nativePreferenceBefore) -ne ($null -eq $nativePreferenceAfter)) { throw 'Git inventory must preserve presence or absence of native error preference.' }
+    if ($null -ne $nativePreferenceBefore -and $nativePreferenceAfter.Value -ne $nativePreferenceBefore.Value) { throw 'Git inventory must restore native error preference value.' }
+    $inventoryEvidence=Get-Content (Join-Path $fixtureRepo 'docs/engineering/writable-evidence/AICO-009.md') -Raw
+    foreach ($path in @('src/value9.txt','src/new9.txt')) { if ($inventoryEvidence -notmatch [regex]::Escape($path)) { throw ('Changed artifact missing from evidence: '+$path) } }
     $runnerText = Get-Content (Join-Path $repoRoot "scripts\run-writable-agent.ps1") -Raw -Encoding UTF8
 
     foreach ($requiredPromptContract in @(
@@ -533,7 +575,7 @@ finally {
     $env:PATH = $savedPath
 
     if (Test-Path $fixtureRepo) {
-        foreach ($id in @("AICO-001","AICO-002","AICO-003","AICO-004","AICO-005","AICO-006","AICO-007","AICO-008")) {
+        foreach ($id in @("AICO-001","AICO-002","AICO-003","AICO-004","AICO-005","AICO-006","AICO-007","AICO-008","AICO-009")) {
             $workspace = Join-Path $workspaces $id
             if (Test-Path $workspace) {
                 try { & git -C $fixtureRepo worktree remove $workspace --force 2>$null | Out-Null } catch {}
