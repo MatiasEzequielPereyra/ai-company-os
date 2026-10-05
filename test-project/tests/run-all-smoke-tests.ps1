@@ -37,6 +37,7 @@ $tests = @(
     "test-review-gate-provider-reliability.ps1",
     "test-gate-evidence-preservation.ps1",
     "test-gate-authoritative-context.ps1",
+    "test-implementation-gate-candidate-context.ps1",
     "test-codex-quota-preservation.ps1",
     "test-codex-schema-portability.ps1",
     "test-provider-planning-focused-e2e.ps1",

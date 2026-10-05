@@ -1,0 +1,12 @@
+# Implementation gate candidate context
+
+Writable implementation produces source changes in the task's registered Git worktree. The primary checkout remains the product baseline. Independent gates previously received the owner report and generic primary-checkout context without the actual candidate source, allowing a gate to evaluate the list-only baseline instead of the implementation under review.
+
+For a task declaring writable implementation evidence, gate context now includes the registered task worktree recorded by that evidence, matching branch, complete changed tracked and untracked source, byte counts, and SHA256 hashes. Custom workspace roots remain valid when Git registration, repository identity and task branch all match. These sources form part of the protected authoritative suffix and must survive candidate provider budgeting in full. Deletions are represented explicitly. Missing or unregistered workspaces, wrong paths, protected or secret files, reparse points, and policy read limits stop execution before inference.
+
+`test-implementation-gate-candidate-context.ps1` creates a disposable real Git repository with a distinctive primary baseline and a registered `aico/aico-006` candidate containing different tracked source plus untracked storage code. Actual Review, QA, and Security constructors route through the real provider router to a fake capture adapter. An oversized generic prefix is reduced while exact candidate source, source hashes, and branch provenance remain within a 22000-character provider budget. The capture adapter deliberately throws after capture so no lifecycle write occurs.
+
+Negative cases cover wrong/missing canonical workspace, an unrelated repository with valid HEAD, matching task branch and dirty source substituted at the registered path, an escaping metadata path, missing declared evidence, secret-sensitive source, per-file and total source-size limits, file-count limits, and a real directory junction to external source. The substituted repository must fail specifically because its Git common directory differs from the primary repository. A deleted tracked source is preserved as an explicit DELETE operation. Existing authoritative gate context, evidence preservation, and provider budgeting regressions remain green. No real provider or acceptance fixture is used.
+
+
+Path existence and metadata checks use literal filesystem semantics so wildcard metacharacters in valid worktree/source names cannot bypass reparse-point protections.
