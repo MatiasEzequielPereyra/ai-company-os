@@ -60,7 +60,7 @@ throw 'CAPTURE_COMPLETE_NO_PROVIDER_NO_LIFECYCLE'
         $capture=Invoke-GateCapture $gate
         Assert-True ($capture.Contains($changed) -and $capture.Contains($storage)) ($gate+' must receive full candidate implementation and untracked storage source.')
         foreach($path in @('src/taskcli/__main__.py','src/taskcli/storage.py')) {
-            $hash=(Get-FileHash (Join-Path $candidate $path) -Algorithm SHA256).Hash.ToLowerInvariant()
+            $hash=(Get-FileHash -LiteralPath (Join-Path $candidate $path) -Algorithm SHA256).Hash.ToLowerInvariant()
             Assert-True ($capture.ToLowerInvariant().Contains($hash)) ($gate+' missing exact candidate source hash '+$path)
         }
         Assert-True ($capture.Length -le 22000) ($gate+' protected candidate envelope exceeded provider budget.')
