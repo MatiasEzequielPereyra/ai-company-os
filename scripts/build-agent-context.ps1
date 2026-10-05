@@ -208,7 +208,7 @@ foreach ($relative in $required) {
 $allowedExtensions = @(
     ".md",".txt",".json",".toml",".yml",".yaml",
     ".ts",".tsx",".js",".jsx",".mjs",".cjs",
-    ".html",".css",".scss",".sql",".ps1",".sh"
+    ".html",".css",".scss",".sql",".ps1",".sh",".py"
 )
 
 $allFiles = @(

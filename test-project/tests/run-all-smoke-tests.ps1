@@ -53,6 +53,7 @@ $tests = @(
     "test-writable-ollama-context-budget.ps1",
     "test-writable-authorization-guard.ps1",
     "test-writable-context-resolution.ps1",
+    "test-python-writable-source-context.ps1",
     "test-tui-runtime-integration-contract.ps1",
     "test-workflow-profiles.ps1",
     "test-end-to-end-code-change.ps1",
