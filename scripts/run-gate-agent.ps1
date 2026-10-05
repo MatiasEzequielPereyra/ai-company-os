@@ -58,6 +58,134 @@ function Add-Artifact {
     [void]$Builder.AppendLine($content)
 }
 
+function Invoke-CandidateGit {
+    param([string[]]$Arguments)
+    $savedPreference = $ErrorActionPreference
+    $nativePreference = Get-Variable PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue
+    $savedNative = if ($null -ne $nativePreference) { $nativePreference.Value } else { $null }
+    try {
+        $ErrorActionPreference = "Continue"
+        $PSNativeCommandUseErrorActionPreference = $false
+        $lines = @(& git @Arguments 2>$null)
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $savedPreference
+        if ($null -ne $nativePreference) { $PSNativeCommandUseErrorActionPreference = $savedNative }
+        else { Remove-Variable PSNativeCommandUseErrorActionPreference -Scope Local -ErrorAction SilentlyContinue }
+    }
+    if ($exitCode -ne 0) { throw "Unable to inspect authoritative implementation candidate with Git." }
+    return $lines
+}
+
+function Add-ImplementationCandidate {
+    param([System.Text.StringBuilder]$Builder,[string]$Root,[string]$TaskId,[string]$TaskContent,[string]$ReportContent)
+    $evidencePath = Join-Path $Root ("docs\engineering\writable-evidence\" + $TaskId + ".md")
+    $declared = $ReportContent -match ('(?i)writable-evidence[\\/]' + [regex]::Escape($TaskId) + '\.md')
+    if (-not (Test-Path $evidencePath -PathType Leaf) -and -not $declared) { return }
+    if ((Read-Field $TaskContent "Work kind") -cne "IMPLEMENTATION") { return }
+    if (-not (Test-Path $evidencePath -PathType Leaf)) { throw "Declared writable implementation evidence is missing: $evidencePath" }
+    $evidenceContent = Get-Content $evidencePath -Raw -Encoding UTF8
+    $workspaceField = Read-Field $evidenceContent "Worktree"
+    $branch = "aico/" + $TaskId.ToLowerInvariant()
+    if ([string]::IsNullOrWhiteSpace($workspaceField) -or -not [IO.Path]::IsPathRooted($workspaceField)) {
+        throw "Writable implementation candidate evidence must contain an absolute worktree path."
+    }
+    $workspace = [IO.Path]::GetFullPath($workspaceField).TrimEnd('\','/')
+    $rootFull = [IO.Path]::GetFullPath($Root).TrimEnd('\','/')
+    if ([string]::Equals($workspace,$rootFull,[StringComparison]::OrdinalIgnoreCase)) {
+        throw "Writable implementation candidate cannot be the primary checkout."
+    }
+    if (-not (Test-Path $workspace -PathType Container)) { throw "Writable implementation candidate worktree is missing: $workspace" }
+    if ((Get-Item $workspace -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        throw "Writable implementation candidate worktree cannot be a reparse point."
+    }
+    $registered = $false
+    $recordPath = ""
+    foreach ($line in @(Invoke-CandidateGit -Arguments @("-C",$Root,"worktree","list","--porcelain"))) {
+        if ($line -match '^worktree (.+)$') { $recordPath = [IO.Path]::GetFullPath($Matches[1]).TrimEnd('\','/') }
+        if ($line -ceq ("branch refs/heads/" + $branch) -and [string]::Equals($recordPath,$workspace,[StringComparison]::OrdinalIgnoreCase)) { $registered = $true }
+    }
+    # Registration metadata alone may survive a replaced worktree directory.
+    # Both Git views must resolve to the same repository common directory.
+    $rootCommon = (@(Invoke-CandidateGit -Arguments @("-C",$Root,"rev-parse","--git-common-dir")) -join '').Trim()
+    $candidateCommon = (@(Invoke-CandidateGit -Arguments @("-C",$workspace,"rev-parse","--git-common-dir")) -join '').Trim()
+    if ([string]::IsNullOrWhiteSpace($rootCommon) -or [string]::IsNullOrWhiteSpace($candidateCommon)) {
+        throw "Writable implementation candidate repository identity is missing."
+    }
+    if (-not [IO.Path]::IsPathRooted($rootCommon)) { $rootCommon = Join-Path $Root $rootCommon }
+    if (-not [IO.Path]::IsPathRooted($candidateCommon)) { $candidateCommon = Join-Path $workspace $candidateCommon }
+    $rootCommon = [IO.Path]::GetFullPath($rootCommon).TrimEnd([char[]]@("\","/"))
+    $candidateCommon = [IO.Path]::GetFullPath($candidateCommon).TrimEnd([char[]]@("\","/"))
+    if (-not [string]::Equals($rootCommon,$candidateCommon,[StringComparison]::OrdinalIgnoreCase)) {
+        throw "Writable implementation candidate belongs to a different Git repository."
+    }
+    $actualBranch = (@(Invoke-CandidateGit -Arguments @("-C",$workspace,"branch","--show-current")) -join '').Trim()
+    if (-not $registered -or $actualBranch -cne $branch -or (Read-Field $evidenceContent "Branch") -cne $branch) {
+        throw "Writable implementation candidate branch/registration does not match the task."
+    }
+    $policyPath = Join-Path $Root '.codex\writable-policy.json'
+    if (-not (Test-Path $policyPath -PathType Leaf)) { throw "Writable candidate policy is missing." }
+    $policy = Get-Content $policyPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $tracked = @(Invoke-CandidateGit -Arguments @("-C",$workspace,"-c","core.quotePath=false","diff","--name-only","HEAD","--"))
+    $untracked = @(Invoke-CandidateGit -Arguments @("-C",$workspace,"-c","core.quotePath=false","ls-files","--others","--exclude-standard"))
+    $paths = @(@($tracked + $untracked) | Sort-Object -Unique)
+    if ($paths.Count -eq 0) { throw "Writable implementation candidate has no changed source files." }
+    if ($paths.Count -gt [int]$policy.max_changed_files) { throw "Writable implementation candidate exceeds policy file-count limit." }
+    [void]$Builder.AppendLine('')
+    [void]$Builder.AppendLine('===== WRITABLE IMPLEMENTATION CANDIDATE =====')
+    [void]$Builder.AppendLine("Worktree: $workspace")
+    [void]$Builder.AppendLine("Branch: $branch")
+    [void]$Builder.AppendLine('Provenance: current registered task worktree state captured for this gate; hashes describe this capture, not an immutable owner snapshot.')
+    [void]$Builder.AppendLine('Evidence type: authoritative actual implementation candidate; primary repository source is baseline comparison only.')
+    $totalBytes = 0L
+    foreach ($pathValue in $paths) {
+        $relative = ([string]$pathValue).Replace('\','/')
+        $segments = @($relative -split '/')
+        if ([IO.Path]::IsPathRooted($relative) -or $segments -contains '..' -or $segments -contains '.' -or $segments -contains '' -or $relative -match '[\r\n]') { throw "Unsafe writable implementation candidate path: $relative" }
+        $lower = $relative.ToLowerInvariant()
+        foreach ($prefixValue in @($policy.protected_path_prefixes)) {
+            $prefix = ([string]$prefixValue).Replace('\','/').TrimEnd('/').ToLowerInvariant()
+            if ($lower -eq $prefix -or $lower.StartsWith($prefix + '/')) { throw "Protected writable implementation candidate path: $relative" }
+        }
+        foreach ($pattern in @($policy.secret_name_patterns)) {
+            if ($lower -match [string]$pattern) { throw "Secret-sensitive writable implementation candidate path: $relative" }
+        }
+        $fullPath = [IO.Path]::GetFullPath((Join-Path $workspace $relative))
+        if (-not $fullPath.StartsWith($workspace + [IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)) { throw "Writable implementation candidate path escapes worktree." }
+        $current = $fullPath
+        while (-not [string]::Equals($current,$workspace,[StringComparison]::OrdinalIgnoreCase)) {
+            if (Test-Path $current) {
+                if ((Get-Item $current -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Writable implementation candidate path traverses a reparse point: $relative" }
+            }
+            $current = Split-Path $current -Parent
+        }
+        [void]$Builder.AppendLine('')
+        [void]$Builder.AppendLine("Repository-relative path: $relative")
+        if (-not (Test-Path $fullPath -PathType Leaf)) {
+            [void]$Builder.AppendLine('Candidate operation: DELETE (absent from current worktree)')
+            continue
+        }
+        $stream = [IO.File]::Open($fullPath,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
+        $sha = [Security.Cryptography.SHA256]::Create()
+        try {
+            $length = $stream.Length
+            $totalBytes += $length
+            if ($length -gt [long]$policy.max_file_bytes -or $totalBytes -gt [long]$policy.max_total_write_bytes) { throw "Writable implementation candidate exceeds policy source-size limit: $relative" }
+            $hash = ([BitConverter]::ToString($sha.ComputeHash($stream))).Replace('-','').ToLowerInvariant()
+            $stream.Position = 0
+            $reader = New-Object IO.StreamReader($stream,[Text.Encoding]::UTF8,$true,1024,$true)
+            try { $content = $reader.ReadToEnd() } finally { $reader.Dispose() }
+        }
+        finally { $sha.Dispose(); $stream.Dispose() }
+        [void]$Builder.AppendLine("SHA256: $hash")
+        [void]$Builder.AppendLine("Bytes: $length")
+        [void]$Builder.AppendLine('Candidate operation: CURRENT SOURCE')
+        [void]$Builder.AppendLine('')
+        [void]$Builder.AppendLine($content)
+    }
+}
+
 function Get-ConcreteStrings {
     param([object]$Value)
 
@@ -275,6 +403,8 @@ if ($Gate -eq "Security") {
     Add-Artifact -Builder $evidence -Root $root -Path $qaPath -Label "QA GATE" -MaxChars $artifactMaxChars
 }
 
+Add-ImplementationCandidate -Builder $evidence -Root $root -TaskId $Id -TaskContent $taskContent -ReportContent (Get-Content $reportPath -Raw -Encoding UTF8)
+
 $promptLines = @(
     "You are executing an independent AI Company OS quality gate.",
     "",
@@ -296,6 +426,7 @@ $promptLines = @(
     "Reject/fail only when the report or task delivery itself is materially incomplete, unsupported, contradictory, outside role authority, or fails the assigned acceptance criteria.",
     "Do not invent repository evidence.",
     "Use only the supplied context and artifacts.",
+    "When WRITABLE IMPLEMENTATION CANDIDATE is supplied, evaluate its full source as the authoritative actual implementation; primary repository source is only baseline comparison, never the candidate implementation.",
     "Explicit gate artifacts are authoritative supplied evidence when they include a Repository-relative path.",
     "An explicit gate artifact remains authoritative even when its path is intentionally excluded from the generic repository inventory.",
     "Do not infer that an explicit gate artifact is missing merely because it is absent from the generic repository inventory.",
