@@ -707,6 +707,7 @@ $prompt = @(
     "",
     "Outcome semantics:",
     "- COMPLETED means you produced a complete implementation change set ready for local application and verification.",
+    "- For an authoritative corrective retry with an existing implementation candidate, report-only correction may return changes=[] and real verification commands. Express the corrected owner handoff in report_markdown; never WRITE or DELETE agent reports, writable evidence, dispatch packets, work requests, plans or other control-plane files in the source worktree.",
     "- BLOCKED means implementation cannot be safely produced from the supplied evidence. BLOCKED must return no changes and no verification commands.",
     "",
     "TASK FILE:",
@@ -870,8 +871,12 @@ if ($result.outcome -ne "COMPLETED") {
     throw "Unsupported writable outcome: $($result.outcome)"
 }
 
-if ($changes.Count -lt 1) {
-    throw "COMPLETED writable result must contain at least one change."
+# The existing candidate was already captured through the safe-path/source
+# guards before provider invocation. An authoritative corrective retry may
+# repair only its role-owned report without fabricating a source operation.
+$reportOnlyCorrective = ($corrective -and $baselineChanged.Count -gt 0 -and $changes.Count -eq 0)
+if ($changes.Count -lt 1 -and -not $reportOnlyCorrective) {
+    throw "COMPLETED writable result must contain at least one change unless correcting a report for an existing safe implementation candidate."
 }
 
 if ($verificationCommands.Count -lt 1) {
@@ -961,7 +966,7 @@ try {
         }
     }
 
-    if ($effectiveChanges -lt 1) {
+    if ($effectiveChanges -lt 1 -and -not $reportOnlyCorrective) {
         throw "Writable provider proposed no effective file changes."
     }
 
