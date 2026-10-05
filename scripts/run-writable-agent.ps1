@@ -245,8 +245,15 @@ function Get-CorrectiveSourceEvidence {
     param([string]$Workspace,[string]$ProjectRoot,[string[]]$Paths,[object]$Policy)
 
     $sourcePaths = @($Paths | Sort-Object -Unique)
-    if ($sourcePaths.Count -gt [int]$Policy.max_changed_files) {
-        throw "Corrective source inventory exceeds max_changed_files policy."
+    $requiredContextMaxFiles = if ($null -ne $Policy.required_context_max_files) { [int]$Policy.required_context_max_files } else { 8 }
+    $requiredContextMaxTotalBytes = if ($null -ne $Policy.required_context_max_total_bytes) { [long]$Policy.required_context_max_total_bytes } else { 100000L }
+    $captureFileLimit = [int]$Policy.max_changed_files + $requiredContextMaxFiles
+    # Corrective evidence contains both the current candidate and the primary
+    # comparison view. Do not reuse the write-set ceiling as if those reads were
+    # new writes; derive a bounded capture ceiling from both existing policies.
+    $captureBytesLimit = 2L * ([long]$Policy.max_total_write_bytes + $requiredContextMaxTotalBytes)
+    if ($sourcePaths.Count -gt $captureFileLimit) {
+        throw "Corrective source inventory exceeds combined writable/required context file-count limit: $captureFileLimit"
     }
     $builder = New-Object Text.StringBuilder
     [void]$builder.AppendLine("===== BEGIN CORRECTIVE IMPLEMENTATION SOURCE =====")
@@ -276,8 +283,8 @@ function Get-CorrectiveSourceEvidence {
                 if ($stream.Length -gt [long]$Policy.max_file_bytes) {
                     throw "Corrective source exceeds max_file_bytes policy: $($safe.Relative)"
                 }
-                if ($totalBytes + $stream.Length -gt [long]$Policy.max_total_write_bytes) {
-                    throw "Corrective source inventory exceeds max_total_write_bytes policy."
+                if ($totalBytes + $stream.Length -gt $captureBytesLimit) {
+                    throw "Corrective source inventory exceeds combined writable/required context capture limit."
                 }
                 $memory = New-Object IO.MemoryStream
                 $stream.CopyTo($memory)
