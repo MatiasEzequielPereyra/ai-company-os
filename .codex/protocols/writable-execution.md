@@ -72,6 +72,8 @@ A task returned to `READY` after `CHANGES_REQUIRED` may reuse its existing task 
 
 The runtime reactivates it through the normal lifecycle guard, applies the correction on top of the existing worktree state, verifies it, and submits a new result.
 
+An authoritative corrective retry may correct only its owner handoff report when an existing policy-safe implementation candidate diff is present. In that case `changes=[]` is permitted, real verification commands remain required and are executed, and the runtime publishes `report_markdown` through its canonical control-plane path. Fresh implementation still requires an effective source change; a no-op WRITE does not qualify as report-only correction. Providers must not WRITE or DELETE agent reports, writable evidence, dispatch packets, work requests, plans, or other protected operational artifacts in the task source worktree.
+
 ## Prohibited automatic actions
 
 Writable execution never performs:

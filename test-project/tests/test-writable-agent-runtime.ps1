@@ -502,11 +502,71 @@ The prior writable implementation needs correction.
         if (-not $captured.Contains($marker+'_START') -or -not $captured.Contains($marker+'_END')) { throw "$kind full corrective findings lost." }
         if ($captured.Contains('STALE_REVIEW_MARKER') -or ($kind -eq 'Security' -and $captured.Contains('QA_AUTHORITATIVE_START'))) { throw 'Stale successful gate findings contaminated correction.' }
     }
+    # Documentation-only correction publishes through the canonical intake,
+    # without asking the provider to write control-plane files or product bytes.
+    function Reset-ReportCorrection {
+        New-FixtureTask -Id 'AICO-004' -Status 'ACTIVE' -FileName 'value4.txt'
+        [IO.File]::AppendAllText((Join-Path $fixtureRepo 'tasks/AICO-004.md'),"`n- 2026-10-04T03:00:00Z - security - SECURITY -> READY - Security gate failed.`n")
+    }
+    function Report-OnlyPayload([object[]]$Changes,[string]$Command) {
+        return @{outcome='COMPLETED';summary='Correct report';report_markdown='# Corrected substantive owner deliverable';changes=@($Changes);verification_commands=@($Command);verification='Actual verification';decisions='NONE';blockers='NONE';recommended_next='REVIEW'}
+    }
+    $candidateFile = Join-Path $workspaces 'AICO-004/src/value4.txt'
+    $candidateHash = (Get-FileHash $candidateFile -Algorithm SHA256).Hash
+    $extraHashBefore = (Get-FileHash (Join-Path $workspaces 'AICO-004/src/extra.py') -Algorithm SHA256).Hash
+    Reset-ReportCorrection
+    Set-FakeResult (Report-OnlyPayload @() 'git diff --check')
+    Invoke-Runner -Id 'AICO-004'
+    if ((Get-TaskStatus 'AICO-004') -ne 'REVIEW') { throw 'Report-only corrective result did not reach REVIEW.' }
+    if ((Get-FileHash $candidateFile -Algorithm SHA256).Hash -ne $candidateHash -or (Get-FileHash (Join-Path $workspaces 'AICO-004/src/extra.py') -Algorithm SHA256).Hash -ne $extraHashBefore) { throw 'Report-only correction changed candidate source bytes.' }
+    if (-not ([IO.File]::ReadAllText((Join-Path $fixtureRepo 'docs/engineering/agent-reports/AICO-004.md'))).Contains('Corrected substantive owner deliverable')) { throw 'Report-only correction not published canonically.' }
+    # Report-only verification failure preserves the previously submitted candidate.
+    Reset-ReportCorrection
+    $resultCount = @(Get-ChildItem (Join-Path $fixtureRepo 'docs/engineering/results') -Filter 'AICO-004-result-*.md').Count
+    Set-FakeResult (Report-OnlyPayload @() 'node warn-failure.js')
+    $failed = $false
+    try { Invoke-Runner -Id 'AICO-004' } catch { $failed = $_.Exception.Message -match 'exit code 7' }
+    if (-not $failed -or (Get-TaskStatus 'AICO-004') -ne 'ACTIVE' -or (Get-FileHash $candidateFile -Algorithm SHA256).Hash -ne $candidateHash -or @(Get-ChildItem (Join-Path $fixtureRepo 'docs/engineering/results') -Filter 'AICO-004-result-*.md').Count -ne $resultCount) { throw 'Failed report-only verification mutated lifecycle/candidate/result.' }
+    $workspaceReportPath = Join-Path $workspaces 'AICO-004/docs/engineering/agent-reports/AICO-004.md'
+    $workspaceReportHash = (Get-FileHash $workspaceReportPath -Algorithm SHA256).Hash
+    foreach ($operation in @('WRITE','DELETE')) {
+        Reset-ReportCorrection
+        $reportWrite = @{path='docs/engineering/agent-reports/AICO-004.md';operation=$operation;content='FORBIDDEN_CANONICAL_WRITE';reason='Invalid control write'}
+        Set-FakeResult (Report-OnlyPayload @($reportWrite) 'git diff --check')
+        $failed = $false
+        try { Invoke-Runner -Id 'AICO-004' } catch { $failed = $true }
+        if (-not $failed -or -not (Test-Path $workspaceReportPath) -or (Get-FileHash $workspaceReportPath -Algorithm SHA256).Hash -ne $workspaceReportHash) { throw 'Provider wrote/deleted canonical owner report in candidate.' }
+    }
+    Reset-ReportCorrection
+    $noop = @{path='src/value4.txt';operation='WRITE';content=[IO.File]::ReadAllText($candidateFile);reason='No-op masquerading as correction'}
+    Set-FakeResult (Report-OnlyPayload @($noop) 'git diff --check')
+    $failed = $false
+    try { Invoke-Runner -Id 'AICO-004' } catch { $failed = $true }
+    if (-not $failed) { throw 'No-op WRITE bypassed effective-change guard.' }
+    # A fresh task cannot submit COMPLETED with zero changes.
+    Set-FakeResult (Report-OnlyPayload @() 'git diff --check')
+    $failed = $false
+    try { Invoke-Runner -Id 'AICO-002' } catch { $failed = $true }
+    if (-not $failed -or (Get-TaskStatus 'AICO-002') -ne 'ACTIVE') { throw 'Fresh zero-change implementation bypassed guard.' }
+    # Dirty canonical control data alone never constitutes a reusable candidate.
+    New-FixtureTask -Id 'AICO-003' -Status 'ACTIVE' -FileName 'value3.txt'
+    [IO.File]::AppendAllText((Join-Path $fixtureRepo 'tasks/AICO-003.md'),"`n- 2026-10-04T03:00:00Z - qa - QA -> READY - QA gate failed.`n")
+    Write-NoBom (Join-Path $fixtureRepo 'docs/engineering/qa/AICO-003-qa.md') "# QA Gate - AICO-003`nOutcome: FAIL`n## Findings`nCorrect report"
+    Write-NoBom (Join-Path $fixtureRepo 'docs/engineering/results/AICO-003-result-001.md') "Task: AICO-003`nOwner: frontend`nOutcome: COMPLETED"
+    Write-NoBom (Join-Path $fixtureRepo 'docs/engineering/agent-reports/AICO-003.md') "# Agent Report - AICO-003`nOwner: frontend`nPrior report"
+    $invalidControl = Join-Path $workspaces 'AICO-003/docs/engineering/agent-reports/AICO-003.md'
+    Write-NoBom $invalidControl 'SYNTHETIC_CONTROL_ONLY_DIRTY'
+    Remove-Item -LiteralPath (Join-Path $fixtureRepo '.codex/captured-corrective.txt') -ErrorAction SilentlyContinue
+    $failed = $false
+    try { Invoke-Runner -Id 'AICO-003' } catch { $failed = $true }
+    if (-not $failed -or (Test-Path (Join-Path $fixtureRepo '.codex/captured-corrective.txt'))) { throw 'Control-only dirty candidate reached provider.' }
+    Remove-Item -LiteralPath $invalidControl
+
     # A later successful canonical review invalidates the failed Security source.
     New-FixtureTask -Id 'AICO-004' -Status 'ACTIVE' -FileName 'value4.txt'
     [IO.File]::AppendAllText((Join-Path $fixtureRepo 'tasks/AICO-004.md'),"`n- 2026-10-04T02:00:00Z - reviewer - REVIEW -> QA - Independent review approved.`n")
     $capturePath = Join-Path $fixtureRepo '.codex/captured-corrective.txt'
-    Remove-Item -LiteralPath $capturePath
+    Remove-Item -LiteralPath $capturePath -ErrorAction SilentlyContinue
     $staleRejected = $false
     try { Invoke-Runner -Id 'AICO-004' } catch { $staleRejected = $_.Exception.Message -match 'clean' }
     if (-not $staleRejected -or (Test-Path $capturePath)) { throw 'Stale corrective gate permitted dirty workspace/provider call.' }
