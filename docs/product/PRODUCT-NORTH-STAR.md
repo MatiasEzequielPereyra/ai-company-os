@@ -1,8 +1,8 @@
 # AI Company OS — Product North Star
 
-Status: Canonical product direction  
-Product authority owner: Product / Company Orchestrator  
-Current implementation baseline audited: 2026-10-04  
+Status: Canonical product direction
+Product authority owner: Product / Company Orchestrator
+Current implementation baseline audited: 2026-10-04
 Baseline: origin/main at 6e70d64029526cd65df791ddefc8de0065f3c83a
 
 ## Document Authority
