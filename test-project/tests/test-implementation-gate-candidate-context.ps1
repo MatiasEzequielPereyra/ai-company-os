@@ -4,7 +4,7 @@ $repoRoot=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $tempBase=[IO.Path]::GetFullPath([IO.Path]::GetTempPath())
 $tempRoot=Join-Path $tempBase ('aico-candidate-gates-'+[guid]::NewGuid().ToString('N'))
 $project=Join-Path $tempRoot 'repo'
-$candidate=Join-Path $tempRoot 'custom-workspaces/AICO-006'
+$candidate=Join-Path $tempRoot 'custom-workspaces[1]/AICO-006'
 $savedKey=$env:OPENROUTER_API_KEY
 function Write-Text([string]$Path,[string]$Text) { New-Item -ItemType Directory -Force -Path (Split-Path $Path) | Out-Null; [IO.File]::WriteAllText($Path,$Text,(New-Object Text.UTF8Encoding($false))) }
 function Assert-True([bool]$Condition,[string]$Message) { if (-not $Condition) { throw $Message } }
@@ -109,7 +109,7 @@ throw 'CAPTURE_COMPLETE_NO_PROVIDER_NO_LIFECYCLE'
         Invoke-GateCapture Review $false
         Assert-True ($script:lastGateError -match 'different Git repository') 'Valid unrelated repository must be rejected specifically for common-directory identity mismatch.'
     } finally {
-        $expectedCandidate=[IO.Path]::GetFullPath((Join-Path $tempRoot 'custom-workspaces/AICO-006'))
+        $expectedCandidate=[IO.Path]::GetFullPath((Join-Path $tempRoot 'custom-workspaces[1]/AICO-006'))
         if(-not [string]::Equals([IO.Path]::GetFullPath($candidate),$expectedCandidate,[StringComparison]::OrdinalIgnoreCase) -or
             -not [IO.Path]::GetFullPath($heldCandidate).StartsWith($tempPrefix,[StringComparison]::OrdinalIgnoreCase)){throw 'Unsafe substituted candidate cleanup/restore path.'}
         Remove-Item -LiteralPath $candidate -Recurse -Force
@@ -130,9 +130,12 @@ throw 'CAPTURE_COMPLETE_NO_PROVIDER_NO_LIFECYCLE'
     Remove-Item -LiteralPath (Join-Path $candidate 'src/oversized.py')
     $outside=Join-Path $tempRoot 'outside'; New-Item -ItemType Directory -Path $outside | Out-Null
     Write-Text (Join-Path $outside 'escape.py') 'OUTSIDE_REPARSE_SOURCE_MUST_NOT_BE_READ'
-    $junction=Join-Path $candidate 'src/reparse-source'
-    New-Item -ItemType Junction -Path $junction -Value $outside | Out-Null
-    try { Invoke-GateCapture Review $false } finally { [IO.Directory]::Delete($junction) }
+    $junctionParent=Join-Path $candidate 'src'
+    foreach($reparseName in @('reparse-source','reparse[x]')) {
+        $junction=Join-Path $junctionParent $reparseName
+        New-Item -ItemType Junction -Path $junctionParent -Name $reparseName -Value $outside | Out-Null
+        try { Invoke-GateCapture Review $false } finally { [IO.Directory]::Delete($junction) }
+    }
     Write-Host 'PASS: registered candidate implementation reaches Review/QA/Security with full sources/hash/provenance; invalid workspace/secret/read-limit fail before inference' -ForegroundColor Green
 }
 finally {
