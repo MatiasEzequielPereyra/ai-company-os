@@ -128,22 +128,6 @@ function Get-ChangedPaths {
     return @($paths | Sort-Object)
 }
 
-function Test-LatestReviewRequiresChanges {
-    param([string]$Root,[string]$TaskId)
-
-    $reviewsDir = Join-Path $Root "docs\engineering\reviews"
-    if (-not (Test-Path $reviewsDir)) { return $false }
-
-    $latest = Get-ChildItem $reviewsDir -Filter ($TaskId + "-review-*.md") -File -ErrorAction SilentlyContinue |
-        Sort-Object Name -Descending |
-        Select-Object -First 1
-
-    if ($null -eq $latest) { return $false }
-
-    $content = Get-Content $latest.FullName -Raw -Encoding UTF8
-    return ((Read-Field -Content $content -Key "Recommendation") -eq "CHANGES_REQUIRED")
-}
-
 function Test-MatchesAnyPattern {
     param([string]$Value,[object[]]$Patterns)
 
@@ -537,7 +521,14 @@ if ($currentBranch -ne $expectedBranch) {
     throw "Writable workspace branch mismatch. Expected '$expectedBranch', found '$currentBranch'."
 }
 
-$corrective = Test-LatestReviewRequiresChanges -Root $root -TaskId $Id
+# Resolve pending corrective evidence from the canonical primary-root lifecycle,
+# never from the older control-plane snapshot in the task worktree.
+$correctiveBuilderPath = Join-Path $PSScriptRoot "build-corrective-analysis-context.ps1"
+if (-not (Test-Path -LiteralPath $correctiveBuilderPath -PathType Leaf)) {
+    throw "Corrective context builder not found: $correctiveBuilderPath"
+}
+$correctiveContext = [string](& $correctiveBuilderPath -ProjectPath $root -Id $Id -Owner $owner)
+$corrective = -not [string]::IsNullOrWhiteSpace($correctiveContext)
 $baselineChanged = @(Get-ChangedPaths -Workspace $workspace)
 
 if ($baselineChanged.Count -gt 0 -and -not $corrective) {
@@ -726,7 +717,7 @@ try {
                 }
             }
             try {
-                $execution = & $routerPath -Provider $candidate -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $outputPath -Model $candidateModel -Role $owner -Workload "writable"
+                $execution = & $routerPath -Provider $candidate -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $outputPath -Model $candidateModel -Role $owner -Workload "writable" -CorrectiveContext $correctiveContext
                 break
             }
             catch {
@@ -747,7 +738,7 @@ try {
             $selectedModel = Get-ConfiguredModel -Config $config -ProviderName $Provider -CollectionName "models"
         }
 
-        $execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $outputPath -Model $selectedModel -Role $owner -Workload "writable"
+        $execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $outputPath -Model $selectedModel -Role $owner -Workload "writable" -CorrectiveContext $correctiveContext
     }
 
     if (-not (Test-Path $outputPath)) {
@@ -1066,8 +1057,8 @@ try {
         (
             $changedAfter +
             @(
-                "docs/engineering/writable-evidence/" + (Split-Path $evidencePath -Leaf),
-                "docs/engineering/agent-reports/" + (Split-Path $reportPath -Leaf)
+                ("docs/engineering/writable-evidence/" + (Split-Path $evidencePath -Leaf)),
+                ("docs/engineering/agent-reports/" + (Split-Path $reportPath -Leaf))
             )
         ) -join "; "
     )

@@ -93,7 +93,7 @@ $payload = @{
     $args.Provider = "OpenRouter"
     $args.Context = "x" * 50000
     & $router @args | Out-Null
-    if ([int](Get-Content ($output + ".length") -Raw) -ne 50000) { throw "Non-Ollama writable context must remain unchanged" }
+    if ([int](Get-Content ($output + ".length") -Raw) -ne 30000) { throw "Cloud writable context must respect the configured finite budget" }
 
     foreach ($forbidden in @("DeepSeek","Grok")) {
         $failed = $false
@@ -101,7 +101,7 @@ $payload = @{
         catch [System.Management.Automation.ParameterBindingException] { $failed = $true }
         if (-not $failed) { throw "$forbidden must be rejected by writable provider binding" }
     }
-    Write-Host "PASS: writable Ollama context budget (5 limits, 5 invalid runtimes, cloud isolation, 2 forbidden providers)" -ForegroundColor Green
+    Write-Host "PASS: writable Ollama context budget (5 limits, 5 invalid runtimes, finite cloud budget, 2 forbidden providers)" -ForegroundColor Green
 }
 finally {
     $env:OPENROUTER_API_KEY = $savedKey
