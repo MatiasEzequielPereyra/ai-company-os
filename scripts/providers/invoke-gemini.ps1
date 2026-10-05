@@ -71,6 +71,16 @@ function ConvertTo-GeminiCompatibleSchema {
                 continue
             }
 
+            # A real composite engineering-plan schema was rejected by Gemini's
+            # backend with the supported object-array maxItems bound present.
+            # Relax only that transport bound; the original canonical maxItems
+            # remains enforced locally before any result enters the lifecycle.
+            if ($property.Name -eq "maxItems" -and
+                [string]$Value.type -eq "array" -and
+                $null -ne $Value.items -and [string]$Value.items.type -eq "object") {
+                continue
+            }
+
             $result[$property.Name] = ConvertTo-GeminiCompatibleSchema -Value $property.Value
         }
 

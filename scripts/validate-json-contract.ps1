@@ -76,6 +76,11 @@ function Assert-SchemaNode {
             throw "$Path must contain at least $minItems item(s)."
         }
 
+        $maxItems = Get-PropertyValue $Schema "maxItems"
+        if ($null -ne $maxItems -and $items.Count -gt [int]$maxItems) {
+            throw "$Path must contain at most $maxItems item(s)."
+        }
+
         $itemSchema = Get-PropertyValue $Schema "items"
         if ($null -ne $itemSchema) {
             for ($i = 0; $i -lt $items.Count; $i++) {
