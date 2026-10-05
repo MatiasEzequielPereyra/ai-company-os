@@ -1,0 +1,46 @@
+[
+  {
+    "path": "scripts/providers/invoke-codex.ps1",
+    "sha256": "6ABA4A3235188FAD9F50358CF080FF1F75D310E6AC12CA5E34FEDDC84AE3A3C6"
+  },
+  {
+    "path": "schemas/agent-result.schema.json",
+    "sha256": "34495AED91DDEF3A1B62706D135841D6DA5F418997DFE215C21532E964106468"
+  },
+  {
+    "path": "schemas/engineering-plan-result.schema.json",
+    "sha256": "D167A9E025AB5123035DEC756014A6C08827F8E3AEF75707334466988F4B4AE9"
+  },
+  {
+    "path": "scripts/validate-json-contract.ps1",
+    "sha256": "B98DCB45132F34B4238F9B6E8AAAD7095E090C1A0FA7B2DCA67251F06FFF7E61"
+  },
+  {
+    "path": "scripts/validate-analysis-result-semantics.ps1",
+    "sha256": "948507DBF47E6FD9A3C0AB7A3EC21A927ACAF73C887DF3302C008C2FB57528D5"
+  },
+  {
+    "path": "scripts/validate-engineering-plan-result.ps1",
+    "sha256": "63795DDF08255F0E17256B78031F3010CEB3E9C063D1DE2EE9130F13BE1050F8"
+  },
+  {
+    "path": "scripts/provider-router.ps1",
+    "sha256": "020E11B39069B3704122646593A81FD3CF3F9FCF4CB316EAF98F38ECFE4E1AD5"
+  },
+  {
+    "path": "test-project/tests/test-codex-schema-portability.ps1",
+    "sha256": "0752B280BBA35870654EA0F641416D38339E51C847CDE197922EF6ECCC642432"
+  },
+  {
+    "path": "test-project/tests/run-all-smoke-tests.ps1",
+    "sha256": "790B08D1AE6D64345C6B290605B015B520F894FB15F85B05C27541916F79EA72"
+  },
+  {
+    "path": "test-project/tests/test-npm-package-e2e.ps1",
+    "sha256": "2CAB7AF426C76E966CC9273B33AEFE03279A137BC52006C6EF726268A827C78B"
+  },
+  {
+    "path": "docs/engineering/codex-structured-schema-portability.md",
+    "sha256": "29A43E0483FAFD9BB1F01519C6A1B59D86D42C2439981CED448602A09C777444"
+  }
+]

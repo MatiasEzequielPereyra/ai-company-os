@@ -108,3 +108,13 @@ Updated (UTC): 2026-10-04T05:15:46.2800017Z
 - CTO-only role policy fixed; router/validator unchanged; one repair then existing Auto fallback.
 - Local:6 new scenarios PASS; Python204 PASS; PowerShell53 PASS; npm2 PASS; exact installed packed E2E PASS.
 - Receipt PENDING; next owner External Orchestrator. Run6 preserved; providers NONE; no merge or functional acceptance.
+
+## Codex structured schema portability
+
+Updated (UTC): 2026-10-04
+- Base: 6e70d64029526cd65df791ddefc8de0065f3c83a; branch fix/codex-structured-schema-portability.
+- Current handoff: [Codex schema portability](../../docs/engineering/handoffs/ai-company-os/codex-structured-schema-portability-2026-10-04.md).
+- Codex temporary strict schema and optional-null normalization; original canonical validation and unchanged semantics.
+- Authorized EM schema correction: executable_work.minItems 0; COMPLETED still requires real work, BLOCKED requires none.
+- Local: 20 new cases PASS; Python204 PASS; PowerShell54/54 PASS; npm2 PASS; installed packed E2E PASS.
+- Receipt PENDING; next owner External Orchestrator. Run6 AICO-003 ACTIVE, 22,706 protected files unchanged; provider calls NONE; no merge/retry.
