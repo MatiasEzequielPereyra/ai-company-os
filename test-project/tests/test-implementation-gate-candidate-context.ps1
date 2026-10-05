@@ -133,7 +133,8 @@ throw 'CAPTURE_COMPLETE_NO_PROVIDER_NO_LIFECYCLE'
     $junctionParent=Join-Path $candidate 'src'
     foreach($reparseName in @('reparse-source','reparse[x]')) {
         $junction=Join-Path $junctionParent $reparseName
-        New-Item -ItemType Junction -Path $junctionParent -Name $reparseName -Value $outside | Out-Null
+        & $env:ComSpec /d /c "mklink /J `"$junction`" `"$outside`"" | Out-Null
+        if($LASTEXITCODE -ne 0 -or -not [IO.Directory]::Exists($junction)){throw ('Unable to create literal reparse regression junction: '+$reparseName)}
         try { Invoke-GateCapture Review $false } finally { [IO.Directory]::Delete($junction) }
     }
     Write-Host 'PASS: registered candidate implementation reaches Review/QA/Security with full sources/hash/provenance; invalid workspace/secret/read-limit fail before inference' -ForegroundColor Green
