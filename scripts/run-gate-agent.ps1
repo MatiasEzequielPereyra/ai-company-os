@@ -46,9 +46,8 @@ function Add-Artifact {
 
     $content = Get-Content $pathFull -Raw -Encoding UTF8
     if ($null -eq $content) { $content = "" }
-    if ($content.Length -gt $MaxChars) {
-        $content = $content.Substring(0,$MaxChars) + [Environment]::NewLine + "[TRUNCATED]"
-    }
+    # Authoritative evidence is never clipped by a per-artifact quota.
+    # The router enforces the complete envelope against each finite candidate budget.
 
     [void]$Builder.AppendLine("")
     [void]$Builder.AppendLine("")
@@ -198,22 +197,9 @@ if (Test-Path $configPath) {
             $maxChars = [int]$providerConfig.gate_context_max_chars
         }
 
-        # Auto builds the global gate evidence once. Candidate-specific provider
-        # and hardware limits are enforced by provider-router.ps1 after selection.
-        # Explicit Ollama can be bounded earlier without reducing cloud evidence.
-        if ($Provider -eq "Ollama") {
-            if ($null -ne $providerConfig.ollama_gate_context_max_chars) {
-                $maxChars = [Math]::Min($maxChars,[int]$providerConfig.ollama_gate_context_max_chars)
-            }
-            if ($null -ne $providerConfig.ollama_gate_artifact_max_chars) {
-                $artifactMaxChars = [Math]::Min($artifactMaxChars,[int]$providerConfig.ollama_gate_artifact_max_chars)
-            }
+        # Provider-specific limits belong to the router. Construction preserves
+        # authoritative artifacts in full for every candidate, including explicit Ollama.
 
-            if ($null -ne $localRuntime -and [bool]$localRuntime.Available) {
-                $maxChars = [Math]::Min($maxChars,[int]$localRuntime.GateContextMaxChars)
-                $artifactMaxChars = [Math]::Min($artifactMaxChars,[int]$localRuntime.GateArtifactMaxChars)
-            }
-        }
     }
     catch {
         throw "Invalid provider configuration: $configPath"
@@ -332,7 +318,7 @@ $runtimeDir = Join-Path $root ".codex\runtime"
 New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
 $outputPath = Join-Path $runtimeDir ($Id + "-" + $Gate.ToLowerInvariant() + "-gate.json")
 
-Write-Host ("Gate context budget: base=" + $maxChars + " chars, artifact=" + $artifactMaxChars + " chars") -ForegroundColor DarkGray
+Write-Host ("Gate context budget: generic=" + $maxChars + " chars; authoritative artifacts preserved in full for candidate budget validation") -ForegroundColor DarkGray
 Write-Host "Running $Gate gate: $reviewerRole -> $Id" -ForegroundColor Cyan
 $execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $evidence.ToString() -SchemaPath $schemaPath -OutputPath $outputPath -Model $Model -Role $reviewerRole -Workload "gate" -SemanticValidatorPath $gateSemanticValidatorPath
 
