@@ -155,11 +155,21 @@ $payload=@{outcome='COMPLETED';summary='fixture';report_markdown='fixture';verif
         Assert (-not (Test-Path -LiteralPath (Join-Path $temp '.codex/runtime/unexpected-local-call'))) 'Auto invoked rejected local candidate.'
         $cloud=[IO.File]::ReadAllText((Join-Path $temp '.codex/runtime/cloud-context.txt'))
         Assert ($cloud.Contains($essential) -and $cloud.Length -le 30000) 'Auto fallback lost corrective evidence or exceeded cloud budget.'
+        # Findings and exact current source jointly exceed the local budget.
+        $sourceText = "# CURRENT_WRITABLE_SOURCE`n"+('source line'+"`n")*1200
+        $sourceBytes = [Text.Encoding]::UTF8.GetBytes($sourceText)
+        $sourceHasher = [Security.Cryptography.SHA256]::Create()
+        try { $sourceHash = ([BitConverter]::ToString($sourceHasher.ComputeHash($sourceBytes))).Replace('-','').ToLowerInvariant() } finally { $sourceHasher.Dispose() }
+        $combined = $essential+"`nPath: src/current.py`nSHA256: $sourceHash`nBytes: $($sourceBytes.Length)`n"+$sourceText
         # The same protected envelope must survive every writable provider budget.
         Put '.codex/provider-config.json' (@{auto_order=@('OpenRouter');allow_paid_fallback=$false;context_max_chars=30000;analysis_context_max_chars=30000;models=@{OpenRouter='openrouter/free'}} | ConvertTo-Json -Depth 10)
-        & (Join-Path $temp 'scripts/provider-router.ps1') -Provider OpenRouter -ProjectPath $temp -Prompt 'synthetic writable' -Context ('G'*40000) -CorrectiveContext $essential -Role frontend -Workload writable -SchemaPath (Join-Path $temp 'schemas/agent-result.schema.json') -OutputPath $output | Out-Null
+        & (Join-Path $temp 'scripts/provider-router.ps1') -Provider OpenRouter -ProjectPath $temp -Prompt 'synthetic writable' -Context ('G'*40000) -CorrectiveContext $combined -Role frontend -Workload writable -SchemaPath (Join-Path $temp 'schemas/agent-result.schema.json') -OutputPath $output | Out-Null
         $cloud=[IO.File]::ReadAllText((Join-Path $temp '.codex/runtime/cloud-context.txt'))
-        Assert ($cloud.Contains($essential) -and $cloud.Length -le 30000) 'Writable cloud context lost protected findings or exceeded finite budget.'
+        Assert ($cloud.Contains($combined) -and $cloud.Contains($sourceHash) -and $cloud.Length -le 30000) 'Writable cloud context lost protected findings or exceeded finite budget.'
+        Put '.codex/provider-config.json' (@{writable_context_max_chars=10000;models=@{Ollama='fake'}} | ConvertTo-Json -Depth 10)
+        $failed=$false
+        try { & (Join-Path $temp 'scripts/provider-router.ps1') -Provider Ollama -ProjectPath $temp -Prompt 'synthetic writable' -Context ('G'*40000) -CorrectiveContext $combined -Role frontend -Workload writable -SchemaPath (Join-Path $temp 'schemas/agent-result.schema.json') -OutputPath $output | Out-Null } catch { $failed=$true }
+        Assert ($failed -and -not (Test-Path (Join-Path $temp '.codex/runtime/unexpected-local-call'))) 'Undersized writable local provider must reject full source before call.'
         Put '.codex/provider-config.json' (@{ auto_order=@('Ollama','OpenRouter'); allow_paid_fallback=$false; analysis_context_max_chars=30000; ollama_context_max_chars=10000; models=@{Ollama='fake';OpenRouter='fake'} } | ConvertTo-Json -Depth 10)
         $failed=$false
         try { & (Join-Path $temp 'scripts/provider-router.ps1') -Provider Ollama -ProjectPath $temp -Prompt 'synthetic' -Context 'G' -CorrectiveContext $essential -Role cto -Workload analysis -SchemaPath (Join-Path $temp 'schemas/agent-result.schema.json') -OutputPath $output | Out-Null } catch { $failed=$true }
