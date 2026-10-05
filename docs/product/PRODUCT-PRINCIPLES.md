@@ -1,7 +1,7 @@
 # AI Company OS — Product Principles
 
-Status: Canonical product constitution  
-Authority: Derived from `docs/product/PRODUCT-NORTH-STAR.md`  
+Status: Canonical product constitution
+Authority: Derived from `docs/product/PRODUCT-NORTH-STAR.md`
 Applies to: Product, Engineering, agents, runtime, interfaces, and future product decisions
 
 ## Document Authority
