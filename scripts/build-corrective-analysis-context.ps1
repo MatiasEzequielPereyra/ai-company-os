@@ -156,6 +156,14 @@ if ($changed.Success) {
     foreach ($line in ($changed.Groups[1].Value -split '[;\r\n]+')) {
         $relative = $line.Trim().TrimStart('-',' ').Trim('`')
         if ([string]::IsNullOrWhiteSpace($relative)) { continue }
+        # Older writable results emitted this exact canonical pair as one array
+        # element. Recover only that known producer shape; arbitrary whitespace
+        # in artifact paths remains literal and still fails closed.
+        $legacyWritablePair = "docs/engineering/writable-evidence/$Id.md docs/engineering/agent-reports/$Id.md"
+        if ($relative -ceq $legacyWritablePair) {
+            $relative = "docs/engineering/writable-evidence/$Id.md"
+            # The companion primary report was already validated and included above.
+        }
         if ($relative -match '(?i)(^|[/\\])(?:\.env(?:\..*)?|provider-config\.json|[^/\\]*(?:secret|credential|api[-_]?key)[^/\\]*)(?:$|[/\\])' -or $relative -match '^\.codex[/\\]') { throw "Unsafe corrective changed artifact reference: $relative" }
         if ($relative -notmatch '^(docs|tasks)/[^\r\n]+\.(md|json)$') { continue }
         if ($relative -eq "docs/engineering/agent-reports/$Id.md") { continue } # Already included in full above.
