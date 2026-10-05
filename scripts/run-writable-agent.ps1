@@ -320,6 +320,15 @@ function Get-SafeCommand {
 
     $parts = @()
     foreach ($element in @($commandAst.CommandElements)) {
+        # PowerShell parses native flags such as -B and -m as parameters.
+        # Admit only standalone literal flags; attached arguments/expressions
+        # still fail the same literal-command contract.
+        if ($element -is [System.Management.Automation.Language.CommandParameterAst] -and
+            $null -eq $element.Argument -and
+            $element.Extent.Text -cmatch '^--?[A-Za-z][A-Za-z0-9_-]*$') {
+            $parts += [string]$element.Extent.Text
+            continue
+        }
         if ($element -isnot [System.Management.Automation.Language.StringConstantExpressionAst]) {
             throw "Verification command may contain only literal executable/arguments."
         }

@@ -14,6 +14,7 @@ $workspaces = Join-Path $tempParent "worktrees"
 $savedOpenRouter = $env:OPENROUTER_API_KEY
 $savedDeepSeek = $env:DEEPSEEK_API_KEY
 $savedXai = $env:XAI_API_KEY
+$savedPath = $env:PATH
 
 function Write-NoBom {
     param([string]$Path,[string]$Value)
@@ -192,6 +193,10 @@ Copy-Item $source $OutputPath -Force
     New-FixtureTask -Id "AICO-004" -Status "READY" -FileName "value4.txt"
     New-FixtureTask -Id "AICO-005" -Status "ACTIVE" -FileName "value5.txt"
     New-FixtureTask -Id "AICO-006" -Status "ACTIVE" -FileName "value6.txt"
+    New-FixtureTask -Id "AICO-007" -Status "ACTIVE" -FileName "value7.txt"
+    New-FixtureTask -Id "AICO-008" -Status "ACTIVE" -FileName "value8.txt"
+    Write-NoBom (Join-Path $fixtureRepo 'tests/test_native.py') "import unittest`nclass NativeSuccess(unittest.TestCase):`n    def test_actual_product_verification(self):`n        self.assertEqual(2 + 2, 4)`n"
+    Write-NoBom (Join-Path $fixtureRepo 'tests_failure/test_native.py') "import unittest`nclass NativeFailure(unittest.TestCase):`n    def test_actual_product_verification(self):`n        self.assertEqual(2 + 2, 5)`n"
     Write-NoBom (Join-Path $fixtureRepo 'warn-success.js') "process.stdout.write('NATIVE_STDOUT_SUCCESS\n'); process.stderr.write('NATIVE_STDERR_WARNING_SUCCESS\n'); process.exit(0);"
     Write-NoBom (Join-Path $fixtureRepo 'warn-failure.js') "process.stdout.write('NATIVE_STDOUT_FAILURE\n'); process.stderr.write('NATIVE_STDERR_WARNING_FAILURE\n'); process.exit(7);"
 
@@ -210,7 +215,7 @@ The prior writable implementation needs correction.
     & git -C $fixtureRepo commit -m "writable runtime fixture" | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "fixture commit failed." }
 
-    foreach ($id in @("AICO-001","AICO-002","AICO-003","AICO-004","AICO-005","AICO-006")) {
+    foreach ($id in @("AICO-001","AICO-002","AICO-003","AICO-004","AICO-005","AICO-006","AICO-007","AICO-008")) {
         & (Join-Path $repoRoot "scripts\new-agent-workspace.ps1") -Id $id -ProjectPath $fixtureRepo -WorkspaceRoot $workspaces | Out-Null
     }
 
@@ -451,6 +456,55 @@ The prior writable implementation needs correction.
         if ((Get-Content (Join-Path $fixtureRepo ('src/'+$case.File)) -Raw) -ne 'original') { throw 'Native fixture execution modified primary checkout product file.' }
     }
 
+    if ($null -eq (Get-Command python -ErrorAction SilentlyContinue)) { throw 'Python is required for real stdlib unittest regression.' }
+    foreach ($case in @(
+        @{Id='AICO-007';File='value7.txt';Tests='tests';Pass=$true},
+        @{Id='AICO-008';File='value8.txt';Tests='tests_failure';Pass=$false}
+    )) {
+        $workspaceFile = Join-Path $workspaces ($case.Id+'\src\'+$case.File)
+        $beforeHash = (Get-FileHash -LiteralPath $workspaceFile -Algorithm SHA256).Hash
+        Set-FakeResult @{
+            outcome='COMPLETED';summary='Python unittest verification';report_markdown='# Python verifier fixture'
+            changes=@(@{path=('src/'+$case.File);operation='WRITE';content='python-verified-change';reason='Test Python stdlib verification'})
+            verification_commands=@('python -B -m unittest discover -s '+$case.Tests+' -v');verification='Stdlib unittest';decisions='NONE';blockers='NONE';recommended_next='REVIEW'
+        }
+        $failed = $false
+        try { Invoke-Runner -Id $case.Id } catch { if (-not $case.Pass -and $_.Exception.Message -match 'exit code 1') { $failed=$true } else { throw } }
+        if ($case.Pass) {
+            if ((Get-TaskStatus $case.Id) -ne 'REVIEW') { throw 'Passing stdlib unittest must advance task to REVIEW.' }
+            $evidence = Get-Content (Join-Path $fixtureRepo ('docs/engineering/writable-evidence/'+$case.Id+'.md')) -Raw
+            foreach ($marker in @('test_actual_product_verification','Ran 1 test','OK')) { if ($evidence -notmatch [regex]::Escape($marker)) { throw ('Actual unittest evidence missing: '+$marker) } }
+            if ((Get-Content -LiteralPath $workspaceFile -Raw) -ne 'python-verified-change') { throw 'Passing unittest lost approved change.' }
+        } else {
+            if (-not $failed) { throw 'Failing unittest must reject verification.' }
+            if ((Get-FileHash -LiteralPath $workspaceFile -Algorithm SHA256).Hash -ne $beforeHash) { throw 'Failing unittest must restore exact original bytes.' }
+            if ((Get-TaskStatus $case.Id) -ne 'ACTIVE') { throw 'Failing unittest must retain ACTIVE.' }
+            if (Test-Path (Join-Path $fixtureRepo ('docs/engineering/results/'+$case.Id+'-result-001.md'))) { throw 'Failing unittest must not publish result.' }
+        }
+    }
+    $tokens=$null; $parseErrors=$null
+    $runnerAst=[Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'scripts/run-writable-agent.ps1'),[ref]$tokens,[ref]$parseErrors)
+    foreach ($functionName in @('Assert-SafeArgument','Get-SafeCommand')) {
+        $functionAst=$runnerAst.Find({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $functionName},$true)
+        Invoke-Expression $functionAst.Extent.Text
+    }
+    $verificationPolicy = Get-Content (Join-Path $repoRoot '.codex/writable-policy.json') -Raw | ConvertFrom-Json
+    foreach ($command in @('python -m unittest','python -B -m unittest discover -s tests -v')) { Get-SafeCommand -Command $command -Policy $verificationPolicy | Out-Null }
+    foreach ($command in @(
+        'python -B -m unittest && git status --short',
+        'python -B -m unittest; git status --short',
+        'python -B -m unittest | node warn-success.js',
+        'python -B -m unittest discover -s ../tests',
+        'python -B -m unittest discover -s C:\tests',
+        'python -B -m unittest discover -s /tests',
+        'python -B -m unittest discover -s $(Get-Location)',
+        'python -B -m unittest discover -s:$env:TEMP',
+        'python -c "print(1)"'
+    )) {
+        $rejected=$false
+        try { Get-SafeCommand -Command $command -Policy $verificationPolicy | Out-Null } catch { $rejected=$true }
+        if (-not $rejected) { throw ('Unittest authorization weakened command safety: '+$command) }
+    }
     $runnerText = Get-Content (Join-Path $repoRoot "scripts\run-writable-agent.ps1") -Raw -Encoding UTF8
 
     foreach ($requiredPromptContract in @(
@@ -476,9 +530,10 @@ finally {
     $env:OPENROUTER_API_KEY = $savedOpenRouter
     $env:DEEPSEEK_API_KEY = $savedDeepSeek
     $env:XAI_API_KEY = $savedXai
+    $env:PATH = $savedPath
 
     if (Test-Path $fixtureRepo) {
-        foreach ($id in @("AICO-001","AICO-002","AICO-003","AICO-004","AICO-005","AICO-006")) {
+        foreach ($id in @("AICO-001","AICO-002","AICO-003","AICO-004","AICO-005","AICO-006","AICO-007","AICO-008")) {
             $workspace = Join-Path $workspaces $id
             if (Test-Path $workspace) {
                 try { & git -C $fixtureRepo worktree remove $workspace --force 2>$null | Out-Null } catch {}
@@ -488,6 +543,9 @@ finally {
     }
 
     if (Test-Path $tempParent) {
-        Remove-Item $tempParent -Recurse -Force -ErrorAction SilentlyContinue
+        $cleanupTarget = [IO.Path]::GetFullPath($tempParent)
+        $cleanupRoot = [IO.Path]::GetFullPath($env:TEMP).TrimEnd([char[]]@('\','/')) + [IO.Path]::DirectorySeparatorChar
+        if (-not $cleanupTarget.StartsWith($cleanupRoot,[StringComparison]::OrdinalIgnoreCase) -or (Split-Path $cleanupTarget -Leaf) -notlike 'aico-writable-runtime-*') { throw 'Unsafe writable fixture cleanup path.' }
+        Remove-Item -LiteralPath $cleanupTarget -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
