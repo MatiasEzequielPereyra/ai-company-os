@@ -28,7 +28,18 @@ function Read-Required([string]$Relative) {
 function Compact-TicketHistory([string]$Text) {
     # Canonical scope and acceptance sections stay verbatim. Only append-only operational
     # history is bounded; the exact complete source remains identifiable by SHA-256.
-    $digest = (Get-FileHash -LiteralPath (Join-Path $root "tasks/$Id.md") -Algorithm SHA256).Hash.ToLowerInvariant()
+    # Use the runtime directly: Get-FileHash can be unavailable when a Windows
+    # PowerShell child inherits a PowerShell 7 module search path.
+    $stream = $null
+    $sha256 = $null
+    try {
+        $stream = [IO.File]::OpenRead((Join-Path $root "tasks/$Id.md"))
+        $sha256 = [Security.Cryptography.SHA256]::Create()
+        $digest = ([BitConverter]::ToString($sha256.ComputeHash($stream))).Replace('-','').ToLowerInvariant()
+    } finally {
+        if ($null -ne $stream) { $stream.Dispose() }
+        if ($null -ne $sha256) { $sha256.Dispose() }
+    }
     $pattern = '(?ms)^## (Evidence|Transition Log|Notes)[ \t]*\r?\n(.*?)(?=^## |\z)'
     $compacted = [regex]::Replace($Text,$pattern,[Text.RegularExpressions.MatchEvaluator]{
         param($match)
