@@ -48,6 +48,31 @@ try {
     Assert (-not $sent.Contains('historical operational entry 1 ')) 'Old operational history was not compacted.'
     $digest=(Get-FileHash -LiteralPath (Join-Path $temp 'tasks/AICO-002.md') -Algorithm SHA256).Hash.ToLowerInvariant()
     Assert ($sent.Contains($digest)) 'Exact source digest missing.'
+    # Reproduce a child host where the module-provided hash command is unusable.
+    # Mixed Unicode/CRLF and a BOM ensure the digest covers exact file bytes,
+    # rather than a decoded/re-encoded task string.
+    $taskPath=Join-Path $temp 'tasks/AICO-002.md'
+    $unicodeEvidence='correcci' + [char]0x00f3 + 'n ' + [char]0x2014 + ' ' + [char]0x65e5 + [char]0x672c + [char]0x8a9e
+    $byteSensitiveTask=([IO.File]::ReadAllText($taskPath)).Replace("`n","`r`n") + "`r`nUnicode evidence: $unicodeEvidence`r`n"
+    [IO.File]::WriteAllText($taskPath,$byteSensitiveTask,(New-Object Text.UTF8Encoding($true)))
+    $expectedHasher=[Security.Cryptography.SHA256]::Create()
+    try { $expectedDigest=([BitConverter]::ToString($expectedHasher.ComputeHash([IO.File]::ReadAllBytes($taskPath)))).Replace('-','').ToLowerInvariant() }
+    finally { $expectedHasher.Dispose() }
+    & {
+        function Get-FileHash { throw 'Synthetic unavailable Get-FileHash in inherited module environment.' }
+        $unavailable=$false
+        try { Get-FileHash -LiteralPath $taskPath -Algorithm SHA256 | Out-Null } catch { $unavailable=$true }
+        Assert $unavailable 'Regression did not make Get-FileHash unavailable.'
+        $portableRequired=& $builder -ProjectPath $temp -Id AICO-002 -Owner cto
+        $portableSent=Limit-CorrectiveAnalysisContext -Context ('GENERAL'*10000) -RequiredContext $portableRequired -MaxChars 20000
+        Assert ($portableSent.Length -le 20000) 'Portable hash context exceeded provider budget.'
+        Assert ($portableSent.Contains("Canonical task source SHA256: $expectedDigest")) 'Portable hash did not cover exact Unicode/CRLF/BOM source bytes.'
+        Assert ($portableSent.Contains("full source tasks/AICO-002.md SHA256=$expectedDigest")) 'Compaction marker did not preserve exact byte digest.'
+        foreach ($marker in @('FULL_OBJECTIVE_END','FULL_ACCEPTANCE_END','FULL_DEPENDENCIES_END','FULL_TESTING_END','FULL_CHANGED_CONTRACT_END','FULL_CHANGED_ADR_END','PREVIOUS_DELIVERABLE_END','ADR_REQUIRED_REVIEW_END','historical operational entry 500','END CORRECTIVE ANALYSIS EVIDENCE')) {
+            Assert ($portableSent.Contains($marker)) "Portable hash path lost corrective evidence: $marker"
+        }
+        Assert (-not $portableSent.Contains('historical operational entry 1 ')) 'Portable hash path did not compact old history.'
+    }
     Put 'docs/engineering/results/AICO-002-result-002.md' "Task: AICO-002`nOwner: cto`n## Changed Artifacts`n.codex/provider-config.json"
     $failed=$false
     try { & $builder -ProjectPath $temp -Id AICO-002 -Owner cto | Out-Null } catch { $failed=$true }
