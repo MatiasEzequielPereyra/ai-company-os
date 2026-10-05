@@ -82,10 +82,10 @@ function Add-ImplementationCandidate {
     param([System.Text.StringBuilder]$Builder,[string]$Root,[string]$TaskId,[string]$TaskContent,[string]$ReportContent)
     $evidencePath = Join-Path $Root ("docs\engineering\writable-evidence\" + $TaskId + ".md")
     $declared = $ReportContent -match ('(?i)writable-evidence[\\/]' + [regex]::Escape($TaskId) + '\.md')
-    if (-not (Test-Path $evidencePath -PathType Leaf) -and -not $declared) { return }
+    if (-not (Test-Path -LiteralPath $evidencePath -PathType Leaf) -and -not $declared) { return }
     if ((Read-Field $TaskContent "Work kind") -cne "IMPLEMENTATION") { return }
-    if (-not (Test-Path $evidencePath -PathType Leaf)) { throw "Declared writable implementation evidence is missing: $evidencePath" }
-    $evidenceContent = Get-Content $evidencePath -Raw -Encoding UTF8
+    if (-not (Test-Path -LiteralPath $evidencePath -PathType Leaf)) { throw "Declared writable implementation evidence is missing: $evidencePath" }
+    $evidenceContent = Get-Content -LiteralPath $evidencePath -Raw -Encoding UTF8
     $workspaceField = Read-Field $evidenceContent "Worktree"
     $branch = "aico/" + $TaskId.ToLowerInvariant()
     if ([string]::IsNullOrWhiteSpace($workspaceField) -or -not [IO.Path]::IsPathRooted($workspaceField)) {
@@ -96,8 +96,8 @@ function Add-ImplementationCandidate {
     if ([string]::Equals($workspace,$rootFull,[StringComparison]::OrdinalIgnoreCase)) {
         throw "Writable implementation candidate cannot be the primary checkout."
     }
-    if (-not (Test-Path $workspace -PathType Container)) { throw "Writable implementation candidate worktree is missing: $workspace" }
-    if ((Get-Item $workspace -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+    if (-not (Test-Path -LiteralPath $workspace -PathType Container)) { throw "Writable implementation candidate worktree is missing: $workspace" }
+    if ((Get-Item -LiteralPath $workspace -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
         throw "Writable implementation candidate worktree cannot be a reparse point."
     }
     $registered = $false
@@ -125,8 +125,8 @@ function Add-ImplementationCandidate {
         throw "Writable implementation candidate branch/registration does not match the task."
     }
     $policyPath = Join-Path $Root '.codex\writable-policy.json'
-    if (-not (Test-Path $policyPath -PathType Leaf)) { throw "Writable candidate policy is missing." }
-    $policy = Get-Content $policyPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if (-not (Test-Path -LiteralPath $policyPath -PathType Leaf)) { throw "Writable candidate policy is missing." }
+    $policy = Get-Content -LiteralPath $policyPath -Raw -Encoding UTF8 | ConvertFrom-Json
     $tracked = @(Invoke-CandidateGit -Arguments @("-C",$workspace,"-c","core.quotePath=false","diff","--name-only","HEAD","--"))
     $untracked = @(Invoke-CandidateGit -Arguments @("-C",$workspace,"-c","core.quotePath=false","ls-files","--others","--exclude-standard"))
     $paths = @(@($tracked + $untracked) | Sort-Object -Unique)
@@ -155,14 +155,14 @@ function Add-ImplementationCandidate {
         if (-not $fullPath.StartsWith($workspace + [IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)) { throw "Writable implementation candidate path escapes worktree." }
         $current = $fullPath
         while (-not [string]::Equals($current,$workspace,[StringComparison]::OrdinalIgnoreCase)) {
-            if (Test-Path $current) {
-                if ((Get-Item $current -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Writable implementation candidate path traverses a reparse point: $relative" }
+            if (Test-Path -LiteralPath $current) {
+                if ((Get-Item -LiteralPath $current -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Writable implementation candidate path traverses a reparse point: $relative" }
             }
             $current = Split-Path $current -Parent
         }
         [void]$Builder.AppendLine('')
         [void]$Builder.AppendLine("Repository-relative path: $relative")
-        if (-not (Test-Path $fullPath -PathType Leaf)) {
+        if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) {
             [void]$Builder.AppendLine('Candidate operation: DELETE (absent from current worktree)')
             continue
         }
