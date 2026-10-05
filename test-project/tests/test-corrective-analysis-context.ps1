@@ -73,6 +73,16 @@ try {
         }
         Assert (-not $portableSent.Contains('historical operational entry 1 ')) 'Portable hash path did not compact old history.'
     }
+    Put 'docs/engineering/writable-evidence/AICO-002.md' 'LEGACY_WRITABLE_EVIDENCE_END'
+    Put 'docs/engineering/results/AICO-002-result-002.md' "Task: AICO-002`nOwner: cto`n## Changed Artifacts`ndocs/engineering/writable-evidence/AICO-002.md docs/engineering/agent-reports/AICO-002.md"
+    $legacy=& $builder -ProjectPath $temp -Id AICO-002 -Owner cto
+    Assert ($legacy.Contains('LEGACY_WRITABLE_EVIDENCE_END')) 'Exact historical writable artifact pair not resolved.'
+    foreach ($badPair in @('docs/architecture/contract.md docs/decisions/adr.md','docs/engineering/writable-evidence/AICO-002.md docs/engineering/agent-reports/AICO-999.md')) {
+        Put 'docs/engineering/results/AICO-002-result-002.md' "Task: AICO-002`nOwner: cto`n## Changed Artifacts`n$badPair"
+        $failed=$false
+        try { & $builder -ProjectPath $temp -Id AICO-002 -Owner cto | Out-Null } catch { $failed=$true }
+        Assert $failed 'Arbitrary or mismatched whitespace pair must remain fail closed.'
+    }
     Put 'docs/engineering/results/AICO-002-result-002.md' "Task: AICO-002`nOwner: cto`n## Changed Artifacts`n.codex/provider-config.json"
     $failed=$false
     try { & $builder -ProjectPath $temp -Id AICO-002 -Owner cto | Out-Null } catch { $failed=$true }
@@ -145,6 +155,12 @@ $payload=@{outcome='COMPLETED';summary='fixture';report_markdown='fixture';verif
         Assert (-not (Test-Path -LiteralPath (Join-Path $temp '.codex/runtime/unexpected-local-call'))) 'Auto invoked rejected local candidate.'
         $cloud=[IO.File]::ReadAllText((Join-Path $temp '.codex/runtime/cloud-context.txt'))
         Assert ($cloud.Contains($essential) -and $cloud.Length -le 30000) 'Auto fallback lost corrective evidence or exceeded cloud budget.'
+        # The same protected envelope must survive every writable provider budget.
+        Put '.codex/provider-config.json' (@{auto_order=@('OpenRouter');allow_paid_fallback=$false;context_max_chars=30000;analysis_context_max_chars=30000;models=@{OpenRouter='openrouter/free'}} | ConvertTo-Json -Depth 10)
+        & (Join-Path $temp 'scripts/provider-router.ps1') -Provider OpenRouter -ProjectPath $temp -Prompt 'synthetic writable' -Context ('G'*40000) -CorrectiveContext $essential -Role frontend -Workload writable -SchemaPath (Join-Path $temp 'schemas/agent-result.schema.json') -OutputPath $output | Out-Null
+        $cloud=[IO.File]::ReadAllText((Join-Path $temp '.codex/runtime/cloud-context.txt'))
+        Assert ($cloud.Contains($essential) -and $cloud.Length -le 30000) 'Writable cloud context lost protected findings or exceeded finite budget.'
+        Put '.codex/provider-config.json' (@{ auto_order=@('Ollama','OpenRouter'); allow_paid_fallback=$false; analysis_context_max_chars=30000; ollama_context_max_chars=10000; models=@{Ollama='fake';OpenRouter='fake'} } | ConvertTo-Json -Depth 10)
         $failed=$false
         try { & (Join-Path $temp 'scripts/provider-router.ps1') -Provider Ollama -ProjectPath $temp -Prompt 'synthetic' -Context 'G' -CorrectiveContext $essential -Role cto -Workload analysis -SchemaPath (Join-Path $temp 'schemas/agent-result.schema.json') -OutputPath $output | Out-Null } catch { $failed=$true }
         Assert $failed 'Explicit undersized provider must fail closed.'
