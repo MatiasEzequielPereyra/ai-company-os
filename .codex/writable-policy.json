@@ -34,6 +34,7 @@
     "^yarn(?:\\.cmd)? test(?: -- .*)?$",
     "^yarn(?:\\.cmd)? run (?:test|verify|check|lint|typecheck|build)(?::[A-Za-z0-9._-]+)?(?: -- .*)?$",
     "^python(?:\\.exe)? -m pytest(?: .*)?$",
+    "^python(?:\\.exe)?(?: -B)? -m unittest(?: .*)?$",
     "^pytest(?:\\.exe)?(?: .*)?$"
   ],
   "free_provider_models": {
