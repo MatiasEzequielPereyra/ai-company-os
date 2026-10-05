@@ -309,184 +309,31 @@ function Limit-CorrectiveAnalysisContext {
 }
 
 function Limit-GateProviderContext {
-    param(
-        [AllowEmptyString()][string]$Context,
-        [int]$MaxChars
-    )
-
-    if ($MaxChars -le 0 -or $Context.Length -le $MaxChars) {
-        return $Context
-    }
+    param([AllowEmptyString()][string]$Context,[int]$MaxChars)
 
     $labels = @(
-        "CANONICAL TASK",
-        "DISPATCH PACKET",
-        "ORIGINAL OWNER ROLE CONTRACT",
-        "PRIMARY AGENT REPORT",
-        "LATEST TASK RESULT",
-        "LATEST INDEPENDENT REVIEW",
-        "QA GATE"
+        "CANONICAL TASK", "DISPATCH PACKET", "ORIGINAL OWNER ROLE CONTRACT",
+        "PRIMARY AGENT REPORT", "LATEST TASK RESULT", "LATEST INDEPENDENT REVIEW", "QA GATE"
     )
-
-    $escapedLabels = @(
-        $labels |
-            ForEach-Object { [regex]::Escape($_) }
-    )
-
-    $pattern = (
-        "(?m)^===== (?:" +
-        ($escapedLabels -join "|") +
-        ") =====\r?$"
-    )
-
-    $sectionMatches = [regex]::Matches($Context,$pattern)
-
-    if ($sectionMatches.Count -eq 0) {
+    $escapedLabels = @($labels | ForEach-Object { [regex]::Escape($_) })
+    $pattern = "(?m)^===== (?:" + ($escapedLabels -join "|") + ") =====\r?$"
+    $firstSection = [regex]::Match($Context,$pattern)
+    if (-not $firstSection.Success) {
         return Limit-ProviderContext -Context $Context -MaxChars $MaxChars
     }
 
-    $finalMarker = (
-        [Environment]::NewLine +
-        "[TRUNCATED BY AI COMPANY OS GATE EVIDENCE POLICY]"
-    )
-
-    $separator = (
-        [Environment]::NewLine +
-        [Environment]::NewLine
-    )
-
-    $separatorBudget = $separator.Length * $sectionMatches.Count
-    $available = [Math]::Max(
-        0,
-        $MaxChars - $finalMarker.Length - $separatorBudget
-    )
-
-    # Keep some generic repository context, but reserve most of the
-    # bounded window for explicit gate evidence.
-    $baseBudget = [Math]::Min(
-        1200,
-        [int][Math]::Floor($available * 0.20)
-    )
-
-    $evidenceBudget = [Math]::Max(0,$available - $baseBudget)
-    $perSection = [int][Math]::Floor(
-        $evidenceBudget / $sectionMatches.Count
-    )
-
-    $builder = New-Object System.Text.StringBuilder
-
-    $baseContext = $Context.Substring(0,$sectionMatches[0].Index)
-    $baseTake = 0
-
-    if ($baseBudget -gt 0 -and $baseContext.Length -gt 0) {
-        $baseTake = [Math]::Min($baseContext.Length,$baseBudget)
-        [void]$builder.Append(
-            $baseContext.Substring(0,$baseTake)
-        )
+    # run-gate-agent appends the complete authoritative envelope after generic context.
+    # Preserve that entire suffix, including middle evidence and section separators.
+    $requiredContext = $Context.Substring($firstSection.Index)
+    if ($MaxChars -le 0 -or $requiredContext.Length -gt $MaxChars) {
+        throw "Required authoritative gate evidence exceeds effective provider context budget ($($requiredContext.Length) > $MaxChars). No provider call permitted; reconcile evidence or budget."
     }
-
-    for ($i = 0; $i -lt $sectionMatches.Count; $i++) {
-        $sectionStart = $sectionMatches[$i].Index
-        $sectionEnd = if ($i + 1 -lt $sectionMatches.Count) {
-            $sectionMatches[$i + 1].Index
-        }
-        else {
-            $Context.Length
-        }
-
-        $sectionLength = $sectionEnd - $sectionStart
-        $section = $Context.Substring($sectionStart,$sectionLength)
-
-        if ($perSection -le 0) {
-            continue
-        }
-
-        if ($section.Length -le $perSection) {
-            $sectionPiece = $section
-        }
-        else {
-            $sectionMarker = (
-                [Environment]::NewLine +
-                "[GATE EVIDENCE SECTION TRUNCATED]" +
-                [Environment]::NewLine
-            )
-
-            $bodyBudget = [Math]::Max(
-                0,
-                $perSection - $sectionMarker.Length
-            )
-
-            if ($bodyBudget -le 0) {
-                $sectionPiece = $section.Substring(
-                    0,
-                    [Math]::Min($section.Length,$perSection)
-                )
-            }
-            else {
-                $headTake = [int][Math]::Floor(
-                    $bodyBudget * 0.70
-                )
-                $tailTake = $bodyBudget - $headTake
-
-                $sectionPiece = (
-                    $section.Substring(0,$headTake) +
-                    $sectionMarker +
-                    $section.Substring(
-                        $section.Length - $tailTake,
-                        $tailTake
-                    )
-                )
-            }
-        }
-
-        [void]$builder.Append($separator)
-        [void]$builder.Append($sectionPiece)
-    }
-
-    # Reuse any evidence quota that small authoritative sections did not need.
-    # Extend the generic/base context without displacing preserved evidence.
-    $remainingBudget = [Math]::Max(
-        0,
-        $MaxChars - $finalMarker.Length - $builder.Length
-    )
-
-    if (
-        $remainingBudget -gt 0 -and
-        $baseContext.Length -gt $baseTake
-    ) {
-        $additionalBaseAvailable = $baseContext.Length - $baseTake
-        $additionalBaseTake = [Math]::Min(
-            $remainingBudget,
-            $additionalBaseAvailable
-        )
-
-        if ($additionalBaseTake -gt 0) {
-            $additionalBase = $baseContext.Substring(
-                $baseTake,
-                $additionalBaseTake
-            )
-
-            [void]$builder.Insert(
-                $baseTake,
-                $additionalBase
-            )
-
-            $baseTake += $additionalBaseTake
-        }
-    }
-
-    [void]$builder.Append($finalMarker)
-
-    $result = $builder.ToString()
-
-    if ($result.Length -gt $MaxChars) {
-        throw (
-            "Gate evidence compaction exceeded provider context budget. " +
-            "MaxChars=$MaxChars; Actual=$($result.Length)"
-        )
-    }
-
-    return $result
+    if ($Context.Length -le $MaxChars) { return $Context }
+    $separator = [Environment]::NewLine
+    $remaining = $MaxChars - $requiredContext.Length - $separator.Length
+    if ($remaining -le 0) { return $requiredContext }
+    $genericContext = $Context.Substring(0,$firstSection.Index)
+    return $requiredContext + $separator + (Limit-ProviderContext -Context $genericContext -MaxChars $remaining)
 }
 
 function Write-ProviderEvent {
@@ -728,14 +575,31 @@ foreach ($candidate in $attempts) {
             Workload = $Workload
             LocalRuntime = $localRuntime
         }
-        $contextBudget = Get-EffectiveProviderContextBudget @contextBudgetArgs
-
         if ($Workload -eq "gate") {
-            $candidateContext = Limit-GateProviderContext `
-                -Context $Context `
-                -MaxChars ([int]$contextBudget.EffectiveMaxChars)
+            try {
+                $contextBudget = Get-EffectiveProviderContextBudget @contextBudgetArgs
+                $candidateContext = Limit-GateProviderContext -Context $Context -MaxChars ([int]$contextBudget.EffectiveMaxChars)
+            }
+            catch {
+                $safeBudgetError = Sanitize-ProviderError -Message $_.Exception.Message
+                Write-ProviderEvent -Event @{
+                    event_type = "provider_context_rejected"
+                    provider = $candidateName
+                    model = $providerModel
+                    success = $false
+                    error_category = "context"
+                    reason = $safeBudgetError
+                    context_input_chars = $Context.Length
+                    context_max_chars = $(if ($null -ne $contextBudget) { [int]$contextBudget.EffectiveMaxChars } else { 0 })
+                } -WarningPrefix "Provider context rejection metrics could not be recorded"
+                if ($Provider -ne "Auto") { throw $safeBudgetError }
+                $errors += ($candidateName + ": " + $safeBudgetError)
+                Write-Host ("Provider skipped: " + $candidateName + "; " + $safeBudgetError) -ForegroundColor DarkYellow
+                continue
+            }
         }
         elseif ($Workload -eq "analysis" -and -not [string]::IsNullOrWhiteSpace($CorrectiveContext)) {
+            $contextBudget = Get-EffectiveProviderContextBudget @contextBudgetArgs
             try {
                 $candidateContext = Limit-CorrectiveAnalysisContext -Context $Context -RequiredContext $CorrectiveContext -MaxChars ([int]$contextBudget.EffectiveMaxChars)
             }
@@ -748,6 +612,7 @@ foreach ($candidate in $attempts) {
             }
         }
         else {
+            $contextBudget = Get-EffectiveProviderContextBudget @contextBudgetArgs
             $candidateContext = Limit-ProviderContext `
                 -Context $Context `
                 -MaxChars ([int]$contextBudget.EffectiveMaxChars)
