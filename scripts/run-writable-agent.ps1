@@ -355,14 +355,35 @@ function Invoke-VerificationCommand {
 
     Push-Location $Workspace
     try {
+        # Native stderr may contain warnings even when the command succeeds.
+        # Capture under native-friendly preferences, then restore strict handling
+        # before formatting/logging. Verification still depends on the exit code.
+        $savedErrorActionPreference = $ErrorActionPreference
+        $nativePreference = Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue
+        $savedNativePreference = if ($null -ne $nativePreference) { $nativePreference.Value } else { $null }
+        try {
+            $ErrorActionPreference = "Continue"
+            $PSNativeCommandUseErrorActionPreference = $false
+            $capturedOutput = @(& $SafeCommand.Executable @($SafeCommand.Arguments) 2>&1)
+            $exitCode = $LASTEXITCODE
+        }
+        finally {
+            $ErrorActionPreference = $savedErrorActionPreference
+            if ($null -ne $nativePreference) {
+                $PSNativeCommandUseErrorActionPreference = $savedNativePreference
+            }
+            else {
+                Remove-Variable -Name PSNativeCommandUseErrorActionPreference -Scope Local -ErrorAction SilentlyContinue
+            }
+        }
+
         $lines = New-Object System.Collections.Generic.List[string]
-        & $SafeCommand.Executable @($SafeCommand.Arguments) 2>&1 | ForEach-Object {
-            $line = $_.ToString()
+        foreach ($entry in $capturedOutput) {
+            $line = $entry.ToString()
             [void]$lines.Add($line)
             Write-Host $line
         }
 
-        $exitCode = $LASTEXITCODE
         if ($null -eq $exitCode) { $exitCode = 0 }
 
         $output = ($lines.ToArray() -join [Environment]::NewLine)
