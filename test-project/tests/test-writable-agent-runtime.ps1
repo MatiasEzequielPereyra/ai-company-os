@@ -75,6 +75,8 @@ function New-FixtureTask {
 
     $dispatch = @(
         "# Execution Request - $Id",
+        "Task: $Id",
+        "Owner: frontend",
         "",
         "## Objective",
         "",
@@ -139,6 +141,7 @@ try {
         "update-task.ps1",
         "submit-task-result.ps1",
         "build-agent-context.ps1",
+        "build-corrective-analysis-context.ps1",
         "resolve-writable-required-files.ps1"
     )) {
         Copy-Item (Join-Path $repoRoot ("scripts\" + $name)) (Join-Path $fixtureRepo ("scripts\" + $name)) -Force
@@ -153,6 +156,7 @@ param(
     [string]$ProjectPath,
     [string]$Prompt,
     [string]$Context,
+    [string]$CorrectiveContext,
     [string]$SchemaPath,
     [string]$OutputPath,
     [string]$Model,
@@ -161,6 +165,7 @@ param(
 )
 if ($Role -ne "frontend" -or $Workload -ne "writable") { throw "Writable runner must propagate its role/workload" }
 if ($Provider -notin @("Ollama","OpenRouter","Gemini")) { throw "Forbidden writable provider reached router" }
+[IO.File]::WriteAllText((Join-Path $ProjectPath '.codex/captured-corrective.txt'),$CorrectiveContext)
 $source = Join-Path (Split-Path -Parent $PSScriptRoot) ".codex\fake-writable-result.json"
 Copy-Item $source $OutputPath -Force
 [PSCustomObject]@{ Provider = $Provider; Model = $Model }
@@ -204,11 +209,17 @@ Copy-Item $source $OutputPath -Force
 
     Write-NoBom (Join-Path $fixtureRepo "docs\engineering\reviews\AICO-004-review-001.md") @"
 # Review
+Task: AICO-004
+Task owner: frontend
 
 Recommendation: CHANGES_REQUIRED
+## Findings
 
 The prior writable implementation needs correction.
 "@
+
+    Write-NoBom (Join-Path $fixtureRepo 'docs/engineering/results/AICO-004-result-001.md') "Task: AICO-004`nOwner: frontend`nPrevious result"
+    Write-NoBom (Join-Path $fixtureRepo 'docs/engineering/agent-reports/AICO-004.md') "# Agent Report - AICO-004`nOwner: frontend`nPrevious deliverable"
 
     & git -C $fixtureRepo init | Out-Null
     & git -C $fixtureRepo config user.email "aico-test@example.invalid"
@@ -423,6 +434,44 @@ The prior writable implementation needs correction.
     if ($corrected -ne "corrected") {
         throw "Corrective writable execution did not update the existing worktree diff."
     }
+
+    # Equivalent corrective gates must admit the existing dirty candidate and
+    # send only the current authoritative findings to the writable router.
+    foreach ($kind in @('QA','Security')) {
+        New-FixtureTask -Id 'AICO-004' -Status 'ACTIVE' -FileName 'value4.txt'
+        $ticket = Join-Path $fixtureRepo 'tasks/AICO-004.md'
+        $history = if ($kind -eq 'QA') { 'QA gate failed.' } else { 'Security gate failed.' }
+        [IO.File]::AppendAllText($ticket,"`n- 2026-10-04T01:00:00Z - gate - QA -> READY - $history`n")
+        Write-NoBom (Join-Path $fixtureRepo 'docs/engineering/reviews/AICO-004-review-002.md') "Task: AICO-004`nTask owner: frontend`nRecommendation: APPROVE`n## Findings`nSTALE_REVIEW_MARKER"
+        Write-NoBom (Join-Path $fixtureRepo 'docs/engineering/qa/AICO-004-qa.md') "# QA Gate - AICO-004`nOutcome: $(if ($kind -eq 'QA') {'FAIL'} else {'PASS'})`n## Findings`nQA_AUTHORITATIVE_START$('Q'*4000)QA_AUTHORITATIVE_END"
+        if ($kind -eq 'Security') {
+            Write-NoBom (Join-Path $fixtureRepo 'docs/engineering/security/AICO-004-security.md') "# Security Gate - AICO-004`nOutcome: FAIL`n## Findings`nSECURITY_AUTHORITATIVE_START$('S'*4000)SECURITY_AUTHORITATIVE_END"
+        }
+        if ($kind -eq 'QA') {
+            # Historical runner output joined exactly these canonical paths with a space.
+            Write-NoBom (Join-Path $fixtureRepo 'docs/engineering/results/AICO-004-result-999.md') "Task: AICO-004`nOwner: frontend`nOutcome: COMPLETED`n## Changed Artifacts`ndocs/engineering/writable-evidence/AICO-004.md docs/engineering/agent-reports/AICO-004.md`n## Verification`nPrevious real verification"
+        }
+        Set-FakeResult @{outcome='COMPLETED';summary='Gate correction';report_markdown='# Gate correction';changes=@(@{path='src/value4.txt';operation='WRITE';content=('corrected-'+$kind);reason='Current findings'});verification_commands=@('git diff --check');verification='Verified';decisions='NONE';blockers='NONE';recommended_next='REVIEW'}
+        Invoke-Runner -Id 'AICO-004'
+        $resultFiles = @(Get-ChildItem (Join-Path $fixtureRepo 'docs/engineering/results') -Filter 'AICO-004-result-*.md' | Sort-Object { [int]([regex]::Match($_.BaseName,'(\d+)$').Value) })
+        $latestResult = [IO.File]::ReadAllText($resultFiles[-1].FullName)
+        if (-not $latestResult.Contains('docs/engineering/writable-evidence/AICO-004.md; docs/engineering/agent-reports/AICO-004.md')) { throw 'Writable result did not delimit canonical changed artifacts.' }
+        if ((Get-TaskStatus 'AICO-004') -ne 'REVIEW') { throw "$kind corrective writable retry failed." }
+        $captured = [IO.File]::ReadAllText((Join-Path $fixtureRepo '.codex/captured-corrective.txt'))
+        $marker = if ($kind -eq 'QA') {'QA_AUTHORITATIVE'} else {'SECURITY_AUTHORITATIVE'}
+        $whole = $marker+'_START'+$(if ($kind -eq 'QA') {'Q'*4000} else {'S'*4000})+$marker+'_END'
+        if (-not $captured.Contains($whole)) { throw 'Corrective findings were partially truncated.' }
+        if (-not $captured.Contains($marker+'_START') -or -not $captured.Contains($marker+'_END')) { throw "$kind full corrective findings lost." }
+        if ($captured.Contains('STALE_REVIEW_MARKER') -or ($kind -eq 'Security' -and $captured.Contains('QA_AUTHORITATIVE_START'))) { throw 'Stale successful gate findings contaminated correction.' }
+    }
+    # A later successful canonical review invalidates the failed Security source.
+    New-FixtureTask -Id 'AICO-004' -Status 'ACTIVE' -FileName 'value4.txt'
+    [IO.File]::AppendAllText((Join-Path $fixtureRepo 'tasks/AICO-004.md'),"`n- 2026-10-04T02:00:00Z - reviewer - REVIEW -> QA - Independent review approved.`n")
+    $capturePath = Join-Path $fixtureRepo '.codex/captured-corrective.txt'
+    Remove-Item -LiteralPath $capturePath
+    $staleRejected = $false
+    try { Invoke-Runner -Id 'AICO-004' } catch { $staleRejected = $_.Exception.Message -match 'clean' }
+    if (-not $staleRejected -or (Test-Path $capturePath)) { throw 'Stale corrective gate permitted dirty workspace/provider call.' }
 
     # Exercise a real native executable under Windows PowerShell ErrorActionPreference=Stop.
     # A warning on stderr is evidence; only a nonzero exit rejects the change.

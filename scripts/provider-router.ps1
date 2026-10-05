@@ -242,7 +242,7 @@ function Get-EffectiveProviderContextBudget {
         }
     }
 
-    if ($Workload -eq "writable" -and $ProviderName -eq "Ollama") {
+    if ($Workload -eq "writable") {
         $globalMax = 120000
         if ($null -ne $Config -and $null -ne $Config.writable_context_max_chars) {
             $globalMax = [int]$Config.writable_context_max_chars
@@ -251,22 +251,25 @@ function Get-EffectiveProviderContextBudget {
             $globalMax = [Math]::Min([int]$Config.context_max_chars,120000)
         }
 
+        if ($globalMax -le 0) { throw "Writable requires a valid positive context budget." }
         $hardwareMax = 0
-        if (
-            $null -eq $LocalRuntime -or
-            -not [bool]$LocalRuntime.Available -or
-            -not [int]::TryParse([string]$LocalRuntime.ContextMaxChars,[ref]$hardwareMax) -or
-            $hardwareMax -le 0 -or $globalMax -le 0
-        ) {
-            throw "Writable Ollama requires a valid positive runtime context budget."
-        }
-
         $providerMax = 0
-        $effectiveMax = [Math]::Min($globalMax,$hardwareMax)
-        if ($null -ne $Config -and $null -ne $Config.ollama_context_max_chars) {
-            $providerMax = [int]$Config.ollama_context_max_chars
-            if ($providerMax -gt 0) {
-                $effectiveMax = [Math]::Min($effectiveMax,$providerMax)
+        $effectiveMax = $globalMax
+        if ($ProviderName -eq "Ollama") {
+            if (
+                $null -eq $LocalRuntime -or
+                -not [bool]$LocalRuntime.Available -or
+                -not [int]::TryParse([string]$LocalRuntime.ContextMaxChars,[ref]$hardwareMax) -or
+                $hardwareMax -le 0
+            ) {
+                throw "Writable Ollama requires a valid positive runtime context budget."
+            }
+            $effectiveMax = [Math]::Min($globalMax,$hardwareMax)
+            if ($null -ne $Config -and $null -ne $Config.ollama_context_max_chars) {
+                $providerMax = [int]$Config.ollama_context_max_chars
+                if ($providerMax -gt 0) {
+                    $effectiveMax = [Math]::Min($effectiveMax,$providerMax)
+                }
             }
         }
         return [PSCustomObject]@{
@@ -566,7 +569,7 @@ foreach ($candidate in $attempts) {
 
     if (
         ($Workload -in @("analysis","gate") -and $candidateName -ne "Codex") -or
-        ($Workload -eq "writable" -and $candidateName -eq "Ollama")
+        ($Workload -eq "writable")
     ) {
         $contextBudgetArgs = @{
             Config = $config
@@ -598,7 +601,7 @@ foreach ($candidate in $attempts) {
                 continue
             }
         }
-        elseif ($Workload -eq "analysis" -and -not [string]::IsNullOrWhiteSpace($CorrectiveContext)) {
+        elseif ($Workload -in @("analysis","writable") -and -not [string]::IsNullOrWhiteSpace($CorrectiveContext)) {
             $contextBudget = Get-EffectiveProviderContextBudget @contextBudgetArgs
             try {
                 $candidateContext = Limit-CorrectiveAnalysisContext -Context $Context -RequiredContext $CorrectiveContext -MaxChars ([int]$contextBudget.EffectiveMaxChars)
