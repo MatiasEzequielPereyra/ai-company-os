@@ -1,9 +1,10 @@
 # Review grounded evidence design
 
-Status: PROPOSED; implementation NOT AUTHORIZED. Revision: 1. Updated: 2026-10-06 (America/Buenos_Aires).
+Status: PROPOSED; implementation NOT AUTHORIZED. Revision: 2. Updated: 2026-10-06 (America/Buenos_Aires).
 Base: `6ba0fd52728cdeb08313e51ad5244b70d5dab72f`; branch: `design/review-grounded-evidence`.
 Author: external Runtime Reliability / Review Systems Architecture. Receipt: PENDING external design audit.
 Authorization: external design request, attachment `a8aab21c-135d-42e9-a919-99e9c9f5151f/Texto pegado.txt`.
+Revision authorization: minor external review, attachment `60907c5f-1cb7-4d0a-a0e8-7db3154354de/Texto pegado.txt`; supersedes reviewed design `00d6d830dd9a0f6a9b65c386c0cbbec2f1875cbd`. Existing design branch only; documentation commit/push authorized, PR not authorized.
 Scope: this document and regression specification only. No production, schema, test, policy or lifecycle edits; no providers, QA, E2E, merges or implementation PR.
 
 Principles: **CORRECT FAILURE > FALSE SUCCESS**, **EVIDENCE BEFORE CLAIMS**, **CONFIGURED ≠ AVAILABLE ≠ CAPABLE**.
@@ -88,13 +89,37 @@ Bind an invocation-local snapshot ID to a retained canonical manifest digest. Pr
 
 Repair, fallback and final intake use the same manifest; validation must not reconstruct evidence from mutable live files. Before intake, safely compare current raw source digests and task/role/dispatch/candidate identity. Drift invalidates invocation, even if normalized text is unchanged. A fresh invocation is required; no automatic task mutation.
 
-### Engine-owned obligation coverage
+### Frozen engine-owned obligation contract: review-grounding-v1
 
-A provider-generated checklist can omit the missing plan. Engine must issue the full obligation list from owner Output declarations and canonical task acceptance items, retaining source path/digest/locator. Require exactly one assessment per engine ID: duplicates, omissions, invented or renamed IDs fail.
+A provider-generated checklist can omit the missing plan. The engine owns the exact set, retaining declaration source path, normalized digest and locator. Require one assessment per ID; duplicates, omissions, unknown IDs and renamed declarations fail. The mandatory set is the disjoint union of **owner Output bullets + canonical task Acceptance Criteria bullets**. No other source automatically contributes obligations in v1.
 
-Enumerate existing declared bullets/checkboxes without semantic rewriting; preserve compound clauses. Conditionality needs an explicit reviewed mapping keyed to role-contract version, not guesses from arbitrary natural language. Unsupported/ambiguous shapes fail preparation rather than silently shrinking coverage. Future implementation must document every shipped role's extraction coverage and map relevant Responsibilities to Output/task criteria or explicitly account for them. This is a small declaration adapter, not a generic semantic synthesizer/scoring framework.
+| Source | Frozen v1 rule / current repository evidence |
+|---|---|
+| A. Owner `## Output` | Each nonempty concrete top-level bullet becomes one role-output obligation; literal normalized text, original order, no merging/splitting or semantic rewrite. PM (`pm.md:49`), CTO (`cto.md:64`) and EM (`engineering-manager.md:62`) have such declarations. Introductory `Produce:`, `The normal output is:` and `Typical outputs include:` are framing, not obligations. |
+| B. Task `## Acceptance Criteria` | Each nonempty top-level checklist/bullet becomes one task obligation. Strip only list marker and checkbox state for declaration text; preserve compound clauses literally. Checked/unchecked state is metadata, never proof. All criteria remain distinct, even identical text at two positions. |
+| C. Task `## Requirements` | **Not independent v1 obligations.** They remain authoritative semantic context; a reviewer may identify a relevant violation as a deliverable defect. Explicit Output plus canonical acceptance criteria define mandatory exact-set coverage. A future requirement promotion needs a versioned declaration change, not inference. This avoids duplicates and generic preparation/ownership instructions becoming additional assertions of delivery. |
+| D. Dispatch Expected Output / Acceptance Criteria | **Context only for coverage.** Canonical task is authoritative for task criteria. Dispatch cannot add or replace an ID, even if wording differs. A materially conflicting dispatch must be reconciled before invocation, not fuzzy-deduplicated. Additional mandatory work must first become an explicit canonical task declaration. |
+| E. Role Responsibilities | Authoritative semantic reviewer context, **not unconditional exact-set obligations**. Scalability/reliability/authentication/authorization/monitoring/integrations/accessibility are not assumed applicable everywhere. Relevant violations may produce deliverable_defects. Future promotion requires an explicit versioned Output/task declaration. No dynamic responsibility-to-output mapping. |
+| F. Roles without Output | Backend, frontend, devops, qa, security and CEO currently have no `## Output`; emit zero role-output IDs, never fabricate them. Require concrete canonical task criteria and actual task-bound report/implementation candidate authority. Scaffold-only or ambiguous task declarations fail preparation before provider invocation. |
+| G. Unsupported shape | Duplicate selected sections, nested/ordered lists, orphan continuations, empty placeholder bullets, non-framing prose or undecidable declaration boundaries fail the whole preparation; never skip the troublesome item. |
 
-CTO coverage includes all seven Output items and task requirements for explicit questions/blockers. ADR remains conditional. Conditional NOT_APPLICABLE needs reason, primary fact citations and cited source condition; reviewer judges necessity. It cannot waive unconditional plan/risks/migration. Engine checks conditional permission and provenance, not correctness of necessity. Unresolved applicability should yield CHANGES_REQUIRED rather than a completeness claim.
+Deterministic parser contract: select exactly one case-sensitive level-two section named `Output` or `Acceptance Criteria`, bounded by the next level-one/two heading outside fenced code. Fenced content is not a declaration; a malformed fence fails preparation. Recognize top-level `- ` / `* ` / `+ ` bullets and optional `[ ]`, `[x]`, `[X]` marker. A continuation indented at least two spaces belongs to the previous bullet, including its normalized whitespace/newlines; no nested list or ambiguous continuation is supported. Blank section separators (`---`) and blank lines are framing. Preserve declaration body characters after the one structural marker/checkbox removal. Role framing is limited to the three shipped strings above; other non-bullet declaration prose is unsupported. Missing task Acceptance Criteria or an empty/placeholder set fails preparation. Absent role Output is supported; present but empty/malformed Output fails.
+
+IDs are deterministic tuples serialized by the engine: `v1/<source-kind>/<canonical-declaration-path>/<normalized-section-sha256>/<one-based-bullet-order>`. Source-kind is `role-output` or `task-acceptance`; full path/digest/order are retained in the manifest even if an opaque short ID is displayed. Section digest includes normalized literal declaration bodies/order, excludes checkbox state and list-marker representation. Identical declarations in different sources/orders retain separate IDs; there is no fuzzy or exact-text deduplication. Reordering/changing declarations changes identity; repairs/fallback use the original frozen set. Snapshot ID separately binds current full source identity.
+
+For roles without Output, parsing a nonempty generic checklist is not sufficient preparation. The current scaffold declarations in `scripts/new-task.ps1:101–105` and `scripts/materialize-plan-tasks.ps1:99–102` are versioned known generic framing: Objective is satisfied; Required evidence is recorded; Applicable quality gates are complete or explicitly marked NOT_APPLICABLE; Role-owned deliverable is produced; Open questions and blockers are explicit; Evidence is recorded in this task; Applicable downstream dependencies are ready. Their exact literal bodies remain task obligations where present, but a set consisting only of them cannot establish a concrete deliverable for a role without Output. Fail with `OBLIGATION_SOURCE_NOT_CONCRETE`; do not expand Objective or Responsibilities into invented criteria. Specific task criteria materialized from approved backlog acceptance_criteria (`materialize-engineering-backlog.ps1:354`) remain literal task obligations. If unfamiliar task declarations are vague/ambiguous and concreteness cannot be established, stop for canonical task clarification rather than ask a provider to synthesize the missing contract. Deterministic parsing does not claim to decide arbitrary prose specificity or semantic applicability; the readiness/source declaration must supply an unambiguous concrete set.
+
+CTO v1 has seven distinct role IDs, in this order: Architecture proposal; **Technical implementation plan**; Component boundaries; API/data contracts; Risks; Migration strategy; ADR when necessary. Preserve actual source punctuation. The plan ID is ordinal2 and cannot be satisfied from result metadata. The task's Open questions and blockers criterion is an additional task ID, not inferred from CTO Responsibilities.
+
+The sole conditional role-output declaration in the shipped v1 Output set is CTO `ADR when necessary.` at ordinal7. Bind this permission to the exact versioned CTO declaration identity/text; do not make punctuation/wording-equivalent guesses. All other shipped Output bullets and task criteria are mandatory unless a future explicitly versioned contract changes them. Conditional ADR NOT_APPLICABLE requires a reason, primary fact citations and the source condition. Reviewer judges necessity; engine verifies authorized conditional identity and provenance, not whether the necessity judgment is right. Missing applicability evidence requires CHANGES_REQUIRED. It cannot waive unconditional plan, contracts, risks or migration. PM/EM framing does not make their enumerated Output bullets optional.
+
+### Frozen v1 atomicity boundary
+
+Reuse **the existing per-task execution lock**, `scripts/task-execution-lock.ps1`; no second lock. Current `run-gate-agent.ps1:240` enters `Enter-TaskExecutionLock -Operation "GATE"`, before evidence capture. Its `:513` calls `review-task.ps1` while the lock is held, and outer `finally :683–684` releases it after processing. `review-task.ps1` creates the Review artifact, updates task evidence and performs APPROVE→QA or CHANGES_REQUIRED→READY within this caller-owned critical section.
+
+The same acquired lock MUST remain continuously held across snapshot capture, provider invocation, same-provider repair, fallback, final grounding validation, raw identity/drift recheck, Review artifact intake and lifecycle transition. Never release/reacquire between check and intake. Snapshot identity does not replace locking; locking does not replace snapshot identity. Preserve writable worktree/common-Git/provenance guards.
+
+This lock serializes participating AI Company OS operations; it is not a filesystem-wide write barrier. `review-task.ps1` is a caller-owned intake helper, not permission to bypass grounding/lock through a separate direct invocation. If implementation finds an authoritative source can mutate through a competing operation outside this lock, fail closed, record the exact writer/entry point and return for architecture review. Do not weaken hash checks, add an unreviewed lock or silently assume safety. External/manual source mutation is likewise not sanctioned by grounding; identity drift invalidates invocation.
 
 ### Normalized line/excerpt primitive
 
@@ -145,7 +170,7 @@ Only one illustrative row; real APPROVE requires the entire engine obligation se
 6. Verify normalized digest against captured text, inclusive bounds and exact ordinal excerpt. No fuzzy matching, relocation, trimming or rendered-Markdown comparison. Verify raw captured identity separately.
 7. APPROVE requires all mandatory rows SATISFIED, only authorized conditional N/A, valid citations and existing empty defect arrays. CHANGES_REQUIRED requires concrete missing output/defect and corresponding UNSATISFIED assessment or concrete deliverable defect. Missing-output negatives need no invented quote; any supplied citation must still be valid.
 8. Return usable judgment or typed unusable-output reason. Grounding valid does not mean semantic quality PASS.
-9. Revalidate after router success against same manifest; compare current raw/source authorization identities immediately before intake. Serial operation/lock must prevent writes racing check and transition. If current coordination cannot guarantee that window, implementation must fail closed or bind intake to immutable candidate revision, not read a different live artifact.
+9. Revalidate after router success against same manifest; compare current raw/source authorization identities immediately before intake under the still-held existing per-task GATE execution lock. Keep it through Review artifact/evidence recording and lifecycle transition; no release/reacquire or second lock. A competing writer outside this lock is a fail-closed architecture escalation with exact writer evidence, not permission to weaken identity checks.
 10. Only usable/current decisions enter existing gate recording/lifecycle. Persist snapshot identity and validated references for audit.
 
 ## 10. Failure semantics
@@ -174,7 +199,7 @@ Separate semantic evaluation uses this sanitized contradiction and expects CHANG
 
 ## 13. Adversarial regression matrix
 
-20 cases specified; tests NOT_RUN.
+22 cases specified; tests NOT_RUN.
 
 | ID | Case | Expected |
 |---|---|---|
@@ -198,6 +223,8 @@ Separate semantic evaluation uses this sanitized contradiction and expects CHANG
 | R | Conditional ADR N/A versus unconditional plan N/A | Conditional fact-grounded semantic exemption allowed; unconditional rejected |
 | S | Genuine primary quote irrelevant to asserted output | Provenance may pass; semantic eval exposes limitation, never deterministic quality PASS |
 | T | Deleted source/drift during repair/intake or declaration ambiguity | Stop invocation, no mutation |
+| U | Role/task declaration cannot be deterministically parsed; obligation-set shrinkage | Entire preparation fails, provider not called, no dropped IDs or lifecycle mutation |
+| V | Competing AI Company OS operation for same task while Review owns GATE lock | Existing execution-lock contract rejects competitor; same invocation/snapshot used for validation/intake; no second Review artifact or transition |
 
 M includes schema-adapter/custom-router compatibility subcases. Preserve existing negative decision/role/context tests. Case S intentionally exercises the semantic boundary; keywords cannot replace judgment.
 
@@ -207,7 +234,7 @@ Manifest limits source reads to canonical task-bound roots and explicit candidat
 
 Artifacts are untrusted data, including prompt-like strings or forged line labels. Authority/IDs come from engine framing, not content. Never interpolate excerpts into shells or paths. Secret-bearing primary sources cannot silently be redacted then treated as full eligible evidence; exclude/fail preparation visibly. Redact diagnostic errors and sanitize regression transport carefully.
 
-Digest proves identity, not safety/truth/ownership. Snapshot ID is trusted only through retained engine binding, not echo. Lock coordination and raw identity prevent stale intake. Historical approvals keep provenance; no retroactive rewrite/status changes.
+Digest proves identity, not safety/truth/ownership. Snapshot ID is trusted only through retained engine binding, not echo. Existing continuously held per-task lock plus raw identity checks are both required. Audit competing source writers; a path outside that lock fails closed and returns for architecture review. Historical approvals keep provenance; no retroactive rewrite/status changes. Retained rejected attempts must not contain secrets or mutate historical canonical gate artifacts.
 
 ## 15. Compatibility
 
@@ -247,13 +274,13 @@ No deterministic proof of architecture quality, sufficiency, relevance or model 
 
 Proposed steps, NOT EXECUTED:
 
-1. Approve authority/locator/failure design, obligation declaration mappings and limits/conditional policy.
-2. Implement small immutable snapshot/manifest helper with existing guards; establish raw/normalized conventions and mutation-lock boundary.
-3. Add coverage mappings for shipped role/task contracts, Review v1 schema and manifest-aware validation; no semantic keyword heuristics.
+1. Audit this frozen v1 obligation-source/conditional/atomicity contract and calibrate numeric limits; source hierarchy and lock ownership are decided, not deferred.
+2. Implement small immutable snapshot/manifest helper with existing guards and specified raw/normalized conventions inside the existing continuous GATE lock; audit competing writers and stop for architecture review if any bypass it.
+3. Implement the frozen role Output/task Acceptance extraction and IDs, Review v1 schema and manifest-aware validation; Requirements/dispatch/Responsibilities stay context only. No semantic keyword heuristics.
 4. Pass same manifest through initial/repair/fallback and pre-intake checks; retain rejected attempts securely.
-5. Create sanitized real fixture/provenance, implement20-case matrix and existing schema/context/packaging regressions.
+5. Create sanitized real fixture/provenance, implement22-case matrix and existing schema/context/packaging regressions.
 6. Run focused/full suites; separately authorize real-provider semantic eval. Deterministic PASS does not certify E2E/TUI.
 
-Open implementation audit decisions: exact role mappings/responsibility coverage, mutation-lock ownership, calibrated limits and retention/redaction policy. Resolve before rollout. None requires implementing code in this task.
+Remaining implementation-calibration decisions: final numeric limits measured against shipped roles/tasks, and exact rejected-attempt storage/retention/redaction details. Limits always fail closed without evidence clipping; retained attempts never mutate historical canonical gate artifacts or persist secrets. Obligation sources, responsibility coverage, conditional ADR policy and ownership/scope of the existing per-task lock are DECIDED by v1 above, not open architecture questions. Any newly discovered competing writer outside that boundary requires a separate architecture review, not silent implementation discretion.
 
 Task validation: git diff --check and authorized-file/status verification only. Runtime tests NOT_RUN (design only). Runtime behavior UNCHANGED. Historical evidence read-only. Both diagnostic A fixtures stay frozen, B NOT_STARTED. PR NONE. Next exact action: External Orchestrator audits this document and authorizes a separate implementation task if accepted.
