@@ -1,10 +1,11 @@
 # Review grounded evidence design
 
-Status: PROPOSED; implementation NOT AUTHORIZED. Revision: 2. Updated: 2026-10-06 (America/Buenos_Aires).
+Status: PROPOSED; implementation NOT AUTHORIZED. Revision: 3. Updated: 2026-10-06 (America/Buenos_Aires).
 Base: `6ba0fd52728cdeb08313e51ad5244b70d5dab72f`; branch: `design/review-grounded-evidence`.
 Author: external Runtime Reliability / Review Systems Architecture. Receipt: PENDING external design audit.
 Authorization: external design request, attachment `a8aab21c-135d-42e9-a919-99e9c9f5151f/Texto pegado.txt`.
 Revision authorization: minor external review, attachment `60907c5f-1cb7-4d0a-a0e8-7db3154354de/Texto pegado.txt`; supersedes reviewed design `00d6d830dd9a0f6a9b65c386c0cbbec2f1875cbd`. Existing design branch only; documentation commit/push authorized, PR not authorized.
+Compatibility revision authorization: final external review, attachment `f019ec9b-8f59-4526-be91-36358a1d2884/Texto pegado.txt`; supersedes reviewed revision `3a27ac8bf9320451da804ae30dbb1e333d952ffa`. Only this document may change; commit/push same branch, no PR or production implementation.
 Scope: this document and regression specification only. No production, schema, test, policy or lifecycle edits; no providers, QA, E2E, merges or implementation PR.
 
 Principles: **CORRECT FAILURE > FALSE SUCCESS**, **EVIDENCE BEFORE CLAIMS**, **CONFIGURED ≠ AVAILABLE ≠ CAPABLE**.
@@ -113,6 +114,29 @@ CTO v1 has seven distinct role IDs, in this order: Architecture proposal; **Tech
 
 The sole conditional role-output declaration in the shipped v1 Output set is CTO `ADR when necessary.` at ordinal7. Bind this permission to the exact versioned CTO declaration identity/text; do not make punctuation/wording-equivalent guesses. All other shipped Output bullets and task criteria are mandatory unless a future explicitly versioned contract changes them. Conditional ADR NOT_APPLICABLE requires a reason, primary fact citations and the source condition. Reviewer judges necessity; engine verifies authorized conditional identity and provenance, not whether the necessity judgment is right. Missing applicability evidence requires CHANGES_REQUIRED. It cannot waive unconditional plan, contracts, risks or migration. PM/EM framing does not make their enumerated Output bullets optional.
 
+### Frozen v1 task-generation compatibility
+
+Current `scripts/materialize-plan-tasks.ps1:99–102` writes only the four generic planning criteria. Its roleObjective switch already deterministically owns the role-specific planning objective. QA/Security/DevOps lack role Output, so the current generic-only generated contract would fail v1 preparation. Rollout MUST update **new task materialization**, not weaken Review or invent role Output declarations.
+
+For the three known no-Output planning roles, prepend one normal canonical Acceptance Criterion whose body literally reuses the existing engine-owned `$roleObjective`, followed by the unchanged four scaffold criteria. No new paraphrase, semantic synthesis, Responsibilities expansion or provider call. It receives the ordinary task-acceptance ID by the frozen parser, with no special Review exemption. Objective text becomes eligible only after explicit canonical materialization as Acceptance Criteria; arbitrary existing `## Objective` text is never an implicit obligation source.
+
+| Planning role | Current contract | Frozen new-materialization rule |
+|---|---|---|
+| pm | Role Output exists | Existing role-output coverage plus task criteria; no compatibility objective promotion needed |
+| cto | Role Output exists | Existing seven role outputs, conditional ADR policy and task criteria unchanged |
+| engineering-manager | Role Output exists | Existing role-output coverage plus task criteria unchanged |
+| qa | No role Output | Prepend `Define functional, regression and release validation required for: <work request objective>` using literal existing roleObjective |
+| security | No role Output | Prepend `Review applicable security boundaries, data handling and release risks for: <work request objective>` using literal existing roleObjective |
+| devops | No role Output | Prepend `Review build, deployment, observability and rollback readiness for: <work request objective>` using literal existing roleObjective |
+
+These role templates are a fixed, versioned materialization mapping, not a runtime inference from role prose. For example a generated QA task has the concrete roleObjective criterion first, then Role-owned deliverable is produced; Open questions and blockers are explicit; Evidence is recorded in this task; Applicable downstream dependencies are ready. The known roleObjective criterion expresses the assigned deliverable but does not prove the provider actually produced it: normal primary evidence grounding and semantic Review still apply.
+
+For non-AUDIT requests the current materializer iterates plan roles and has a default `Complete the $role responsibilities required for: $objective` branch; AUDIT filters to six known roles. That default generic Responsibilities reference is **not** a concrete v1 mapping. Any additional role through this planning path needs an explicitly versioned engine-owned concrete objective/template criterion or materialization must fail visibly. Validate all selected roles and supported literal criterion shape before creating any tasks, avoiding a partial batch before an unknown role failure. Unknown/no-Output roles never become reviewable through scaffold alone. Malformed/empty/UNKNOWN work-request objectives or text that cannot be represented by the frozen declaration parser fail materialization/preparation, not semantic synthesis or silent clipping. Formatting may add structural checklist syntax, but must preserve literal objective content and compound clauses.
+
+**Historical tasks:** no rewriting tasks, Review artifacts or frozen evidence. Newly materialized tasks after rollout receive the compatibility criterion. For an existing task entering v1 Review: role Output present → use it plus current Acceptance Criteria; no Output but concrete existing Acceptance Criteria → use those; no Output and generic-only criteria → `OBLIGATION_SOURCE_NOT_CONCRETE`, with no provider call or legacy bypass. Canonical task clarification, if separately authorized, is distinct from automatic migration.
+
+**Engineering backlog tasks:** `scripts/materialize-engineering-backlog.ps1:354–356` already writes `item.acceptance_criteria` via Format-Checks into canonical task Acceptance Criteria. Those concrete declarations remain ordinary v1 task obligations, including backend/frontend owners without Output. Empty, generic-only or unsupported criteria fail closed; never substitute Objective or Responsibilities. Preserve existing structured backlog/schema/dependency validation; compatibility does not loosen it or fabricate criteria. This rule neither adds a new obligation source nor exempts any provider/role from grounding.
+
 ### Frozen v1 atomicity boundary
 
 Reuse **the existing per-task execution lock**, `scripts/task-execution-lock.ps1`; no second lock. Current `run-gate-agent.ps1:240` enters `Enter-TaskExecutionLock -Operation "GATE"`, before evidence capture. Its `:513` calls `review-task.ps1` while the lock is held, and outer `finally :683–684` releases it after processing. `review-task.ps1` creates the Review artifact, updates task evidence and performs APPROVE→QA or CHANGES_REQUIRED→READY within this caller-owned critical section.
@@ -199,7 +223,7 @@ Separate semantic evaluation uses this sanitized contradiction and expects CHANG
 
 ## 13. Adversarial regression matrix
 
-22 cases specified; tests NOT_RUN.
+26 cases specified; tests NOT_RUN.
 
 | ID | Case | Expected |
 |---|---|---|
@@ -225,8 +249,12 @@ Separate semantic evaluation uses this sanitized contradiction and expects CHANG
 | T | Deleted source/drift during repair/intake or declaration ambiguity | Stop invocation, no mutation |
 | U | Role/task declaration cannot be deterministically parsed; obligation-set shrinkage | Entire preparation fails, provider not called, no dropped IDs or lifecycle mutation |
 | V | Competing AI Company OS operation for same task while Review owns GATE lock | Existing execution-lock contract rejects competitor; same invocation/snapshot used for validation/intake; no second Review artifact or transition |
+| W | QA planning task created by real planning materializer after rollout | Canonical criterion literally equals engine QA roleObjective; preparation succeeds with normal task-acceptance ID/full exact set; generic-only control fails |
+| X | Security planning task created by real planning materializer after rollout | Literal Security roleObjective criterion; preparation succeeds with its normal task-acceptance ID; scaffold alone remains insufficient |
+| Y | DevOps planning task created by real planning materializer after rollout | Literal DevOps roleObjective criterion; preparation succeeds/full exact set includes it; no role Output fabrication |
+| Z | Unknown/no-Output planning role with generic-only contract | Fail materialization preflight or Review preparation; no invented Output/Responsibilities promotion, no provider call/lifecycle mutation; no partial task batch on materialization rejection |
 
-M includes schema-adapter/custom-router compatibility subcases. Preserve existing negative decision/role/context tests. Case S intentionally exercises the semantic boundary; keywords cannot replace judgment.
+M includes schema-adapter/custom-router compatibility subcases. W–Y use the real materializer in isolated regression fixtures with a known work request/plan; assert exact generated criterion text and ordinary obligation identity, not provider semantic quality. Include existing historical scaffold-only task rejection and concrete backend/frontend backlog acceptance as compatibility subcases; no historical original is rewritten. Preserve existing negative decision/role/context tests. Case S intentionally exercises the semantic boundary; keywords cannot replace judgment.
 
 ## 14. Security
 
@@ -247,6 +275,8 @@ Labels/manifests/excerpts increase prompt/output size; count actual characters/b
 New Review invocations require explicit v1. Legacy ungrounded APPROVE is unusable; may take single repair/fallback, never accepted through an optional mode. Ship schema, manifest plumbing, validator, intake guard and packaging/install/update together after authorization. Old gate artifacts stay immutable and auditable; absence of v1 identifies legacy provenance, without automatic reopening or continuation.
 
 Rollout: sanitized fixture, compatibility regressions, existing full suites, then separately authorized provider eval. Rollback may visibly disable v1 Review execution; never silently allow ungrounded approval for invocations claiming v1. No provider order/free policy/TUI/task-state changes in this design.
+
+Ship the planning materializer compatibility update with the grounding contract before generating new v1 planning tasks. Otherwise current QA/Security/DevOps planning would deterministically fail on generic-only criteria. Existing concrete engineering-backlog criteria remain valid; existing historical generic-only tasks are not silently migrated or exempted. This is required lifecycle compatibility, not a new Review authority source or feature expansion.
 
 ## 17. Non-goals and decision test
 
@@ -276,9 +306,9 @@ Proposed steps, NOT EXECUTED:
 
 1. Audit this frozen v1 obligation-source/conditional/atomicity contract and calibrate numeric limits; source hierarchy and lock ownership are decided, not deferred.
 2. Implement small immutable snapshot/manifest helper with existing guards and specified raw/normalized conventions inside the existing continuous GATE lock; audit competing writers and stop for architecture review if any bypass it.
-3. Implement the frozen role Output/task Acceptance extraction and IDs, Review v1 schema and manifest-aware validation; Requirements/dispatch/Responsibilities stay context only. No semantic keyword heuristics.
+3. Implement the frozen role Output/task Acceptance extraction and IDs, Review v1 schema and manifest-aware validation; Requirements/dispatch/Responsibilities stay context only. No semantic keyword heuristics. Include compatibility-safe `materialize-plan-tasks.ps1` literal QA/Security/DevOps roleObjective criteria and unknown-role preflight, plus materialization regressions; keep existing concrete backlog validation/criteria intact.
 4. Pass same manifest through initial/repair/fallback and pre-intake checks; retain rejected attempts securely.
-5. Create sanitized real fixture/provenance, implement22-case matrix and existing schema/context/packaging regressions.
+5. Create sanitized real fixture/provenance, implement26-case A–Z matrix and existing schema/context/packaging regressions.
 6. Run focused/full suites; separately authorize real-provider semantic eval. Deterministic PASS does not certify E2E/TUI.
 
 Remaining implementation-calibration decisions: final numeric limits measured against shipped roles/tasks, and exact rejected-attempt storage/retention/redaction details. Limits always fail closed without evidence clipping; retained attempts never mutate historical canonical gate artifacts or persist secrets. Obligation sources, responsibility coverage, conditional ADR policy and ownership/scope of the existing per-task lock are DECIDED by v1 above, not open architecture questions. Any newly discovered competing writer outside that boundary requires a separate architecture review, not silent implementation discretion.
