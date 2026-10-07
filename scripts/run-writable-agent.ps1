@@ -1138,8 +1138,146 @@ if ($isBugTask -and [string]$result.outcome -eq "COMPLETED") {
         }
 
         $hypothesisId = ([string]$hypothesis.id).Trim()
-        if ([string]::IsNullOrWhiteSpace($hypothesisId) -or $hypothesisId -notmatch '^[A-Za-z0-9._-]+
+        if ([string]::IsNullOrWhiteSpace($hypothesisId) -or $hypothesisId -notmatch '^[A-Za-z0-9._-]+$') {
+            throw "BUG hypothesis id is invalid: $hypothesisId"
+        }
+        if ($hypothesisIds.ContainsKey($hypothesisId)) {
+            throw "BUG diagnostic_plan contains duplicate hypothesis id: $hypothesisId"
+        }
+        $hypothesisIds[$hypothesisId] = $true
 
+        foreach ($field in @("statement","prediction","falsifier","experiment_command")) {
+            if ([string]::IsNullOrWhiteSpace([string]$hypothesis.$field)) {
+                throw "BUG hypothesis.$field must be concrete."
+            }
+        }
+
+        $safeExperiment = Get-SafeCommand -Command ([string]$hypothesis.experiment_command) -Policy $policy
+        Write-Host ""
+        Write-Host ("Diagnostic hypothesis " + $hypothesisId + ": " + $safeExperiment.Display) -ForegroundColor Cyan
+        $experimentResult = Invoke-DiagnosticCommand -SafeCommand $safeExperiment -Workspace $workspace
+        $receiptSerial++
+        $receiptId = "attempt-" + $diagnosticAttemptIndex + "-" + $hypothesisId + "-" + $receiptSerial.ToString("000")
+        $receipt = New-DiagnosticReceipt -Id $receiptId -Phase "HYPOTHESIS" -Command $safeExperiment.Display -CommandResult $experimentResult
+        $priorReceipts = @($priorReceipts) + @($receipt)
+
+        $supported = Test-DiagnosticExitCondition -ExitCode $experimentResult.ExitCode -Condition ([string]$hypothesis.supported_when)
+        $hypothesisEvidence += [ordered]@{
+            id = $hypothesisId
+            statement = [string]$hypothesis.statement
+            prediction = [string]$hypothesis.prediction
+            falsifier = [string]$hypothesis.falsifier
+            experiment_command = [string]$safeExperiment.Display
+            supported_when = [string]$hypothesis.supported_when
+            result = if ($supported) { "SUPPORTED" } else { "FALSIFIED" }
+            receipt_ref = $receiptId
+        }
+    }
+
+    if ($hypothesisEvidence.Count -lt 1) {
+        throw "BUG diagnostic_plan requires at least one falsifiable hypothesis."
+    }
+
+    $cause = $plan.cause
+    foreach ($field in @("status","statement","hypothesis_refs")) {
+        if ($null -eq $cause.PSObject.Properties[$field]) {
+            throw "BUG cause missing field: $field"
+        }
+    }
+
+    $causeRefs = @($cause.hypothesis_refs | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
+    $causeReceiptRefs = @()
+
+    foreach ($causeRef in $causeRefs) {
+        $matched = @($hypothesisEvidence | Where-Object { [string]$_.id -eq $causeRef })
+        if ($matched.Count -ne 1) {
+            throw "BUG cause references unknown hypothesis: $causeRef"
+        }
+        if ([string]$cause.status -eq "CONFIRMED" -and [string]$matched[0].result -ne "SUPPORTED") {
+            throw "BUG CONFIRMED cause references a hypothesis that the runtime falsified: $causeRef"
+        }
+        $causeReceiptRefs += [string]$matched[0].receipt_ref
+    }
+
+    if ([string]$cause.status -eq "CONFIRMED") {
+        if ($causeRefs.Count -lt 1 -or $causeReceiptRefs.Count -lt 1) {
+            throw "BUG CONFIRMED cause requires supported hypothesis evidence."
+        }
+    }
+    elseif ([string]$cause.status -ne "UNCONFIRMED") {
+        throw "BUG cause.status must be CONFIRMED or UNCONFIRMED."
+    }
+
+    $resolution = $plan.resolution
+    foreach ($field in @("classification","summary","residual_risk")) {
+        if ($null -eq $resolution.PSObject.Properties[$field]) {
+            throw "BUG resolution missing field: $field"
+        }
+    }
+
+    if ([string]$resolution.classification -eq "REPAIR") {
+        if ([string]$cause.status -ne "CONFIRMED") {
+            throw "BUG REPAIR requires a CONFIRMED evidence-backed cause."
+        }
+    }
+    elseif ([string]$resolution.classification -eq "WORKAROUND") {
+        if ([string]::IsNullOrWhiteSpace([string]$resolution.residual_risk)) {
+            throw "BUG WORKAROUND requires explicit residual_risk."
+        }
+    }
+    else {
+        throw "BUG resolution.classification must be REPAIR or WORKAROUND."
+    }
+
+    $attempt = [ordered]@{
+        index = $diagnosticAttemptIndex
+        corrective = [bool]($corrective -or $priorAttempts.Count -gt 0)
+        hypotheses = @($hypothesisEvidence)
+        cause = [ordered]@{
+            status = [string]$cause.status
+            statement = [string]$cause.statement
+            hypothesis_refs = @($causeRefs)
+            receipt_refs = @($causeReceiptRefs)
+        }
+        resolution = [ordered]@{
+            classification = [string]$resolution.classification
+            summary = [string]$resolution.summary
+            residual_risk = [string]$resolution.residual_risk
+        }
+    }
+
+    $diagnosticArtifact = [ordered]@{
+        schema_version = "1"
+        task_id = $Id
+        workflow = "BUG"
+        state = "PREFLIGHT"
+        reproduction = [ordered]@{
+            kind = "COMMAND"
+            command = [string]$safeReproductionCommand.Display
+            working_directory = "."
+            broken_when = [string]$signal.broken_when
+            signal_fingerprint = $signalFingerprint
+            pre_fix = [ordered]@{
+                observation = "BROKEN_OBSERVED"
+                receipt_ref = $preFixReceiptRef
+            }
+        }
+        receipts = @($priorReceipts)
+        attempts = @($priorAttempts) + @($attempt)
+        regression = [ordered]@{ receipt_refs = @() }
+        post_fix_replay = [ordered]@{
+            signal_fingerprint = $signalFingerprint
+            observation = "NOT_RUN"
+            receipt_ref = ""
+        }
+    }
+
+    Save-DiagnosticArtifact -Path $diagnosticPath -Artifact $diagnosticArtifact
+    & $diagnosticValidatorPath -JsonPath $diagnosticPath | Out-Null
+}
+
+$changes = @($result.changes)
+$verificationCommands = @($result.verification_commands)
 if ($result.outcome -eq "BLOCKED") {
     if ($changes.Count -gt 0 -or $verificationCommands.Count -gt 0) {
         throw "BLOCKED writable result must not contain changes or verification commands."
