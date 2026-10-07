@@ -178,6 +178,14 @@ switch ([string]$evidence.state) {
             throw "Diagnostic contract: PREFLIGHT cannot claim post-fix evidence."
         }
     }
+    "FAILED_VERIFICATION" {
+        if ([string]$preFix.observation -ne "BROKEN_OBSERVED") {
+            throw "Diagnostic contract: FAILED_VERIFICATION requires observed broken behavior before the attempted change."
+        }
+        if ([string]$postFix.observation -ne "NOT_RUN") {
+            throw "Diagnostic contract: FAILED_VERIFICATION cannot claim post-fix replay evidence."
+        }
+    }
     "FAILED_POST_FIX" {
         if ([string]$preFix.observation -ne "BROKEN_OBSERVED" -or [string]$postFix.observation -ne "BROKEN_OBSERVED") {
             throw "Diagnostic contract: FAILED_POST_FIX requires broken observations before and after the attempted change."

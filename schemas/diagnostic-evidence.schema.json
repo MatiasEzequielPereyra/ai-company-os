@@ -6,7 +6,7 @@
     "workflow": { "type": "string", "enum": ["BUG"] },
     "state": {
       "type": "string",
-      "enum": ["NOT_REPRODUCED", "PREFLIGHT", "FAILED_POST_FIX", "COMPLETE"]
+      "enum": ["NOT_REPRODUCED", "PREFLIGHT", "FAILED_VERIFICATION", "FAILED_POST_FIX", "COMPLETE"]
     },
     "reproduction": {
       "type": "object",

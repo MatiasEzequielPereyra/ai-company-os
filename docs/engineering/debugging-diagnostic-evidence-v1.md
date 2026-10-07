@@ -37,3 +37,10 @@ Automated writable repair uses command-based reproduction and hypothesis experim
 ## Distribution
 
 The canonical `.agents/skills/bug` capability and legacy template must stay semantically aligned. New projects must receive canonical skills. Existing-project reconciliation remains explicit and must not silently overwrite local skill customization.
+
+
+## Runtime enforcement
+
+The writable BUG runner selects a BUG-specific structured output contract. Before any source mutation it validates the reproduction command with the writable command policy, executes it, runs the declared hypothesis experiments, and refuses REPAIR when the runtime evidence does not support the claimed cause.
+
+Corrective attempts reuse the original frozen signal fingerprint and append attempts/receipts rather than replacing diagnostic history. Automatic signal substitution is fail-closed; formal invalidation requires a separate explicit control-plane decision.
