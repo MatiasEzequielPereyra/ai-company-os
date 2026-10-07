@@ -391,12 +391,24 @@ Add-Artifact `
     -MaxChars $artifactMaxChars
 
 $diagnosticPath = Join-Path $root ("docs\engineering\diagnostics\" + $Id + "-diagnostic-v1.json")
+$taskType = (Read-Field $taskContent "Type").Trim().ToUpperInvariant()
+$taskWorkKind = (Read-Field $taskContent "Work kind").Trim().ToUpperInvariant()
+$isBugImplementation = ($taskType -eq "BUG" -and $taskWorkKind -eq "IMPLEMENTATION")
+
 if (Test-Path -LiteralPath $diagnosticPath -PathType Leaf) {
     if (-not (Test-Path -LiteralPath $diagnosticValidatorPath -PathType Leaf)) {
         throw "Diagnostic evidence validator missing: $diagnosticValidatorPath"
     }
     & $diagnosticValidatorPath -JsonPath $diagnosticPath | Out-Null
     Add-Artifact -Builder $evidence -Root $root -Path $diagnosticPath -Label "DIAGNOSTIC EVIDENCE CONTRACT V1" -MaxChars $artifactMaxChars
+}
+elseif ($isBugImplementation) {
+    [void]$evidence.AppendLine("===== DIAGNOSTIC EVIDENCE CONTRACT V1 =====")
+    [void]$evidence.AppendLine("Repository-relative path: docs/engineering/diagnostics/$Id-diagnostic-v1.json")
+    [void]$evidence.AppendLine("Evidence type: required BUG diagnostic artifact")
+    [void]$evidence.AppendLine("MISSING: a BUG implementation cannot receive Review APPROVE or QA PASS without COMPLETE diagnostic evidence.")
+    [void]$evidence.AppendLine("===== END DIAGNOSTIC EVIDENCE CONTRACT V1 =====")
+    [void]$evidence.AppendLine()
 }
 
 if ($Gate -in @("QA","Security")) {

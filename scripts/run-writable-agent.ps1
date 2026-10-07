@@ -1153,6 +1153,9 @@ if ($isBugTask -and [string]$result.outcome -eq "COMPLETED") {
         }
 
         $safeExperiment = Get-SafeCommand -Command ([string]$hypothesis.experiment_command) -Policy $policy
+        if ([string]$safeExperiment.Display -ceq [string]$safeReproductionCommand.Display) {
+            throw "BUG hypothesis experiment must discriminate the cause and cannot be identical to the frozen reproduction signal."
+        }
         Write-Host ""
         Write-Host ("Diagnostic hypothesis " + $hypothesisId + ": " + $safeExperiment.Display) -ForegroundColor Cyan
         $experimentResult = Invoke-DiagnosticCommand -SafeCommand $safeExperiment -Workspace $workspace

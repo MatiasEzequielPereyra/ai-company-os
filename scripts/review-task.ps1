@@ -44,6 +44,14 @@ if($status -ne "REVIEW"){
     throw "Task $Id must be REVIEW to submit a review. Current status: $status"
 }
 
+if($Recommendation -eq "APPROVE"){
+    $diagnosticGuard=Join-Path $PSScriptRoot "assert-bug-diagnostic-evidence.ps1"
+    if(-not(Test-Path -LiteralPath $diagnosticGuard -PathType Leaf)){
+        throw "BUG diagnostic evidence guard missing: $diagnosticGuard"
+    }
+    & $diagnosticGuard -Id $Id -ProjectPath $root -Stage REVIEW_APPROVE | Out-Null
+}
+
 $reviewDir=Join-Path $root "docs\engineering\reviews"
 if(-not(Test-Path $reviewDir)){New-Item -ItemType Directory -Force -Path $reviewDir|Out-Null}
 

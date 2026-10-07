@@ -44,3 +44,14 @@ The canonical `.agents/skills/bug` capability and legacy template must stay sema
 The writable BUG runner selects a BUG-specific structured output contract. Before any source mutation it validates the reproduction command with the writable command policy, executes it, runs the declared hypothesis experiments, and refuses REPAIR when the runtime evidence does not support the claimed cause.
 
 Corrective attempts reuse the original frozen signal fingerprint and append attempts/receipts rather than replacing diagnostic history. Automatic signal substitution is fail-closed; formal invalidation requires a separate explicit control-plane decision.
+
+
+## Approval guard
+
+Review APPROVE and QA PASS are fail-closed for BUG IMPLEMENTATION tasks. Both manual and AI-driven gate paths call the same diagnostic evidence guard, which requires a validated COMPLETE artifact with the original frozen signal observed broken before the change and FIXED_OBSERVED after it.
+
+A missing artifact remains reviewable as a defect, but it cannot be approved or passed.
+
+## Hypothesis discrimination
+
+A root-cause experiment cannot be byte-for-byte the same command as the frozen reproduction signal. Reproducing the symptom is not evidence of its cause. Runtime receipts bind each hypothesis to its own experiment command and deterministically recompute SUPPORTED/FALSIFIED from the observed exit code.
