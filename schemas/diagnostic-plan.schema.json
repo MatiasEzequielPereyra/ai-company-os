@@ -1,0 +1,72 @@
+{
+  "type": "object",
+  "properties": {
+    "reproduction_signal": {
+      "type": "object",
+      "properties": {
+        "kind": { "type": "string", "enum": ["COMMAND"] },
+        "command": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "working_directory": { "type": "string", "enum": ["."] },
+        "broken_when": { "type": "string", "enum": ["EXIT_ZERO", "EXIT_NONZERO"] }
+      },
+      "required": ["kind", "command", "working_directory", "broken_when"],
+      "additionalProperties": false
+    },
+    "hypotheses": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^[A-Za-z0-9._-]+$"
+          },
+          "statement": { "type": "string", "minLength": 1, "maxLength": 1000 },
+          "prediction": { "type": "string", "minLength": 1, "maxLength": 1000 },
+          "falsifier": { "type": "string", "minLength": 1, "maxLength": 1000 },
+          "experiment_command": { "type": "string", "minLength": 1, "maxLength": 1000 },
+          "supported_when": { "type": "string", "enum": ["EXIT_ZERO", "EXIT_NONZERO"] }
+        },
+        "required": [
+          "id",
+          "statement",
+          "prediction",
+          "falsifier",
+          "experiment_command",
+          "supported_when"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "cause": {
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "enum": ["CONFIRMED", "UNCONFIRMED"] },
+        "statement": { "type": "string", "minLength": 1, "maxLength": 1500 },
+        "hypothesis_refs": {
+          "type": "array",
+          "maxItems": 12,
+          "items": { "type": "string", "minLength": 1, "maxLength": 80 }
+        }
+      },
+      "required": ["status", "statement", "hypothesis_refs"],
+      "additionalProperties": false
+    },
+    "resolution": {
+      "type": "object",
+      "properties": {
+        "classification": { "type": "string", "enum": ["REPAIR", "WORKAROUND"] },
+        "summary": { "type": "string", "minLength": 1, "maxLength": 1500 },
+        "residual_risk": { "type": "string", "maxLength": 1500 }
+      },
+      "required": ["classification", "summary", "residual_risk"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["reproduction_signal", "hypotheses", "cause", "resolution"],
+  "additionalProperties": false
+}

@@ -1,0 +1,39 @@
+# AICO Debugging Capability v1 — Diagnostic Evidence Contract
+
+Status: IMPLEMENTATION CONTRACT
+Baseline: `62485cdc7de9d3bc01b0aed4a1d5e7e710365fc9`
+Decision: ADAPT
+
+## Trust rule
+
+Models may propose diagnostic reasoning. AI Company OS must preserve the evidence that justifies it.
+
+A repair is demonstrated only when the same frozen signal that proved the defect before the change demonstrates its absence after the change.
+
+## Existing lifecycle
+
+No lifecycle state is added. Debugging remains inside the existing task flow:
+
+`ACTIVE -> REVIEW -> QA -> SECURITY -> DONE`
+
+Existing implementation authorization, isolated writable worktrees, Result Intake, Review, QA, Security, and Final approval remain authoritative.
+
+## Durable evidence
+
+BUG implementation work produces a canonical control-plane artifact:
+
+`docs/engineering/diagnostics/<TASK-ID>-diagnostic-v1.json`
+
+The provider does not write that artifact. The runtime derives signal identity and execution receipts, persists the artifact, validates it, references it from the primary agent report/result, and supplies it to independent gates.
+
+## Automated v1 boundary
+
+Automated writable repair uses command-based reproduction and hypothesis experiments that pass the existing safe-command policy. Manual/procedure evidence remains representable by the durable evidence schema but cannot authorize automated source mutation without trusted user/runtime evidence.
+
+## Required chain
+
+`symptom -> frozen reproduction -> pre-fix observation -> falsifiable hypotheses -> experiments -> evidence-backed cause -> REPAIR/WORKAROUND -> change -> regression -> exact signal replay`
+
+## Distribution
+
+The canonical `.agents/skills/bug` capability and legacy template must stay semantically aligned. New projects must receive canonical skills. Existing-project reconciliation remains explicit and must not silently overwrite local skill customization.
