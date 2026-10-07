@@ -20,6 +20,14 @@ $content=Get-Content $taskPath -Raw -Encoding UTF8
 $status=Read-Field $content "Status"
 if($status -ne "QA"){throw "Task $Id must be QA. Current status: $status"}
 
+if($Outcome -eq "PASS"){
+    $diagnosticGuard=Join-Path $PSScriptRoot "assert-bug-diagnostic-evidence.ps1"
+    if(-not(Test-Path -LiteralPath $diagnosticGuard -PathType Leaf)){
+        throw "BUG diagnostic evidence guard missing: $diagnosticGuard"
+    }
+    & $diagnosticGuard -Id $Id -ProjectPath $root -Stage QA_PASS | Out-Null
+}
+
 $dir=Join-Path $root "docs\engineering\qa"
 if(-not(Test-Path $dir)){New-Item -ItemType Directory -Force -Path $dir|Out-Null}
 $now=(Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")

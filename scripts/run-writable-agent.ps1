@@ -480,6 +480,128 @@ function Invoke-VerificationCommand {
     }
 }
 
+function Get-Sha256Hex {
+    param([string]$Value)
+
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes([string]$Value)
+        return ([System.BitConverter]::ToString($sha.ComputeHash($bytes))).Replace("-","").ToLowerInvariant()
+    }
+    finally {
+        $sha.Dispose()
+    }
+}
+
+function Invoke-DiagnosticCommand {
+    param(
+        [object]$SafeCommand,
+        [string]$Workspace
+    )
+
+    $resolved = Get-Command $SafeCommand.Executable -ErrorAction SilentlyContinue
+    if ($null -eq $resolved) {
+        throw "Diagnostic executable is not available: $($SafeCommand.Executable)"
+    }
+
+    Push-Location $Workspace
+    try {
+        $savedErrorActionPreference = $ErrorActionPreference
+        $nativePreference = Get-Variable -Name PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue
+        $savedNativePreference = if ($null -ne $nativePreference) { $nativePreference.Value } else { $null }
+
+        try {
+            $ErrorActionPreference = "Continue"
+            $PSNativeCommandUseErrorActionPreference = $false
+            $capturedOutput = @(& $SafeCommand.Executable @($SafeCommand.Arguments) 2>&1)
+            $exitCode = $LASTEXITCODE
+        }
+        finally {
+            $ErrorActionPreference = $savedErrorActionPreference
+            if ($null -ne $nativePreference) {
+                $PSNativeCommandUseErrorActionPreference = $savedNativePreference
+            }
+            else {
+                Remove-Variable -Name PSNativeCommandUseErrorActionPreference -Scope Local -ErrorAction SilentlyContinue
+            }
+        }
+
+        if ($null -eq $exitCode) { $exitCode = 0 }
+
+        $lines = New-Object System.Collections.Generic.List[string]
+        foreach ($entry in $capturedOutput) {
+            $line = $entry.ToString()
+            [void]$lines.Add($line)
+            Write-Host $line
+        }
+
+        $output = $lines.ToArray() -join [Environment]::NewLine
+        if ($output.Length -gt 30000) {
+            $output = $output.Substring(0,30000) + [Environment]::NewLine + "[TRUNCATED]"
+        }
+
+        return [PSCustomObject]@{
+            ExitCode = [int]$exitCode
+            Output = $output
+            OutputSha256 = Get-Sha256Hex -Value $output
+        }
+    }
+    finally {
+        Pop-Location
+    }
+}
+
+function Test-DiagnosticExitCondition {
+    param(
+        [int]$ExitCode,
+        [string]$Condition
+    )
+
+    switch ($Condition) {
+        "EXIT_ZERO" { return ($ExitCode -eq 0) }
+        "EXIT_NONZERO" { return ($ExitCode -ne 0) }
+        default { throw "Unsupported diagnostic exit condition: $Condition" }
+    }
+}
+
+function New-DiagnosticReceipt {
+    param(
+        [string]$Id,
+        [string]$Phase,
+        [string]$Command,
+        [object]$CommandResult
+    )
+
+    $excerpt = [string]$CommandResult.Output
+    if ($excerpt.Length -gt 4000) {
+        $excerpt = $excerpt.Substring(0,4000) + [Environment]::NewLine + "[TRUNCATED]"
+    }
+
+    return [ordered]@{
+        id = $Id
+        phase = $Phase
+        source = "RUNTIME"
+        command = $Command
+        exit_code = [int]$CommandResult.ExitCode
+        output_sha256 = [string]$CommandResult.OutputSha256
+        output_excerpt = $excerpt
+    }
+}
+
+function Save-DiagnosticArtifact {
+    param(
+        [string]$Path,
+        [object]$Artifact
+    )
+
+    $parent = Split-Path $Path -Parent
+    if (-not (Test-Path $parent)) {
+        New-Item -ItemType Directory -Force -Path $parent | Out-Null
+    }
+
+    Write-Utf8NoBom -Path $Path -Value ($Artifact | ConvertTo-Json -Depth 100)
+}
+
 function Restore-PlannedFiles {
     param([hashtable]$Backups)
 
@@ -519,6 +641,31 @@ $task = Get-Content $taskPath -Raw -Encoding UTF8
 $status = Read-Field -Content $task -Key "Status"
 $owner = Read-Field -Content $task -Key "Owner"
 $workKind = Read-Field -Content $task -Key "Work kind"
+$taskType = (Read-Field -Content $task -Key "Type").Trim().ToUpperInvariant()
+$workRequestId = (Read-Field -Content $task -Key "Work request").Trim()
+$workRequestType = ""
+
+if (-not [string]::IsNullOrWhiteSpace($workRequestId)) {
+    $workRequestPath = Join-Path $root ("docs\engineering\work-requests\" + $workRequestId + ".md")
+    if (Test-Path -LiteralPath $workRequestPath -PathType Leaf) {
+        $workRequestContent = Get-Content -LiteralPath $workRequestPath -Raw -Encoding UTF8
+        $workRequestType = (Read-Field -Content $workRequestContent -Key "Type").Trim().ToUpperInvariant()
+    }
+}
+
+if (
+    -not [string]::IsNullOrWhiteSpace($taskType) -and
+    -not [string]::IsNullOrWhiteSpace($workRequestType) -and
+    $taskType -cne $workRequestType
+) {
+    throw "Task/work-request type mismatch for $Id. Task=$taskType WorkRequest=$workRequestType"
+}
+
+if ([string]::IsNullOrWhiteSpace($taskType)) {
+    $taskType = $workRequestType
+}
+
+$isBugTask = ($taskType -ceq "BUG")
 
 if ($workKind -cne "IMPLEMENTATION") {
     $displayWorkKind = if ([string]::IsNullOrWhiteSpace($workKind)) { "<missing>" } else { $workKind }
@@ -617,14 +764,32 @@ if ($status -ne "ACTIVE") {
 
 $dispatchPath = Join-Path $root ("docs\engineering\dispatch\" + $Id + ".md")
 $rolePath = Join-Path $root (".codex\agents\" + $owner + ".md")
-$schemaPath = Join-Path $root "schemas\writable-change-set.schema.json"
+$defaultSchemaPath = Join-Path $root "schemas\writable-change-set.schema.json"
+$bugSchemaPath = Join-Path $root "schemas\writable-bug-change-set.schema.json"
+$diagnosticEvidenceSchemaPath = Join-Path $root "schemas\diagnostic-evidence.schema.json"
+$diagnosticValidatorPath = Join-Path $PSScriptRoot "validate-diagnostic-evidence.ps1"
+$schemaPath = if ($isBugTask) { $bugSchemaPath } else { $defaultSchemaPath }
 $policyPath = Join-Path $root ".codex\writable-policy.json"
 $routerPath = Join-Path $PSScriptRoot "provider-router.ps1"
 $contextBuilderPath = Join-Path $PSScriptRoot "build-agent-context.ps1"
 $requiredResolverPath = Join-Path $PSScriptRoot "resolve-writable-required-files.ps1"
 $submitPath = Join-Path $PSScriptRoot "submit-task-result.ps1"
 
-foreach ($required in @($dispatchPath,$rolePath,$schemaPath,$policyPath,$routerPath,$contextBuilderPath,$requiredResolverPath,$submitPath)) {
+$requiredRuntimeComponents = @(
+    $dispatchPath,
+    $rolePath,
+    $schemaPath,
+    $policyPath,
+    $routerPath,
+    $contextBuilderPath,
+    $requiredResolverPath,
+    $submitPath
+)
+if ($isBugTask) {
+    $requiredRuntimeComponents += @($diagnosticEvidenceSchemaPath,$diagnosticValidatorPath)
+}
+
+foreach ($required in $requiredRuntimeComponents) {
     if (-not (Test-Path $required)) {
         throw "Required writable runtime component not found: $required"
     }
@@ -711,6 +876,19 @@ $prompt = @(
     "",
     "Exact local verification-command allowlist patterns:",
     ($verificationPolicyLines -join [Environment]::NewLine),
+    "",
+    $(if ($isBugTask) {
+        @(
+            "BUG Diagnostic Evidence Contract v1 is mandatory for COMPLETED implementation.",
+            "Populate diagnostic_plan with exactly one command-based reproduction signal, falsifiable hypotheses, evidence-bound cause status, and REPAIR or WORKAROUND classification.",
+            "The reproduction command and every hypothesis experiment command are untrusted suggestions: they must match the local verification-command policy and the runtime executes them before any source mutation.",
+            "Do not claim that you executed commands and do not invent receipt ids, hashes, signal fingerprints, or observations; the runtime creates those.",
+            "Use cause.status=CONFIRMED only when the listed hypothesis experiments are expected to support the cause. REPAIR requires CONFIRMED cause.",
+            "WORKAROUND must state residual_risk explicitly.",
+            "Do not invent a reproduction test or command that is not evidenced by the task, dispatch, repository context, or existing test/tooling surface.",
+            "Automated writable v1 supports COMMAND reproduction only. Manual/procedure evidence cannot authorize automated source mutation."
+        ) -join [Environment]::NewLine
+    } else { "" }),
     "",
     "Outcome semantics:",
     "- COMPLETED means you produced a complete implementation change set ready for local application and verification.",
@@ -832,9 +1010,277 @@ if ($null -eq $result) {
     throw "Writable provider produced no usable result."
 }
 
+$diagnosticPath = Join-Path $root ("docs\engineering\diagnostics\" + $Id + "-diagnostic-v1.json")
+$diagnosticRelative = "docs/engineering/diagnostics/" + $Id + "-diagnostic-v1.json"
+$diagnosticArtifact = $null
+$safeReproductionCommand = $null
+$signalFingerprint = ""
+$diagnosticAttemptIndex = 0
+
+if ($isBugTask -and [string]$result.outcome -eq "COMPLETED") {
+    if ($null -eq $result.PSObject.Properties["diagnostic_plan"] -or $null -eq $result.diagnostic_plan) {
+        throw "BUG COMPLETED writable result requires diagnostic_plan."
+    }
+
+    $plan = $result.diagnostic_plan
+    foreach ($field in @("reproduction_signal","hypotheses","cause","resolution")) {
+        if ($null -eq $plan.PSObject.Properties[$field]) {
+            throw "BUG diagnostic_plan missing field: $field"
+        }
+    }
+
+    $signal = $plan.reproduction_signal
+    foreach ($field in @("kind","command","working_directory","broken_when")) {
+        if ($null -eq $signal.PSObject.Properties[$field]) {
+            throw "BUG reproduction_signal missing field: $field"
+        }
+    }
+
+    if ([string]$signal.kind -ne "COMMAND") {
+        throw "Automated writable BUG execution supports COMMAND reproduction only."
+    }
+    if ([string]$signal.working_directory -ne ".") {
+        throw "BUG reproduction signal working_directory must be repository root '.'."
+    }
+
+    $safeReproductionCommand = Get-SafeCommand -Command ([string]$signal.command) -Policy $policy
+    $signalFingerprint = Get-Sha256Hex -Value (
+        "COMMAND" + [Environment]::NewLine +
+        "." + [Environment]::NewLine +
+        [string]$safeReproductionCommand.Display + [Environment]::NewLine +
+        [string]$signal.broken_when
+    )
+
+    $priorReceipts = @()
+    $priorAttempts = @()
+    $preFixObservation = ""
+    $preFixReceiptRef = ""
+
+    if (Test-Path -LiteralPath $diagnosticPath -PathType Leaf) {
+        & $diagnosticValidatorPath -JsonPath $diagnosticPath | Out-Null
+        $existingDiagnostic = Get-Content -LiteralPath $diagnosticPath -Raw -Encoding UTF8 | ConvertFrom-Json
+
+        if ([string]$existingDiagnostic.task_id -ne $Id) {
+            throw "Existing diagnostic artifact belongs to another task."
+        }
+        if ([string]$existingDiagnostic.reproduction.signal_fingerprint -ne $signalFingerprint) {
+            throw "BUG reproduction signal substitution refused. Corrective work must preserve the frozen signal fingerprint."
+        }
+
+        $priorReceipts = @($existingDiagnostic.receipts)
+        $priorAttempts = @($existingDiagnostic.attempts)
+        $preFixObservation = [string]$existingDiagnostic.reproduction.pre_fix.observation
+        $preFixReceiptRef = [string]$existingDiagnostic.reproduction.pre_fix.receipt_ref
+    }
+
+    $receiptSerial = $priorReceipts.Count
+
+    if ($preFixObservation -ne "BROKEN_OBSERVED") {
+        Write-Host ""
+        Write-Host ("Diagnostic reproduction: " + $safeReproductionCommand.Display) -ForegroundColor Cyan
+        $preFixResult = Invoke-DiagnosticCommand -SafeCommand $safeReproductionCommand -Workspace $workspace
+        $receiptSerial++
+        $preFixReceiptRef = "pre-fix-" + $receiptSerial.ToString("000")
+        $preFixReceipt = New-DiagnosticReceipt -Id $preFixReceiptRef -Phase "PRE_FIX" -Command $safeReproductionCommand.Display -CommandResult $preFixResult
+        $priorReceipts = @($priorReceipts) + @($preFixReceipt)
+
+        $brokenObserved = Test-DiagnosticExitCondition -ExitCode $preFixResult.ExitCode -Condition ([string]$signal.broken_when)
+        $preFixObservation = if ($brokenObserved) { "BROKEN_OBSERVED" } else { "NOT_REPRODUCED" }
+
+        if (-not $brokenObserved) {
+            $diagnosticArtifact = [ordered]@{
+                schema_version = "1"
+                task_id = $Id
+                workflow = "BUG"
+                state = "NOT_REPRODUCED"
+                reproduction = [ordered]@{
+                    kind = "COMMAND"
+                    command = [string]$safeReproductionCommand.Display
+                    working_directory = "."
+                    broken_when = [string]$signal.broken_when
+                    signal_fingerprint = $signalFingerprint
+                    pre_fix = [ordered]@{
+                        observation = "NOT_REPRODUCED"
+                        receipt_ref = $preFixReceiptRef
+                    }
+                }
+                receipts = @($priorReceipts)
+                attempts = @($priorAttempts)
+                regression = [ordered]@{ receipt_refs = @() }
+                post_fix_replay = [ordered]@{
+                    signal_fingerprint = $signalFingerprint
+                    observation = "NOT_RUN"
+                    receipt_ref = ""
+                }
+            }
+            Save-DiagnosticArtifact -Path $diagnosticPath -Artifact $diagnosticArtifact
+            & $diagnosticValidatorPath -JsonPath $diagnosticPath | Out-Null
+            throw "BUG reproduction signal did not observe the broken state. Source mutation refused."
+        }
+    }
+
+    $existingIndexes = @($priorAttempts | ForEach-Object { [int]$_.index })
+    $diagnosticAttemptIndex = if ($existingIndexes.Count -gt 0) {
+        [int](($existingIndexes | Measure-Object -Maximum).Maximum) + 1
+    }
+    else {
+        1
+    }
+
+    $hypothesisIds = @{}
+    $hypothesisEvidence = @()
+
+    foreach ($hypothesis in @($plan.hypotheses)) {
+        foreach ($field in @("id","statement","prediction","falsifier","experiment_command","supported_when")) {
+            if ($null -eq $hypothesis.PSObject.Properties[$field]) {
+                throw "BUG hypothesis missing field: $field"
+            }
+        }
+
+        $hypothesisId = ([string]$hypothesis.id).Trim()
+        if ([string]::IsNullOrWhiteSpace($hypothesisId) -or $hypothesisId -notmatch '^[A-Za-z0-9._-]+$') {
+            throw "BUG hypothesis id is invalid: $hypothesisId"
+        }
+        if ($hypothesisIds.ContainsKey($hypothesisId)) {
+            throw "BUG diagnostic_plan contains duplicate hypothesis id: $hypothesisId"
+        }
+        $hypothesisIds[$hypothesisId] = $true
+
+        foreach ($field in @("statement","prediction","falsifier","experiment_command")) {
+            if ([string]::IsNullOrWhiteSpace([string]$hypothesis.$field)) {
+                throw "BUG hypothesis.$field must be concrete."
+            }
+        }
+
+        $safeExperiment = Get-SafeCommand -Command ([string]$hypothesis.experiment_command) -Policy $policy
+        if ([string]$safeExperiment.Display -ceq [string]$safeReproductionCommand.Display) {
+            throw "BUG hypothesis experiment must discriminate the cause and cannot be identical to the frozen reproduction signal."
+        }
+        Write-Host ""
+        Write-Host ("Diagnostic hypothesis " + $hypothesisId + ": " + $safeExperiment.Display) -ForegroundColor Cyan
+        $experimentResult = Invoke-DiagnosticCommand -SafeCommand $safeExperiment -Workspace $workspace
+        $receiptSerial++
+        $receiptId = "attempt-" + $diagnosticAttemptIndex + "-" + $hypothesisId + "-" + $receiptSerial.ToString("000")
+        $receipt = New-DiagnosticReceipt -Id $receiptId -Phase "HYPOTHESIS" -Command $safeExperiment.Display -CommandResult $experimentResult
+        $priorReceipts = @($priorReceipts) + @($receipt)
+
+        $supported = Test-DiagnosticExitCondition -ExitCode $experimentResult.ExitCode -Condition ([string]$hypothesis.supported_when)
+        $hypothesisEvidence += [ordered]@{
+            id = $hypothesisId
+            statement = [string]$hypothesis.statement
+            prediction = [string]$hypothesis.prediction
+            falsifier = [string]$hypothesis.falsifier
+            experiment_command = [string]$safeExperiment.Display
+            supported_when = [string]$hypothesis.supported_when
+            result = if ($supported) { "SUPPORTED" } else { "FALSIFIED" }
+            receipt_ref = $receiptId
+        }
+    }
+
+    if ($hypothesisEvidence.Count -lt 1) {
+        throw "BUG diagnostic_plan requires at least one falsifiable hypothesis."
+    }
+
+    $cause = $plan.cause
+    foreach ($field in @("status","statement","hypothesis_refs")) {
+        if ($null -eq $cause.PSObject.Properties[$field]) {
+            throw "BUG cause missing field: $field"
+        }
+    }
+
+    $causeRefs = @($cause.hypothesis_refs | ForEach-Object { ([string]$_).Trim() } | Where-Object { $_ })
+    $causeReceiptRefs = @()
+
+    foreach ($causeRef in $causeRefs) {
+        $matched = @($hypothesisEvidence | Where-Object { [string]$_.id -eq $causeRef })
+        if ($matched.Count -ne 1) {
+            throw "BUG cause references unknown hypothesis: $causeRef"
+        }
+        if ([string]$cause.status -eq "CONFIRMED" -and [string]$matched[0].result -ne "SUPPORTED") {
+            throw "BUG CONFIRMED cause references a hypothesis that the runtime falsified: $causeRef"
+        }
+        $causeReceiptRefs += [string]$matched[0].receipt_ref
+    }
+
+    if ([string]$cause.status -eq "CONFIRMED") {
+        if ($causeRefs.Count -lt 1 -or $causeReceiptRefs.Count -lt 1) {
+            throw "BUG CONFIRMED cause requires supported hypothesis evidence."
+        }
+    }
+    elseif ([string]$cause.status -ne "UNCONFIRMED") {
+        throw "BUG cause.status must be CONFIRMED or UNCONFIRMED."
+    }
+
+    $resolution = $plan.resolution
+    foreach ($field in @("classification","summary","residual_risk")) {
+        if ($null -eq $resolution.PSObject.Properties[$field]) {
+            throw "BUG resolution missing field: $field"
+        }
+    }
+
+    if ([string]$resolution.classification -eq "REPAIR") {
+        if ([string]$cause.status -ne "CONFIRMED") {
+            throw "BUG REPAIR requires a CONFIRMED evidence-backed cause."
+        }
+    }
+    elseif ([string]$resolution.classification -eq "WORKAROUND") {
+        if ([string]::IsNullOrWhiteSpace([string]$resolution.residual_risk)) {
+            throw "BUG WORKAROUND requires explicit residual_risk."
+        }
+    }
+    else {
+        throw "BUG resolution.classification must be REPAIR or WORKAROUND."
+    }
+
+    $attempt = [ordered]@{
+        index = $diagnosticAttemptIndex
+        corrective = [bool]($corrective -or $priorAttempts.Count -gt 0)
+        hypotheses = @($hypothesisEvidence)
+        cause = [ordered]@{
+            status = [string]$cause.status
+            statement = [string]$cause.statement
+            hypothesis_refs = @($causeRefs)
+            receipt_refs = @($causeReceiptRefs)
+        }
+        resolution = [ordered]@{
+            classification = [string]$resolution.classification
+            summary = [string]$resolution.summary
+            residual_risk = [string]$resolution.residual_risk
+        }
+    }
+
+    $diagnosticArtifact = [ordered]@{
+        schema_version = "1"
+        task_id = $Id
+        workflow = "BUG"
+        state = "PREFLIGHT"
+        reproduction = [ordered]@{
+            kind = "COMMAND"
+            command = [string]$safeReproductionCommand.Display
+            working_directory = "."
+            broken_when = [string]$signal.broken_when
+            signal_fingerprint = $signalFingerprint
+            pre_fix = [ordered]@{
+                observation = "BROKEN_OBSERVED"
+                receipt_ref = $preFixReceiptRef
+            }
+        }
+        receipts = @($priorReceipts)
+        attempts = @($priorAttempts) + @($attempt)
+        regression = [ordered]@{ receipt_refs = @() }
+        post_fix_replay = [ordered]@{
+            signal_fingerprint = $signalFingerprint
+            observation = "NOT_RUN"
+            receipt_ref = ""
+        }
+    }
+
+    Save-DiagnosticArtifact -Path $diagnosticPath -Artifact $diagnosticArtifact
+    & $diagnosticValidatorPath -JsonPath $diagnosticPath | Out-Null
+}
+
 $changes = @($result.changes)
 $verificationCommands = @($result.verification_commands)
-
 if ($result.outcome -eq "BLOCKED") {
     if ($changes.Count -gt 0 -or $verificationCommands.Count -gt 0) {
         throw "BLOCKED writable result must not contain changes or verification commands."
@@ -983,15 +1429,63 @@ try {
     }
 
     $verificationLog = New-Object System.Collections.Generic.List[string]
+    $verificationIndex = 0
 
     foreach ($safeCommand in $safeVerificationCommands) {
+        $verificationIndex++
         Write-Host ""
         Write-Host ("Verification: " + $safeCommand.Display) -ForegroundColor Cyan
-        $commandOutput = Invoke-VerificationCommand -SafeCommand $safeCommand -Workspace $workspace
 
-        [void]$verificationLog.Add(
-            ("$ " + $safeCommand.Display + [Environment]::NewLine + $commandOutput).Trim()
-        )
+        if ($isBugTask -and $null -ne $diagnosticArtifact) {
+            $verificationResult = Invoke-DiagnosticCommand -SafeCommand $safeCommand -Workspace $workspace
+            $commandOutput = [string]$verificationResult.Output
+
+            [void]$verificationLog.Add(
+                ("$ " + $safeCommand.Display + [Environment]::NewLine + $commandOutput).Trim()
+            )
+
+            $verificationReceiptId = "attempt-" + $diagnosticAttemptIndex + "-regression-" + $verificationIndex.ToString("000")
+            $verificationReceipt = New-DiagnosticReceipt -Id $verificationReceiptId -Phase "REGRESSION" -Command $safeCommand.Display -CommandResult $verificationResult
+            $diagnosticArtifact.receipts = @($diagnosticArtifact.receipts) + @($verificationReceipt)
+            $diagnosticArtifact.regression.receipt_refs = @($diagnosticArtifact.regression.receipt_refs) + @($verificationReceiptId)
+
+            if ([int]$verificationResult.ExitCode -ne 0) {
+                $diagnosticArtifact.state = "FAILED_VERIFICATION"
+                Save-DiagnosticArtifact -Path $diagnosticPath -Artifact $diagnosticArtifact
+                & $diagnosticValidatorPath -JsonPath $diagnosticPath | Out-Null
+                throw ("Verification command failed with exit code " + $verificationResult.ExitCode + ": " + $safeCommand.Display)
+            }
+        }
+        else {
+            $commandOutput = Invoke-VerificationCommand -SafeCommand $safeCommand -Workspace $workspace
+            [void]$verificationLog.Add(
+                ("$ " + $safeCommand.Display + [Environment]::NewLine + $commandOutput).Trim()
+            )
+        }
+    }
+
+    if ($isBugTask -and $null -ne $diagnosticArtifact) {
+        Write-Host ""
+        Write-Host ("Post-fix reproduction replay: " + $safeReproductionCommand.Display) -ForegroundColor Cyan
+        $postFixResult = Invoke-DiagnosticCommand -SafeCommand $safeReproductionCommand -Workspace $workspace
+        $postFixReceiptId = "attempt-" + $diagnosticAttemptIndex + "-post-fix"
+        $postFixReceipt = New-DiagnosticReceipt -Id $postFixReceiptId -Phase "POST_FIX" -Command $safeReproductionCommand.Display -CommandResult $postFixResult
+        $diagnosticArtifact.receipts = @($diagnosticArtifact.receipts) + @($postFixReceipt)
+
+        $stillBroken = Test-DiagnosticExitCondition -ExitCode $postFixResult.ExitCode -Condition ([string]$diagnosticArtifact.reproduction.broken_when)
+        $diagnosticArtifact.post_fix_replay = [ordered]@{
+            signal_fingerprint = $signalFingerprint
+            observation = if ($stillBroken) { "BROKEN_OBSERVED" } else { "FIXED_OBSERVED" }
+            receipt_ref = $postFixReceiptId
+        }
+        $diagnosticArtifact.state = if ($stillBroken) { "FAILED_POST_FIX" } else { "COMPLETE" }
+
+        Save-DiagnosticArtifact -Path $diagnosticPath -Artifact $diagnosticArtifact
+        & $diagnosticValidatorPath -JsonPath $diagnosticPath | Out-Null
+
+        if ($stillBroken) {
+            throw "BUG post-fix replay still reproduces the original defect. Source changes will be restored."
+        }
     }
 
     $changedAfter = @(Get-ChangedPaths -Workspace $workspace)
@@ -1073,6 +1567,10 @@ try {
         "",
         [string]$result.decisions,
         "",
+        "## Diagnostic Evidence",
+        "",
+        $(if ($isBugTask -and (Test-Path -LiteralPath $diagnosticPath -PathType Leaf)) { $diagnosticRelative } else { "NOT_APPLICABLE" }),
+        "",
         "## Runtime Guarantees",
         "",
         "- Source writes were restricted to the registered task worktree.",
@@ -1127,22 +1625,29 @@ try {
         "",
         "## Writable Evidence",
         "",
-        ("docs/engineering/writable-evidence/" + (Split-Path $evidencePath -Leaf))
+        ("docs/engineering/writable-evidence/" + (Split-Path $evidencePath -Leaf)),
+        "",
+        "## Diagnostic Evidence",
+        "",
+        $(if ($isBugTask -and (Test-Path -LiteralPath $diagnosticPath -PathType Leaf)) { $diagnosticRelative } else { "NOT_APPLICABLE" })
     ) -join [Environment]::NewLine
 
     Write-Utf8NoBom -Path $reportPath -Value $primaryReport
 
-    $changedArtifacts = (
-        (
-            $changedAfter +
-            @(
-                ("docs/engineering/writable-evidence/" + (Split-Path $evidencePath -Leaf)),
-                ("docs/engineering/agent-reports/" + (Split-Path $reportPath -Leaf))
-            )
-        ) -join "; "
+    $controlArtifacts = @(
+        ("docs/engineering/writable-evidence/" + (Split-Path $evidencePath -Leaf)),
+        ("docs/engineering/agent-reports/" + (Split-Path $reportPath -Leaf))
     )
+    if ($isBugTask -and (Test-Path -LiteralPath $diagnosticPath -PathType Leaf)) {
+        $controlArtifacts += $diagnosticRelative
+    }
+
+    $changedArtifacts = (($changedAfter + $controlArtifacts) -join "; ")
 
     $verificationSummary = "git diff --check PASS. " + (($verificationCommands | ForEach-Object { $_ + " PASS" }) -join "; ")
+    if ($isBugTask -and $null -ne $diagnosticArtifact -and [string]$diagnosticArtifact.state -eq "COMPLETE") {
+        $verificationSummary += ". Diagnostic same-signal replay PASS: " + $signalFingerprint
+    }
 
     & $submitPath -ProjectPath $root -Id $Id -Outcome COMPLETED -Summary ([string]$result.summary) -ChangedArtifacts $changedArtifacts -Verification $verificationSummary -Decisions ([string]$result.decisions) -Blockers "NONE" -RecommendedNext "REVIEW"
 

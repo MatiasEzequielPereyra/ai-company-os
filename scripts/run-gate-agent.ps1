@@ -262,6 +262,7 @@ $originalOwnerRolePath = Join-Path $root (".codex\agents\" + $owner + ".md")
 $schemaPath = Join-Path $root ("schemas\" + $schemaName)
 $routerPath = Join-Path $PSScriptRoot "provider-router.ps1"
 $gateSemanticValidatorPath = Join-Path $PSScriptRoot "validate-gate-result-semantics.ps1"
+$diagnosticValidatorPath = Join-Path $PSScriptRoot "validate-diagnostic-evidence.ps1"
 $contextBuilderPath = Join-Path $PSScriptRoot "build-agent-context.ps1"
 $localResolverPath = Join-Path $PSScriptRoot "local-runtime\resolve-local-runtime.ps1"
 $localRuntimeConfigPath = Join-Path $root ".codex\local-runtime-config.json"
@@ -389,6 +390,27 @@ Add-Artifact `
     -Label "LATEST TASK RESULT" `
     -MaxChars $artifactMaxChars
 
+$diagnosticPath = Join-Path $root ("docs\engineering\diagnostics\" + $Id + "-diagnostic-v1.json")
+$taskType = (Read-Field $taskContent "Type").Trim().ToUpperInvariant()
+$taskWorkKind = (Read-Field $taskContent "Work kind").Trim().ToUpperInvariant()
+$isBugImplementation = ($taskType -eq "BUG" -and $taskWorkKind -eq "IMPLEMENTATION")
+
+if (Test-Path -LiteralPath $diagnosticPath -PathType Leaf) {
+    if (-not (Test-Path -LiteralPath $diagnosticValidatorPath -PathType Leaf)) {
+        throw "Diagnostic evidence validator missing: $diagnosticValidatorPath"
+    }
+    & $diagnosticValidatorPath -JsonPath $diagnosticPath | Out-Null
+    Add-Artifact -Builder $evidence -Root $root -Path $diagnosticPath -Label "DIAGNOSTIC EVIDENCE CONTRACT V1" -MaxChars $artifactMaxChars
+}
+elseif ($isBugImplementation) {
+    [void]$evidence.AppendLine("===== DIAGNOSTIC EVIDENCE CONTRACT V1 =====")
+    [void]$evidence.AppendLine("Repository-relative path: docs/engineering/diagnostics/$Id-diagnostic-v1.json")
+    [void]$evidence.AppendLine("Evidence type: required BUG diagnostic artifact")
+    [void]$evidence.AppendLine("MISSING: a BUG implementation cannot receive Review APPROVE or QA PASS without COMPLETE diagnostic evidence.")
+    [void]$evidence.AppendLine("===== END DIAGNOSTIC EVIDENCE CONTRACT V1 =====")
+    [void]$evidence.AppendLine()
+}
+
 if ($Gate -in @("QA","Security")) {
     $latestReview = Get-ChildItem (Join-Path $root "docs\engineering\reviews") -Filter ($Id + "-review-*.md") -File -ErrorAction SilentlyContinue |
         Sort-Object Name -Descending |
@@ -431,6 +453,9 @@ $promptLines = @(
     "An explicit gate artifact remains authoritative even when its path is intentionally excluded from the generic repository inventory.",
     "Do not infer that an explicit gate artifact is missing merely because it is absent from the generic repository inventory.",
     "Correlate result ChangedArtifacts references with the canonical Repository-relative path attached to explicit gate artifacts.",
+    "When DIAGNOSTIC EVIDENCE CONTRACT V1 is supplied, treat runtime receipts and the frozen signal fingerprint as authoritative diagnostic execution evidence.",
+    "For a BUG repair, Review must reject unsupported CONFIRMED causes, signal substitution, WORKAROUND mislabeled as REPAIR, or missing same-signal replay.",
+    "For a BUG repair, QA must assess the originally broken behavior and cannot PASS when post_fix_replay is not FIXED_OBSERVED with the same frozen signal fingerprint.",
     "",
     "For Review: APPROVE requires missing_required_outputs=[] and deliverable_defects=[]. CHANGES_REQUIRED requires at least one concrete missing_required_output or deliverable_defect.",
     "For QA: assess concrete task/role criteria in criteria_assessment. PASS cannot contain an UNSATISFIED criterion. FAIL requires at least one concrete UNSATISFIED criterion.",

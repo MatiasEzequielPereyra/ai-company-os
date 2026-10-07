@@ -34,6 +34,9 @@ $required = @(
     "schemas\agent-result.schema.json",
     "schemas\engineering-plan-result.schema.json",
     "schemas\writable-change-set.schema.json",
+    "schemas\writable-bug-change-set.schema.json",
+    "schemas\diagnostic-evidence.schema.json",
+    "scripts\validate-diagnostic-evidence.ps1",
     ".codex\writable-policy.json",
     "schemas\review-result.schema.json",
     "schemas\qa-gate-result.schema.json",
@@ -293,12 +296,33 @@ foreach ($field in @("outcome","summary","report_markdown","changes","verificati
     }
 }
 
+$bugWritableSchema = Get-Content (Join-Path $repoRoot "schemas\writable-bug-change-set.schema.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+if ($null -eq $bugWritableSchema.properties.diagnostic_plan) {
+    throw "BUG writable schema must expose diagnostic_plan."
+}
+
+$writableRunnerContract = Get-Content (Join-Path $repoRoot "scripts\run-writable-agent.ps1") -Raw -Encoding UTF8
+foreach ($requiredDiagnosticAnchor in @(
+    "writable-bug-change-set.schema.json",
+    "validate-diagnostic-evidence.ps1",
+    "BUG reproduction signal did not observe the broken state",
+    "Post-fix reproduction replay",
+    "docs/engineering/diagnostics"
+)) {
+    if ($writableRunnerContract -notmatch [regex]::Escape($requiredDiagnosticAnchor)) {
+        throw "Writable runner missing diagnostic contract anchor: $requiredDiagnosticAnchor"
+    }
+}
+
 $writablePolicy = Get-Content (Join-Path $repoRoot ".codex\writable-policy.json") -Raw -Encoding UTF8 | ConvertFrom-Json
 if (@($writablePolicy.free_provider_models.OpenRouter) -notcontains "qwen/qwen3.8-27b:free") {
     throw "Writable policy must allow the pinned free structured coding model"
 }
 if (@($writablePolicy.protected_path_prefixes) -notcontains ".git") {
     throw "Writable policy must protect .git"
+}
+if (@($writablePolicy.protected_path_prefixes) -notcontains "docs/engineering/diagnostics") {
+    throw "Writable policy must protect runtime-generated diagnostic evidence"
 }
 if (@($writablePolicy.secret_name_patterns).Count -lt 1) {
     throw "Writable policy must define secret-path rejection patterns"
@@ -435,6 +459,7 @@ $parseTargets = @(
     "scripts\validate-engineering-plan-result.ps1",
     "scripts\validate-engineering-backlog-semantics.ps1",
     "scripts\validate-gate-result-semantics.ps1",
+    "scripts\validate-diagnostic-evidence.ps1",
     "scripts\build-agent-context.ps1",
     "scripts\providers\invoke-codex.ps1",
     "scripts\providers\invoke-openrouter.ps1",

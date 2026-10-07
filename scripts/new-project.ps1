@@ -115,6 +115,15 @@ foreach ($CompanyFolder in @("policies","protocols","workflows","templates")) {
     }
 }
 
+$SkillsSource = Join-Path $ScriptRoot ".agents\skills"
+$SkillsTarget = Join-Path $ProjectPath ".agents\skills"
+if (Test-Path $SkillsSource) {
+    Get-ChildItem $SkillsSource -Directory | ForEach-Object {
+        $destination = Join-Path $SkillsTarget $_.Name
+        Copy-Item $_.FullName $destination -Recurse -Force
+    }
+}
+
 Copy-Item `
     (Join-Path $TemplateRoot "docs\PROJECT-BRIEF.md") `
     (Join-Path $ProjectPath "docs\PROJECT-BRIEF.md") `
@@ -180,6 +189,7 @@ $ScriptFiles = @(
     "build-agent-context.ps1",
     "build-corrective-analysis-context.ps1",
     "validate-analysis-result-semantics.ps1",
+    "validate-diagnostic-evidence.ps1",
     "provider-router.ps1",
     "run-gate-agent.ps1",
     "run-pending-gates.ps1",
