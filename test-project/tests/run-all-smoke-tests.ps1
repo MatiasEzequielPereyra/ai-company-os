@@ -21,6 +21,7 @@ $tests = @(
     "test-role-deliverable-gate-validation.ps1",
     "test-gate-semantic-validator.ps1",
     "test-diagnostic-evidence-contract.ps1",
+    "test-bug-diagnostic-gate-integration.ps1",
     "test-agent-completion-self-check.ps1",
     "test-analysis-result-semantics.ps1",
     "test-corrective-analysis-context.ps1",
