@@ -8,7 +8,7 @@ if ($null -eq (Get-Command git -ErrorAction SilentlyContinue)) {
 }
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$tempParent = Join-Path $env:TEMP ("aico-writable-runtime-" + [Guid]::NewGuid().ToString("N"))
+$tempParent = Join-Path ([IO.Path]::GetTempPath()) ("aico-writable-runtime-" + [Guid]::NewGuid().ToString("N"))
 $fixtureRepo = Join-Path $tempParent "repo"
 $workspaces = Join-Path $tempParent "worktrees"
 $savedOpenRouter = $env:OPENROUTER_API_KEY
@@ -732,7 +732,7 @@ finally {
 
     if (Test-Path $tempParent) {
         $cleanupTarget = [IO.Path]::GetFullPath($tempParent)
-        $cleanupRoot = [IO.Path]::GetFullPath($env:TEMP).TrimEnd([char[]]@('\','/')) + [IO.Path]::DirectorySeparatorChar
+        $cleanupRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd([char[]]@('\','/')) + [IO.Path]::DirectorySeparatorChar
         if (-not $cleanupTarget.StartsWith($cleanupRoot,[StringComparison]::OrdinalIgnoreCase) -or (Split-Path $cleanupTarget -Leaf) -notlike 'aico-writable-runtime-*') { throw 'Unsafe writable fixture cleanup path.' }
         Remove-Item -LiteralPath $cleanupTarget -Recurse -Force -ErrorAction SilentlyContinue
     }
