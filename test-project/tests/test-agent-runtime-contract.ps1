@@ -198,7 +198,9 @@ if ($runner -notmatch 'execution-plan\.json') {
 if ($providerRouter -notmatch 'SemanticValidatorPath') {
     throw "Provider router must accept a semantic validator"
 }
-if ($providerRouter -notmatch '& \$SemanticValidatorPath -JsonPath') {
+if ($providerRouter -notmatch '\$semanticArgs\s*=\s*@\{\s*JsonPath\s*=\s*\$OutputPath\s*\}' -or
+    $providerRouter -notmatch '\$semanticArgs\.GroundingContext\s*=\s*\$SemanticValidationContext' -or
+    @([regex]::Matches($providerRouter, '& \$SemanticValidatorPath @semanticArgs')).Count -ne 2) {
     throw "Provider router must execute semantic validation before accepting provider output"
 }
 
@@ -409,9 +411,16 @@ if ($gemini -notmatch 'Get-GeminiErrorBody') {
 foreach ($runnerName in @("run-agent-task.ps1","run-gate-agent.ps1","run-writable-agent.ps1","finalize-task.ps1")) {
     $runnerText = Get-Content (Join-Path $repoRoot ("scripts\" + $runnerName)) -Raw
 
-    if ($runnerText -notmatch 'Enter-TaskExecutionLock') {
+    $hasDirectLock = $runnerText -match 'Enter-TaskExecutionLock' -and $runnerText -match 'finally\s*\{\s*Exit-TaskExecutionLock';
+    $hasLeaseScope = $runnerText -match 'Enter-TaskExecutionScope.*-Lease \$TaskExecutionLease' -and
+        $runnerText -match 'finally\s*\{\s*Exit-TaskExecutionScope -Scope \$writerScope';
+    if (-not ($hasDirectLock -or $hasLeaseScope)) {
         throw "$runnerName must serialize execution through the per-task lock"
     }
+}
+$lockHelper = Get-Content (Join-Path $repoRoot "scripts\task-execution-lock.ps1") -Raw
+foreach ($signal in @('function Enter-TaskExecutionScope','Assert-TaskExecutionLease','Enter-TaskExecutionLock','function Exit-TaskExecutionScope')) {
+    if ($lockHelper -notmatch [regex]::Escape($signal)) { throw "Task execution scopes must preserve lease validation and lock ownership: $signal" }
 }
 
 $contextBuilder = Get-Content (Join-Path $repoRoot "scripts\build-agent-context.ps1") -Raw

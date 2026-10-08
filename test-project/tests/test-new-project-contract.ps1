@@ -32,6 +32,9 @@ try {
         "scripts\validate-engineering-backlog-semantics.ps1",
         "scripts\validate-gate-result-semantics.ps1",
         "scripts\provider-router.ps1",
+        "scripts\review-grounding.ps1",
+        "scripts\task-execution-lock.ps1",
+        "schemas\review-result.schema.json",
         "scripts\providers\invoke-ollama.ps1",
         "scripts\local-runtime\detect-hardware.ps1",
         "scripts\local-runtime\resolve-local-runtime.ps1",
@@ -60,6 +63,9 @@ try {
         "scripts/validate-engineering-backlog-semantics.ps1",
         "scripts/validate-gate-result-semantics.ps1",
         "scripts/provider-router.ps1",
+        "scripts/review-grounding.ps1",
+        "scripts/task-execution-lock.ps1",
+        "schemas/review-result.schema.json",
         "scripts/local-runtime/resolve-local-runtime.ps1",
         ".codex/provider-config.json",
         ".codex/local-runtime-config.json",
@@ -74,6 +80,17 @@ try {
     }
 
     $sourceValidator = Join-Path $repoRoot "scripts\validate-artifacts.ps1"
+    foreach($relative in @('scripts/review-grounding.ps1','scripts/task-execution-lock.ps1','schemas/review-result.schema.json')) {
+        if((Get-FileHash (Join-Path $repoRoot $relative)).Hash -cne (Get-FileHash (Join-Path $projectPath $relative)).Hash){throw "Generated grounding/barrier artifact differs: $relative"}
+    }
+    . (Join-Path $projectPath 'scripts/task-execution-lock.ps1')
+    $shared=Enter-ProjectExecutionLease -ProjectPath $projectPath -Mode Shared
+    try {
+        $reason='';try{$unexpected=Enter-ProjectExecutionLease -ProjectPath $projectPath -Mode Maintenance;Exit-ProjectExecutionLease $unexpected}catch{$reason=$_.Exception.Message}
+        if($reason -notmatch 'project maintenance cannot run while project executions are active'){throw 'Generated project barrier failed actual shared/exclusive contention.'}
+    }finally{Exit-ProjectExecutionLease $shared}
+    $maintenance=Enter-ProjectExecutionLease -ProjectPath $projectPath -Mode Maintenance
+    Exit-ProjectExecutionLease $maintenance
     $generatedValidator = Join-Path $projectPath "scripts\validate-artifacts.ps1"
 
     $sourceHash = (Get-FileHash $sourceValidator -Algorithm SHA256).Hash
@@ -86,6 +103,9 @@ try {
         ".codex\provider-config.json",
         ".codex\local-runtime-config.json",
         "scripts\provider-router.ps1",
+        "scripts\review-grounding.ps1",
+        "scripts\task-execution-lock.ps1",
+        "schemas\review-result.schema.json",
         "scripts\local-runtime\detect-hardware.ps1",
         "scripts\local-runtime\resolve-local-runtime.ps1",
         "scripts\local-runtime\initialize-local-runtime.ps1",

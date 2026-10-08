@@ -9,7 +9,9 @@ param(
     [string]$Actor = "engineering-manager",
     [string]$Reason = "Status transition requested.",
     [string]$Evidence = "",
-    [string]$TasksPath = "tasks"
+    [string]$TasksPath = "tasks",
+    [object]$TaskExecutionLease = $null,
+    [object]$ReviewIntakeReceipt = $null
 )
 
 $ErrorActionPreference = "Stop"
@@ -208,6 +210,9 @@ else {
     $resolvedTasksPath = Join-Path $projectRoot $TasksPath
 }
 
+. (Join-Path $PSScriptRoot "task-execution-lock.ps1")
+$writerScope = Enter-TaskExecutionScope -ProjectPath $projectRoot -Id $Id -Operation "ADVANCE-TASK" -Lease $TaskExecutionLease
+try {
 $filePath = Join-Path $resolvedTasksPath ($Id + ".md")
 
 if (-not (Test-Path $filePath)) {
@@ -216,6 +221,10 @@ if (-not (Test-Path $filePath)) {
 
 $content = Get-Content -Path $filePath -Raw -Encoding UTF8
 $currentStatus = Read-Field -Content $content -Key "Status"
+if ($currentStatus -eq 'REVIEW' -and $Status -in @('QA','READY')) {
+    $reviewRecommendation=if($Status -eq 'QA'){'APPROVE'}else{'CHANGES_REQUIRED'}
+    Assert-ReviewIntakeReceipt -ProjectPath $projectRoot -Id $Id -Lease $writerScope.Lease -Receipt $ReviewIntakeReceipt -Recommendation $reviewRecommendation
+}
 
 if ([string]::IsNullOrWhiteSpace($currentStatus)) {
     $currentStatus = "UNKNOWN"
@@ -384,3 +393,5 @@ if (Test-Path $metricsWriter) {
 
 Write-Host "Task advanced:" -ForegroundColor Green
 Write-Host ($Id + ": " + $currentStatus + " -> " + $Status)
+
+} finally { Exit-TaskExecutionScope -Scope $writerScope }

@@ -3,6 +3,10 @@ param()
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+. (Join-Path $repoRoot 'scripts/task-execution-lock.ps1')
+. (Join-Path $repoRoot 'scripts/review-grounding.ps1')
+. (Join-Path $repoRoot 'test-project/helpers/grounded-review-fixture.ps1')
+$groundedFixture=$null
 $validator = Join-Path $repoRoot "scripts\validate-gate-result-semantics.ps1"
 if (-not (Test-Path $validator -PathType Leaf)) {
     throw "Gate semantic validator missing: $validator"
@@ -22,7 +26,7 @@ function Assert-Rejected {
     param([string]$Path,[string]$Pattern,[string]$Label)
     $rejected = $false
     try {
-        & $validator -JsonPath $Path | Out-Null
+        & $validator -JsonPath $Path -GroundingContext $groundedFixture.Context | Out-Null
     }
     catch {
         if ($_.Exception.Message -match $Pattern) {
@@ -36,14 +40,9 @@ function Assert-Rejected {
 }
 
 try {
-    $reviewGood = Write-FixtureJson "review-good" @{
-        recommendation = "APPROVE"
-        findings = "NONE"
-        verification = "Reviewed."
-        missing_required_outputs = @()
-        deliverable_defects = @()
-    }
-    & $validator -JsonPath $reviewGood | Out-Null
+    $groundedFixture=New-GroundedRouterFixture -Root $tempRoot
+    $reviewGood=Join-Path $tempRoot 'fixture-grounded-review.json'
+    & $validator -JsonPath $reviewGood -GroundingContext $groundedFixture.Context | Out-Null
 
     $reviewBad = Write-FixtureJson "review-bad" @{
         recommendation = "CHANGES_REQUIRED"
@@ -98,6 +97,7 @@ try {
     Write-Host "PASS: gate semantic validator contract" -ForegroundColor Green
 }
 finally {
+    if($null-ne $groundedFixture){Exit-TaskExecutionLock -Lock $groundedFixture.Lease}
     if (Test-Path $tempRoot) {
         Remove-Item $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
     }

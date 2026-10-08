@@ -11,26 +11,26 @@ function Assert-True([bool]$Condition,[string]$Message) { if (-not $Condition) {
 function Write-Evidence([string]$Workspace=$candidate) { Write-Text (Join-Path $project 'docs/engineering/writable-evidence/AICO-006.md') ("# Writable Execution Evidence - AICO-006`nOutcome: COMPLETED`nWorktree: $Workspace`nBranch: aico/aico-006`n## Changed Paths`n- src/taskcli/__main__.py`n- src/taskcli/storage.py`n") }
 function Invoke-GateCapture([string]$Gate,[bool]$ExpectCapture=$true) {
     $status=switch($Gate){Review{'REVIEW'} QA{'QA'} Security{'SECURITY'}}
-    Write-Text (Join-Path $project 'tasks/AICO-006.md') ("# AICO-006`nID: AICO-006`nStatus: $status`nOwner: backend`nWork kind: IMPLEMENTATION`n## Objective`nImplement TaskCLI storage commands.`n")
+    Write-Text (Join-Path $project 'tasks/AICO-006.md') ("# AICO-006`nID: AICO-006`nStatus: $status`nOwner: backend`nWork kind: IMPLEMENTATION`n## Objective`nImplement TaskCLI storage commands.`n## Acceptance Criteria`n- [ ] Implement TaskCLI storage commands in the registered candidate source.`n")
     $capture=Join-Path $project '.codex/runtime/captured-context.txt'
     if (Test-Path $capture) { Remove-Item -LiteralPath $capture }
     $failed=$false
     try { & (Join-Path $project 'scripts/run-gate-agent.ps1') -Id 'AICO-006' -Gate $Gate -ProjectPath $project -Provider OpenRouter | Out-Null } catch { $failed=$true; $script:lastGateError=$_.Exception.Message }
     Assert-True $failed 'Capture-only fake adapter must stop before lifecycle writes.'
-    Assert-True ((Test-Path $capture) -eq $ExpectCapture) ('Unexpected provider capture for '+$Gate)
+    Assert-True ((Test-Path $capture) -eq $ExpectCapture) ('Unexpected provider capture for '+$Gate+': '+$script:lastGateError)
     Assert-True ((Get-Content (Join-Path $project 'tasks/AICO-006.md') -Raw) -match ('Status: '+$status)) 'Gate fixture lifecycle status must remain unchanged.'
-    if ($ExpectCapture) { return Get-Content $capture -Raw }
+    if ($ExpectCapture) { return Get-Content $capture -Raw -Encoding UTF8 }
 }
 try {
     New-Item -ItemType Directory -Path $project | Out-Null
-    foreach($name in @('run-gate-agent.ps1','provider-router.ps1','validate-json-contract.ps1','validate-gate-result-semantics.ps1','write-operational-event.ps1','task-execution-lock.ps1')) { Write-Text (Join-Path $project ('scripts/'+$name)) (Get-Content (Join-Path $repoRoot ('scripts/'+$name)) -Raw) }
-    foreach($name in @('review-result.schema.json','qa-gate-result.schema.json','security-gate-result.schema.json')) { Write-Text (Join-Path $project ('schemas/'+$name)) (Get-Content (Join-Path $repoRoot ('schemas/'+$name)) -Raw) }
+    foreach($name in @('run-gate-agent.ps1','provider-router.ps1','validate-json-contract.ps1','validate-gate-result-semantics.ps1','write-operational-event.ps1','task-execution-lock.ps1','review-grounding.ps1')) { Write-Text (Join-Path $project ('scripts/'+$name)) (Get-Content (Join-Path $repoRoot ('scripts/'+$name)) -Raw -Encoding UTF8) }
+    foreach($name in @('review-result.schema.json','qa-gate-result.schema.json','security-gate-result.schema.json')) { Write-Text (Join-Path $project ('schemas/'+$name)) (Get-Content (Join-Path $repoRoot ('schemas/'+$name)) -Raw -Encoding UTF8) }
     Write-Text (Join-Path $project '.codex/writable-policy.json') (Get-Content (Join-Path $repoRoot '.codex/writable-policy.json') -Raw)
     Write-Text (Join-Path $project '.codex/provider-config.json') '{"gate_context_max_chars":22000,"models":{"OpenRouter":"fake"}}'
     Write-Text (Join-Path $project '.codex/agents/backend.md') '# Backend implementation contract'
-    Write-Text (Join-Path $project 'docs/engineering/dispatch/AICO-006.md') 'Implement TaskCLI JSON storage commands.'
-    Write-Text (Join-Path $project 'docs/engineering/agent-reports/AICO-006.md') '# Implemented add complete remove and JSON persistence.'
-    Write-Text (Join-Path $project 'docs/engineering/results/AICO-006-result-001.md') 'Outcome: COMPLETED'
+    Write-Text (Join-Path $project 'docs/engineering/dispatch/AICO-006.md') "Task: AICO-006`nOwner: backend`nImplement TaskCLI JSON storage commands."
+    Write-Text (Join-Path $project 'docs/engineering/agent-reports/AICO-006.md') "# Agent Report - AICO-006`nOwner: backend`nImplemented add complete remove and JSON persistence."
+    Write-Text (Join-Path $project 'docs/engineering/results/AICO-006-result-001.md') "Task: AICO-006`nOwner: backend`nOutcome: COMPLETED"
     Write-Text (Join-Path $project 'docs/engineering/reviews/AICO-006-review-001.md') 'Recommendation: APPROVE'
     Write-Text (Join-Path $project 'docs/engineering/qa/AICO-006-qa.md') 'Outcome: PASS'
     Write-Text (Join-Path $project 'scripts/build-agent-context.ps1') 'param($ProjectPath,$Id,$Owner,$MaxChars); "GENERIC_BASELINE_NONAUTHORITATIVE_" * 3000'
@@ -58,7 +58,8 @@ throw 'CAPTURE_COMPLETE_NO_PROVIDER_NO_LIFECYCLE'
     $env:OPENROUTER_API_KEY='deterministic-fake-no-network'
     foreach($gate in @('Review','QA','Security')) {
         $capture=Invoke-GateCapture $gate
-        Assert-True ($capture.Contains($changed) -and $capture.Contains($storage)) ($gate+' must receive full candidate implementation and untracked storage source.')
+        $sourceCapture=($capture -replace '(?m)^\d+\|','').Replace("`r",'')
+        Assert-True ($sourceCapture.Contains($changed) -and $sourceCapture.Contains($storage)) ($gate+' must receive full candidate implementation and untracked storage source.')
         foreach($path in @('src/taskcli/__main__.py','src/taskcli/storage.py')) {
             $hash=(Get-FileHash -LiteralPath (Join-Path $candidate $path) -Algorithm SHA256).Hash.ToLowerInvariant()
             Assert-True ($capture.ToLowerInvariant().Contains($hash)) ($gate+' missing exact candidate source hash '+$path)

@@ -2,6 +2,7 @@ param()
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+. (Join-Path $repoRoot 'test-project/helpers/grounded-review-fixture.ps1')
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('aico-corrective-analysis-' + [Guid]::NewGuid().ToString('N'))
 
 function Write-FixtureFile {
@@ -129,7 +130,7 @@ function Test-CorrectiveFailedGate {
     $runner = Join-Path $root 'scripts/run-agent-task.ps1'
     Write-FixtureFile (Join-Path $root 'fake-mode.txt') 'first'
     & $runner -Id AICO-002 -ProjectPath $root -Provider Ollama | Out-Null
-    & (Join-Path $root 'scripts/review-task.ps1') -Id AICO-002 -Recommendation APPROVE -Reviewer backend -Findings 'Review confirms architecture proposal.' -ProjectPath $root | Out-Null
+    Invoke-GroundedFixtureReview -Id AICO-002 -Recommendation APPROVE -Reviewer backend -Findings 'Review confirms architecture proposal.' -ProjectPath $root | Out-Null
     if ($Gate -eq 'Security') {
         & (Join-Path $root 'scripts/qa-task.ps1') -Id AICO-002 -Outcome PASS -Evidence 'QA accepts architecture testability.' -ProjectPath $root | Out-Null
     }
@@ -152,7 +153,7 @@ function Test-CorrectiveFailedGate {
     $events = @(Get-Content (Join-Path $root '.codex/runtime/metrics/events.jsonl') | ForEach-Object { $_ | ConvertFrom-Json })
     Assert-True (@($events | Where-Object { $_.context_input_chars -gt $_.context_chars -and $_.context_chars -eq 12000 }).Count -gt 0) "$Gate regression did not exercise oversized context compaction."
     # Later successes supersede the gate failure; historical ticket notes must not reactivate it.
-    & (Join-Path $root 'scripts/review-task.ps1') -Id AICO-002 -Recommendation APPROVE -Reviewer backend -Findings 'Corrective ADR accepted.' -ProjectPath $root | Out-Null
+    Invoke-GroundedFixtureReview -Id AICO-002 -Recommendation APPROVE -Reviewer backend -Findings 'Corrective ADR accepted.' -ProjectPath $root | Out-Null
     $afterReview = & (Join-Path $root 'scripts/build-corrective-analysis-context.ps1') -ProjectPath $root -Id AICO-002 -Owner cto
     Assert-True ([string]::IsNullOrWhiteSpace([string]$afterReview)) "$Gate historical FAIL remained authoritative after a later Review APPROVE before QA PASS."
     & (Join-Path $root 'scripts/qa-task.ps1') -Id AICO-002 -Outcome PASS -Evidence 'Corrective validation accepted.' -ProjectPath $root | Out-Null
@@ -210,7 +211,7 @@ try {
     Assert-True ($first.context -notmatch 'PREVIOUS_DELIVERABLE_SENTINEL') 'First attempt incorrectly received a corrective owner deliverable.'
     Assert-True ($first.context -notmatch 'BEGIN CORRECTIVE ANALYSIS EVIDENCE') 'First attempt received a corrective evidence envelope.'
 
-    & (Join-Path $root 'scripts/review-task.ps1') -Id AICO-002 -Recommendation CHANGES_REQUIRED -Reviewer backend -Findings 'FINDINGS_SENTINEL: CTO must produce an ADR; no external dependency prevents drafting it.' -Verification 'Independent deterministic review' -ProjectPath $root | Out-Null
+    Invoke-GroundedFixtureReview -Id AICO-002 -Recommendation CHANGES_REQUIRED -Reviewer backend -Findings 'FINDINGS_SENTINEL: CTO must produce an ADR; no external dependency prevents drafting it.' -Verification 'Independent deterministic review' -ProjectPath $root | Out-Null
     Assert-True ((Get-Status $root AICO-002) -eq 'READY') 'Independent CHANGES_REQUIRED must return task to READY.'
     & (Join-Path $root 'scripts/advance-task.ps1') -Id AICO-002 -Status ACTIVE -Actor cto -Reason 'Authorized corrective retry' -TasksPath (Join-Path $root 'tasks') | Out-Null
     Write-FixtureFile (Join-Path $root 'fake-mode.txt') 'retry'
@@ -237,7 +238,7 @@ try {
     Assert-True ($boundedEvents.Count -gt 0) 'Provider metrics did not record constructed context greater than the effective sent budget.'
 
     # Exhausted repair during an actual corrective retry must preserve prior durable evidence.
-    & (Join-Path $root 'scripts/review-task.ps1') -Id AICO-002 -Recommendation CHANGES_REQUIRED -Reviewer backend -Findings 'FINDINGS_SENTINEL: add ADR tradeoff detail.' -ProjectPath $root | Out-Null
+    Invoke-GroundedFixtureReview -Id AICO-002 -Recommendation CHANGES_REQUIRED -Reviewer backend -Findings 'FINDINGS_SENTINEL: add ADR tradeoff detail.' -ProjectPath $root | Out-Null
     & (Join-Path $root 'scripts/advance-task.ps1') -Id AICO-002 -Status ACTIVE -Actor cto -Reason 'Authorized second corrective retry' -TasksPath (Join-Path $root 'tasks') | Out-Null
     $priorReportHash = (Get-FileHash (Join-Path $root 'docs/engineering/agent-reports/AICO-002.md')).Hash
     $priorResults = @(Get-ChildItem (Join-Path $root 'docs/engineering/results') -Filter 'AICO-002-result-*.md' | ForEach-Object { $_.Name + ':' + (Get-FileHash $_.FullName).Hash })

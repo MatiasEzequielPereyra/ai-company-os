@@ -23,7 +23,8 @@ param(
 
     [string]$RecommendedNext = "REVIEW",
 
-    [string]$ProjectPath = "."
+    [string]$ProjectPath = ".",
+    [object]$TaskExecutionLease = $null
 )
 
 $ErrorActionPreference = "Stop"
@@ -41,6 +42,9 @@ function Read-Field {
 }
 
 $root=(Resolve-Path $ProjectPath).Path
+. (Join-Path $PSScriptRoot "task-execution-lock.ps1")
+$writerScope = Enter-TaskExecutionScope -ProjectPath $root -Id $Id -Operation "SUBMIT-TASK-RESULT" -Lease $TaskExecutionLease
+try {
 $tasksPath=Join-Path $root "tasks"
 $taskPath=Join-Path $tasksPath ($Id + ".md")
 
@@ -118,15 +122,17 @@ if(-not(Test-Path $updateScript)){throw "update-task.ps1 not found: $updateScrip
 if(-not(Test-Path $advanceScript)){throw "advance-task.ps1 not found: $advanceScript"}
 
 $relativeResult="docs/engineering/results/" + (Split-Path $resultPath -Leaf)
-& $updateScript -Id $Id -Evidence ("Result submitted: " + $relativeResult) -Note ("Owner outcome: " + $Outcome + ". " + $Summary) -TasksPath $tasksPath
+& $updateScript -Id $Id -Evidence ("Result submitted: " + $relativeResult) -Note ("Owner outcome: " + $Outcome + ". " + $Summary) -TasksPath $tasksPath -TaskExecutionLease $writerScope.Lease
 
 if($Outcome -eq "BLOCKED"){
-    & $advanceScript -Id $Id -Status BLOCKED -Actor $owner -Reason ("Owner reported blocker. " + $Blockers) -Evidence ("Result artifact: " + $relativeResult) -TasksPath $tasksPath
+    & $advanceScript -Id $Id -Status BLOCKED -Actor $owner -Reason ("Owner reported blocker. " + $Blockers) -Evidence ("Result artifact: " + $relativeResult) -TasksPath $tasksPath -TaskExecutionLease $writerScope.Lease
 }
 else{
-    & $advanceScript -Id $Id -Status REVIEW -Actor $owner -Reason "Owner submitted completed work for independent review." -Evidence ("Result artifact: " + $relativeResult) -TasksPath $tasksPath
+    & $advanceScript -Id $Id -Status REVIEW -Actor $owner -Reason "Owner submitted completed work for independent review." -Evidence ("Result artifact: " + $relativeResult) -TasksPath $tasksPath -TaskExecutionLease $writerScope.Lease
 }
 
 Write-Host "Task result recorded:" -ForegroundColor Green
 Write-Host $resultPath
 Write-Host "Outcome: $Outcome"
+
+} finally { Exit-TaskExecutionScope -Scope $writerScope }

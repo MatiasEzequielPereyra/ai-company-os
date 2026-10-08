@@ -49,6 +49,11 @@ function ConvertTo-SafeFileText {
 $now = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 $id = Get-NextTaskId -Path $TasksPath
 $filePath = Join-Path $TasksPath "$id.md"
+. (Join-Path $PSScriptRoot "task-execution-lock.ps1")
+$creationScope = Enter-TaskExecutionScope -ProjectPath (Split-Path -Parent (Resolve-Path $TasksPath).Path) -Id $id -Operation "NEW-TASK"
+try {
+if (Test-Path -LiteralPath $filePath) { throw "New task ID was concurrently allocated: $id" }
+
 $safeTitle = ConvertTo-SafeFileText $Title
 $safeOwner = ConvertTo-SafeFileText $Owner
 $safeObjective = ConvertTo-SafeFileText $Objective
@@ -174,3 +179,5 @@ Write-Host "ID: $id"
 Write-Host "Status: BACKLOG"
 Write-Host "Owner: $safeOwner"
 Write-Host "Workflow profile: $WorkflowProfile"
+
+} finally { Exit-TaskExecutionScope -Scope $creationScope }

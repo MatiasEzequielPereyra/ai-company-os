@@ -79,7 +79,8 @@ function Invoke-CandidateGit {
 }
 
 function Add-ImplementationCandidate {
-    param([System.Text.StringBuilder]$Builder,[string]$Root,[string]$TaskId,[string]$TaskContent,[string]$ReportContent)
+    param([System.Text.StringBuilder]$Builder,[string]$Root,[string]$TaskId,[string]$TaskContent,[string]$ReportContent,
+          [System.Collections.Generic.List[object]]$CapturedArtifacts)
     $evidencePath = Join-Path $Root ("docs\engineering\writable-evidence\" + $TaskId + ".md")
     $declared = $ReportContent -match ('(?i)writable-evidence[\\/]' + [regex]::Escape($TaskId) + '\.md')
     if (-not (Test-Path -LiteralPath $evidencePath -PathType Leaf) -and -not $declared) { return }
@@ -139,6 +140,7 @@ function Add-ImplementationCandidate {
     [void]$Builder.AppendLine('Provenance: current registered task worktree state captured for this gate; hashes describe this capture, not an immutable owner snapshot.')
     [void]$Builder.AppendLine('Evidence type: authoritative actual implementation candidate; primary repository source is baseline comparison only.')
     $totalBytes = 0L
+    $candidateFiles = New-Object 'System.Collections.Generic.List[object]'
     foreach ($pathValue in $paths) {
         $relative = ([string]$pathValue).Replace('\','/')
         $segments = @($relative -split '/')
@@ -164,6 +166,7 @@ function Add-ImplementationCandidate {
         [void]$Builder.AppendLine("Repository-relative path: $relative")
         if (-not (Test-Path -LiteralPath $fullPath -PathType Leaf)) {
             [void]$Builder.AppendLine('Candidate operation: DELETE (absent from current worktree)')
+            $candidateFiles.Add([ordered]@{path=$relative;deleted=$true;raw_sha256=''})
             continue
         }
         $stream = [IO.File]::Open($fullPath,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
@@ -172,10 +175,11 @@ function Add-ImplementationCandidate {
             $length = $stream.Length
             $totalBytes += $length
             if ($length -gt [long]$policy.max_file_bytes -or $totalBytes -gt [long]$policy.max_total_write_bytes) { throw "Writable implementation candidate exceeds policy source-size limit: $relative" }
-            $hash = ([BitConverter]::ToString($sha.ComputeHash($stream))).Replace('-','').ToLowerInvariant()
-            $stream.Position = 0
-            $reader = New-Object IO.StreamReader($stream,[Text.Encoding]::UTF8,$true,1024,$true)
-            try { $content = $reader.ReadToEnd() } finally { $reader.Dispose() }
+            $memory = New-Object IO.MemoryStream
+            try { $stream.CopyTo($memory); $rawBytes=$memory.ToArray() } finally { $memory.Dispose() }
+            $hash = ([BitConverter]::ToString($sha.ComputeHash($rawBytes))).Replace('-','').ToLowerInvariant()
+            $content = (New-Object Text.UTF8Encoding($false,$true)).GetString($rawBytes)
+            if ($content.Length -gt 0 -and [int]$content[0] -eq 0xFEFF) { $content=$content.Substring(1) }
         }
         finally { $sha.Dispose(); $stream.Dispose() }
         [void]$Builder.AppendLine("SHA256: $hash")
@@ -183,6 +187,16 @@ function Add-ImplementationCandidate {
         [void]$Builder.AppendLine('Candidate operation: CURRENT SOURCE')
         [void]$Builder.AppendLine('')
         [void]$Builder.AppendLine($content)
+        $candidateFiles.Add([ordered]@{path=$relative;deleted=$false;raw_sha256=$hash})
+        if ($null -ne $CapturedArtifacts) {
+            $CapturedArtifacts.Add([pscustomobject]@{
+                Path=$fullPath;RelativePath=$relative;Namespace='implementation-candidate';CapturedRawBytes=$rawBytes
+                CandidateIdentity=[ordered]@{root=$workspace;branch=$branch;common_directory=$candidateCommon;registered=$registered}
+            })
+        }
+    }
+    if ($null -ne $CapturedArtifacts) {
+        return [ordered]@{root=$workspace;branch=$branch;common_directory=$candidateCommon;registered=$registered;files=@($candidateFiles.ToArray())}
     }
 }
 
@@ -218,6 +232,9 @@ $root = (Resolve-Path $ProjectPath).Path
 $taskPath = Join-Path $root ("tasks\" + $Id + ".md")
 if (-not (Test-Path $taskPath)) { throw "Task not found: $taskPath" }
 
+. (Join-Path $PSScriptRoot 'task-execution-lock.ps1')
+$taskExecutionLock = Enter-TaskExecutionLock -ProjectPath $root -Id $Id -Operation 'GATE'
+try {
 $taskContent = Get-Content $taskPath -Raw -Encoding UTF8
 $status = Read-Field $taskContent "Status"
 $owner = Read-Field $taskContent "Owner"
@@ -237,9 +254,6 @@ if (-not (Test-Path $lockHelperPath -PathType Leaf)) {
     throw "Task execution lock helper not found: $lockHelperPath"
 }
 . $lockHelperPath
-$taskExecutionLock = Enter-TaskExecutionLock -ProjectPath $root -Id $Id -Operation "GATE"
-
-try {
 $reviewerRole = switch ($Gate) {
     "Review" { "engineering-manager" }
     "QA" {
@@ -403,7 +417,43 @@ if ($Gate -eq "Security") {
     Add-Artifact -Builder $evidence -Root $root -Path $qaPath -Label "QA GATE" -MaxChars $artifactMaxChars
 }
 
-Add-ImplementationCandidate -Builder $evidence -Root $root -TaskId $Id -TaskContent $taskContent -ReportContent (Get-Content $reportPath -Raw -Encoding UTF8)
+$groundingContext = $null
+if ($Gate -eq 'Review') {
+    . (Join-Path $PSScriptRoot 'review-grounding.ps1')
+    $primaryArtifacts = New-Object 'System.Collections.Generic.List[object]'
+    $candidateBuilder = New-Object Text.StringBuilder
+    $reportContent = Get-Content -LiteralPath $reportPath -Raw -Encoding UTF8
+    $candidateIdentity = Add-ImplementationCandidate -Builder $candidateBuilder -Root $root -TaskId $Id -TaskContent $taskContent -ReportContent $reportContent -CapturedArtifacts $primaryArtifacts
+    $contextArgs = @{
+        ProjectPath=$root;Id=$Id;Lease=$taskExecutionLock;TaskPath=$taskPath;RolePath=$originalOwnerRolePath
+        DispatchPath=$dispatchPath;ResultPath=$latestResult.FullName
+    }
+    if ((Read-Field $taskContent 'Work kind') -ceq 'IMPLEMENTATION') {
+        if ($primaryArtifacts.Count -eq 0) { throw 'REVIEW_PRIMARY_MISSING: registered implementation candidate is required.' }
+        $contextArgs.PrimaryArtifacts=@($primaryArtifacts.ToArray())
+        $contextArgs.AdditionalSourcePaths=@((Join-Path $root ("docs/engineering/writable-evidence/$Id.md")),(Join-Path $root '.codex/writable-policy.json'))
+        $candidateCapture=${function:Add-ImplementationCandidate}
+        $candidateGit=${function:Invoke-CandidateGit}
+        $candidateReadField=${function:Read-Field}
+        $contextArgs.CandidateIdentityVerifier={
+            function Invoke-CandidateGit { param([string[]]$Arguments) & $candidateGit -Arguments $Arguments }
+            function Read-Field { param([string]$Content,[string]$Key) & $candidateReadField -Content $Content -Key $Key }
+            $currentArtifacts=New-Object 'System.Collections.Generic.List[object]'
+            & $candidateCapture -Builder (New-Object Text.StringBuilder) -Root $root -TaskId $Id -TaskContent $taskContent -ReportContent $reportContent -CapturedArtifacts $currentArtifacts
+        }.GetNewClosure()
+    } else {
+        $contextArgs.PrimaryArtifacts=@([pscustomobject]@{Path=$reportPath;RelativePath="docs/engineering/agent-reports/$Id.md";Namespace='project'})
+    }
+    $groundingContext = New-ReviewGroundingContext @contextArgs
+    # Only the engine snapshot supplies authoritative Review frames. The generic
+    # inventory remains contextual and cannot grant primary citation authority.
+    $evidence = New-Object Text.StringBuilder
+    [void]$evidence.Append($baseContext)
+    [void]$evidence.AppendLine('')
+    [void]$evidence.Append((Get-ReviewGroundingPrompt -Context $groundingContext))
+} else {
+    Add-ImplementationCandidate -Builder $evidence -Root $root -TaskId $Id -TaskContent $taskContent -ReportContent (Get-Content $reportPath -Raw -Encoding UTF8)
+}
 
 $promptLines = @(
     "You are executing an independent AI Company OS quality gate.",
@@ -444,6 +494,9 @@ $promptLines = @(
 )
 
 $prompt = $promptLines -join [Environment]::NewLine
+if ($Gate -eq 'Review') {
+    $prompt += [Environment]::NewLine + 'Review requires review-grounding-v1, the exact engine obligation set, and snapshot_id from the immutable manifest. Every SATISFIED row and authorized conditional NOT_APPLICABLE row must cite exact normalized primary lines. Results/self-attestation and requirements are not primary delivery evidence. Return CHANGES_REQUIRED for missing outputs without inventing citations. Grounding proves provenance, not semantic sufficiency.'
+}
 
 $runtimeDir = Join-Path $root ".codex\runtime"
 New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
@@ -451,7 +504,9 @@ $outputPath = Join-Path $runtimeDir ($Id + "-" + $Gate.ToLowerInvariant() + "-ga
 
 Write-Host ("Gate context budget: generic=" + $maxChars + " chars; authoritative artifacts preserved in full for candidate budget validation") -ForegroundColor DarkGray
 Write-Host "Running $Gate gate: $reviewerRole -> $Id" -ForegroundColor Cyan
-$execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $evidence.ToString() -SchemaPath $schemaPath -OutputPath $outputPath -Model $Model -Role $reviewerRole -Workload "gate" -SemanticValidatorPath $gateSemanticValidatorPath
+$routerArgs = @{Provider=$Provider;ProjectPath=$root;Prompt=$prompt;Context=$evidence.ToString();SchemaPath=$schemaPath;OutputPath=$outputPath;Model=$Model;Role=$reviewerRole;Workload='gate';SemanticValidatorPath=$gateSemanticValidatorPath}
+if ($null -ne $groundingContext) { $routerArgs.SemanticValidationContext=$groundingContext }
+$execution = & $routerPath @routerArgs
 
 if (-not (Test-Path $outputPath)) {
     throw "Gate provider did not produce structured output: $outputPath"
@@ -461,7 +516,12 @@ $result = Get-Content $outputPath -Raw -Encoding UTF8 | ConvertFrom-Json
 
 # Provider routing performs semantic retry/fallback. Revalidate once more before
 # mutating lifecycle state so alternate/custom router implementations also fail closed.
-& $gateSemanticValidatorPath -JsonPath $outputPath | Out-Null
+$finalValidatorArgs=@{JsonPath=$outputPath}
+if ($null -ne $groundingContext) {
+    $finalValidatorArgs.GroundingContext=$groundingContext
+    & (Join-Path $PSScriptRoot 'validate-json-contract.ps1') -JsonPath $outputPath -SchemaPath $schemaPath | Out-Null
+}
+& $gateSemanticValidatorPath @finalValidatorArgs | Out-Null
 
 switch ($Gate) {
     "Review" {
@@ -516,7 +576,10 @@ switch ($Gate) {
             -Recommendation $result.recommendation `
             -Reviewer ("ai-" + $reviewerRole) `
             -Findings $result.findings `
-            -Verification $result.verification
+            -Verification $result.verification `
+            -TaskExecutionLease $taskExecutionLock `
+            -ResultPath $outputPath `
+            -GroundingContext $groundingContext
     }
 
     "QA" {
@@ -592,7 +655,8 @@ switch ($Gate) {
             -Id $Id `
             -Outcome $result.outcome `
             -Evidence $result.evidence `
-            -Findings $result.findings
+            -Findings $result.findings `
+            -TaskExecutionLease $taskExecutionLock
     }
 
     "Security" {
@@ -671,7 +735,8 @@ switch ($Gate) {
             -Id $Id `
             -Outcome $result.outcome `
             -Evidence $result.evidence `
-            -Findings $result.findings
+            -Findings $result.findings `
+            -TaskExecutionLease $taskExecutionLock
     }
 }
 

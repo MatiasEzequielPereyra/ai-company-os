@@ -109,6 +109,9 @@ try {
         "npm-bin/bootstrap.js",
         "scripts/update-runtime.ps1",
         "scripts/provider-router.ps1",
+        "scripts/review-grounding.ps1",
+        "scripts/task-execution-lock.ps1",
+        "schemas/review-result.schema.json",
         "scripts/run-agent-task.ps1",
         "scripts/run-gate-agent.ps1",
         "scripts/run-writable-agent.ps1",
@@ -278,6 +281,9 @@ try {
             "npm-bin\bootstrap.js",
             "scripts\update-runtime.ps1",
             "scripts\provider-router.ps1",
+        "scripts\review-grounding.ps1",
+        "scripts\task-execution-lock.ps1",
+        "schemas\review-result.schema.json",
             "scripts\validate-engineering-plan-result.ps1",
             "scripts\validate-engineering-backlog-semantics.ps1",
             "scripts\validate-gate-result-semantics.ps1",
@@ -301,6 +307,19 @@ try {
         if (Test-Path (Join-Path $installedPackageRoot "npm-bin\package.test.js")) {
             throw "Installed npm tarball must not contain npm-bin/package.test.js."
         }
+        foreach($relative in @('scripts/review-grounding.ps1','scripts/task-execution-lock.ps1','schemas/review-result.schema.json')){
+            if((Get-FileHash (Join-Path $repoRoot $relative)).Hash -cne (Get-FileHash (Join-Path $installedPackageRoot $relative)).Hash){throw "Installed tarball has stale grounding/barrier bytes: $relative"}
+        }
+        $barrierProject=Join-Path $installRoot 'shipped barrier probe'
+        New-Item -ItemType Directory -Path $barrierProject -Force|Out-Null
+        . (Join-Path $installedPackageRoot 'scripts/task-execution-lock.ps1')
+        $shared=Enter-ProjectExecutionLease -ProjectPath $barrierProject -Mode Shared
+        try{
+            $reason='';try{$unexpected=Enter-ProjectExecutionLease -ProjectPath $barrierProject -Mode Maintenance;Exit-ProjectExecutionLease $unexpected}catch{$reason=$_.Exception.Message}
+            if($reason-notmatch 'project maintenance cannot run while project executions are active'){throw 'Installed tarball barrier failed actual shared/exclusive contention.'}
+        }finally{Exit-ProjectExecutionLease $shared}
+        $maintenance=Enter-ProjectExecutionLease -ProjectPath $barrierProject -Mode Maintenance
+        Exit-ProjectExecutionLease $maintenance
 
         $packagedReadmePath = Join-Path $installedPackageRoot "README.md"
         Assert-PackagedReadmeLinks -ReadmePath $packagedReadmePath -PackageRoot $installedPackageRoot

@@ -1,0 +1,6 @@
+# Preserve exact hashed evidence bytes, including serialized JSON CRLF.
+* -text
+# The original unfinished report ends with a meaningful captured trailing space.
+primary-report.md whitespace=-blank-at-eol
+legacy-approval.json whitespace=cr-at-eol
+provenance.json whitespace=cr-at-eol

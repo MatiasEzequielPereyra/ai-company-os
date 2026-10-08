@@ -3,6 +3,10 @@ param()
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+. (Join-Path $repoRoot 'scripts/task-execution-lock.ps1')
+. (Join-Path $repoRoot 'scripts/review-grounding.ps1')
+. (Join-Path $repoRoot 'test-project/helpers/grounded-review-fixture.ps1')
+$groundedFixture=$null
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) (
     "aico-review-gate-provider-reliability-" +
     [Guid]::NewGuid().ToString("N")
@@ -135,13 +139,7 @@ try {
         '$fixtureRoot = Split-Path -Parent $OutputPath'
         'Add-Content -Path (Join-Path $fixtureRoot "provider-attempts.txt") -Value "OpenRouter" -Encoding UTF8'
         ''
-        '$payload = @{'
-        '    recommendation = "APPROVE"'
-        '    findings = "Deterministic Review fallback fixture."'
-        '    verification = "Truncated Ollama was rejected and fallback completed."'
-        '    missing_required_outputs = @()'
-        '    deliverable_defects = @()'
-        '} | ConvertTo-Json -Depth 10'
+        '$payload = [IO.File]::ReadAllText((Join-Path $fixtureRoot "fixture-grounded-review.json"))'
         ''
         '[System.IO.File]::WriteAllText('
         '    $OutputPath,'
@@ -162,7 +160,8 @@ try {
     $semanticCapture = @(
         'param('
         '    [Parameter(Mandatory = $true)]'
-        '    [string]$JsonPath'
+        '    [string]$JsonPath,',
+        '    [object]$GroundingContext'
         ')'
         ''
         '$fixtureRoot = Split-Path -Parent $JsonPath'
@@ -173,7 +172,7 @@ try {
         '    (New-Object System.Text.UTF8Encoding($false))'
         ')'
         ''
-        '& (Join-Path $PSScriptRoot "validate-gate-result-semantics.ps1") -JsonPath $JsonPath | Out-Null'
+        '& (Join-Path $PSScriptRoot "validate-gate-result-semantics.ps1") -JsonPath $JsonPath -GroundingContext $GroundingContext | Out-Null'
     ) -join [Environment]::NewLine
 
     Write-Utf8NoBom `
@@ -184,7 +183,9 @@ try {
 
     $context = "G" * 51021
 
+    $groundedFixture=New-GroundedRouterFixture -Root $tempRoot
     $routerArgs = @{
+        SemanticValidationContext=$groundedFixture.Context
         Provider = "Auto"
         ProjectPath = $tempRoot
         Prompt = "Deterministic Review gate provider reliability fixture"
@@ -278,7 +279,7 @@ try {
     & (
         Join-Path $tempRoot "scripts\validate-gate-result-semantics.ps1"
     ) `
-        -JsonPath (Join-Path $tempRoot "review-result.json") |
+        -JsonPath (Join-Path $tempRoot "review-result.json") -GroundingContext $groundedFixture.Context |
         Out-Null
 
     Remove-Item $attemptsPath -Force -ErrorAction SilentlyContinue
@@ -351,6 +352,7 @@ try {
     ) -ForegroundColor Green
 }
 finally {
+    if($null-ne $groundedFixture){Exit-TaskExecutionLock -Lock $groundedFixture.Lease}
     $env:OPENROUTER_API_KEY = $savedOpenRouterKey
 
     if (Test-Path $tempRoot) {

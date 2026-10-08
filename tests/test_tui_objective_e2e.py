@@ -71,6 +71,13 @@ def prepare_engine_project(
         root / "scripts",
     )
 
+    # The deterministic adapter must return citations from the real frozen
+    # engine context; intake and lifecycle validation remain production code.
+    shutil.copy2(
+        engine_root / "test-project" / "helpers" / "grounded-review-fixture.ps1",
+        root / "scripts" / "e2e-grounded-review-fixture.ps1",
+    )
+
     shutil.copytree(
         engine_root / "schemas",
         root / "schemas",
@@ -205,7 +212,8 @@ def prepare_engine_project(
     [string]$Model,
     [string]$Role,
     [string]$Workload,
-    [string]$SemanticValidatorPath
+    [string]$SemanticValidatorPath,
+    [object]$SemanticValidationContext
 )
 
 $ErrorActionPreference = "Stop"
@@ -461,13 +469,9 @@ switch ($name) {
     }
 
     "review-result.schema.json" {
-        $result = [ordered]@{
-            recommendation = "APPROVE"
-            findings = "NONE"
-            verification = "Full TUI E2E review pass."
-            missing_required_outputs = @()
-            deliverable_defects = @()
-        }
+        . (Join-Path $ProjectPath "scripts/review-grounding.ps1")
+        . (Join-Path $ProjectPath "scripts/e2e-grounded-review-fixture.ps1")
+        $result = New-GroundedFixtureJudgment -Context $SemanticValidationContext
     }
 
     "qa-gate-result.schema.json" {
@@ -517,7 +521,11 @@ if (-not [string]::IsNullOrWhiteSpace($SemanticValidatorPath)) {
         throw "Semantic validator not found: $SemanticValidatorPath"
     }
 
-    & $SemanticValidatorPath -JsonPath $OutputPath
+    $validation = @{ JsonPath = $OutputPath }
+    if ($null -ne $SemanticValidationContext) {
+        $validation.GroundingContext = $SemanticValidationContext
+    }
+    & $SemanticValidatorPath @validation
 }
 
 [PSCustomObject]@{

@@ -2,7 +2,8 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$SourceTaskId,
 
-    [string]$ProjectPath = "."
+    [string]$ProjectPath = ".",
+    [object]$TaskExecutionLease = $null
 )
 
 $ErrorActionPreference = "Stop"
@@ -71,6 +72,9 @@ function Test-IsExplicitImplementationAuthorizationDecision {
 }
 
 $root = (Resolve-Path $ProjectPath).Path
+. (Join-Path $PSScriptRoot "task-execution-lock.ps1")
+$sourceScope = Enter-TaskExecutionScope -ProjectPath $root -Id $SourceTaskId -Operation "MATERIALIZE-ENGINEERING-BACKLOG" -Lease $TaskExecutionLease
+try {
 $tasksPath = Join-Path $root "tasks"
 $planPath = Join-Path $root ("docs\engineering\plans\" + $SourceTaskId + "-engineering-backlog.json")
 $mappingPath = Join-Path $root ("docs\engineering\plans\" + $SourceTaskId + "-engineering-backlog-tasks.md")
@@ -418,7 +422,11 @@ foreach ($item in $items) {
     ) -join [Environment]::NewLine
 
     $path = Join-Path $tasksPath ($id + ".md")
-    Write-Utf8NoBom $path $content
+    $creationScope = Enter-TaskExecutionScope -ProjectPath $root -Id $id -Operation "BACKLOG-TASK-CREATE"
+    try {
+        if (Test-Path -LiteralPath $path) { throw "Backlog task ID was concurrently allocated: $id" }
+        Write-Utf8NoBom $path $content
+    } finally { Exit-TaskExecutionScope -Scope $creationScope }
     $created += [PSCustomObject]@{ Key=$key; ID=$id; Kind=[string]$item.kind; Owner=[string]$item.owner; Priority=[string]$item.priority; Title=[string]$item.title }
 }
 
@@ -488,3 +496,5 @@ Write-Utf8NoBom $mappingPath ($mapping -join [Environment]::NewLine)
 Write-Host "Engineering backlog materialized:" -ForegroundColor Green
 $created | Format-Table ID, Priority, Kind, Owner, Key, Title -AutoSize
 Write-Host ("Mapping: " + $mappingPath)
+
+} finally { Exit-TaskExecutionScope -Scope $sourceScope }

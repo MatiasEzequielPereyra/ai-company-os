@@ -1,7 +1,8 @@
 param(
     [string]$ProjectPath = ".",
 
-    [switch]$Apply
+    [switch]$Apply,
+    [object]$ProjectMaintenanceLease = $null
 )
 
 $ErrorActionPreference = "Stop"
@@ -99,6 +100,13 @@ function Repair-ArtifactContent {
 }
 
 $root = (Resolve-Path $ProjectPath).Path
+$maintenanceScope=$null
+if ($Apply) {
+    . (Join-Path $PSScriptRoot "task-execution-lock.ps1")
+    $maintenanceScope=Enter-ProjectExecutionScope -ProjectPath $root -Mode Maintenance -Lease $ProjectMaintenanceLease
+}
+try {
+
 
 $artifactRoots = @(
     "tasks",
@@ -163,3 +171,5 @@ else {
     Write-Host ("Repairable artifact files: " + $changed.Count) -ForegroundColor Yellow
     Write-Host "Dry run only. Re-run with -Apply to write changes." -ForegroundColor Yellow
 }
+
+} finally { if($Apply){Exit-ProjectExecutionScope -Scope $maintenanceScope} }

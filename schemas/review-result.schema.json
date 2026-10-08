@@ -34,6 +34,90 @@
         "maxLength": 800
       },
       "maxItems": 30
+    },
+    "contract_version": {
+      "enum": [
+        "review-grounding-v1"
+      ],
+      "type": "string"
+    },
+    "snapshot_id": {
+      "minLength": 1,
+      "type": "string",
+      "maxLength": 200
+    },
+    "assessments": {
+      "items": {
+        "type": "object",
+        "properties": {
+          "required_output_id": {
+            "minLength": 1,
+            "type": "string",
+            "maxLength": 1024
+          },
+          "status": {
+            "enum": [
+              "SATISFIED",
+              "UNSATISFIED",
+              "NOT_APPLICABLE"
+            ],
+            "type": "string"
+          },
+          "rationale": {
+            "minLength": 1,
+            "type": "string",
+            "maxLength": 2000
+          },
+          "evidence": {
+            "items": {
+              "type": "object",
+              "properties": {
+                "artifact_id": {
+                  "minLength": 1,
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "start_line": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "end_line": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "excerpt": {
+                  "maxLength": 2048,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "artifact_id",
+                "start_line",
+                "end_line",
+                "excerpt"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 3,
+            "type": "array"
+          },
+          "conditional_authority": {
+            "minLength": 1,
+            "type": "string",
+            "maxLength": 1024
+          }
+        },
+        "required": [
+          "required_output_id",
+          "status",
+          "rationale",
+          "evidence"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 1,
+      "maxItems": 64,
+      "type": "array"
     }
   },
   "required": [
@@ -41,7 +125,10 @@
     "findings",
     "verification",
     "missing_required_outputs",
-    "deliverable_defects"
+    "deliverable_defects",
+    "contract_version",
+    "snapshot_id",
+    "assessments"
   ],
   "additionalProperties": false
 }

@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory = $true)]
-    [string]$JsonPath
+    [string]$JsonPath,
+    [object]$GroundingContext
 )
 
 $ErrorActionPreference = "Stop"
@@ -38,6 +39,8 @@ if (-not (Test-Path $JsonPath -PathType Leaf)) {
 $result = Get-Content $JsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
 
 if ($null -ne $result.PSObject.Properties["recommendation"]) {
+    if ($null -eq $GroundingContext) { throw 'REVIEW_GROUNDING_UNTRUSTED_CONTEXT: Review requires engine-owned invocation context.' }
+    . (Join-Path $PSScriptRoot 'review-grounding.ps1')
     Assert-StructuredFields -Result $result -Fields @("recommendation","findings","verification","missing_required_outputs","deliverable_defects") -Label "Review"
     $missingRequiredOutputs = @(Get-ConcreteStrings -Value $result.missing_required_outputs)
     $deliverableDefects = @(Get-ConcreteStrings -Value $result.deliverable_defects)
@@ -57,6 +60,7 @@ if ($null -ne $result.PSObject.Properties["recommendation"]) {
             throw "Semantic contract: invalid Review recommendation: $($result.recommendation)"
         }
     }
+    Assert-ReviewGroundingResult -Result $result -Context $GroundingContext | Out-Null
     Write-Output "PASS: Review gate semantic validation"
     return
 }

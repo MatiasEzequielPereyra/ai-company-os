@@ -3,6 +3,7 @@ param()
 $ErrorActionPreference="Stop"
 
 $repoRoot=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+. (Join-Path $repoRoot 'test-project/helpers/grounded-review-fixture.ps1')
 $newWorkRequest=Join-Path $repoRoot "scripts\new-work-request.ps1"
 $generatePlan=Join-Path $repoRoot "scripts\generate-plan.ps1"
 $materializePlan=Join-Path $repoRoot "scripts\materialize-plan-tasks.ps1"
@@ -26,6 +27,7 @@ try{
 
     Copy-Item $advance (Join-Path $tempRoot "scripts\advance-task.ps1") -Force
     Copy-Item $update (Join-Path $tempRoot "scripts\update-task.ps1") -Force
+    Initialize-GroundedReviewFixture -Root $tempRoot -Id AICO-001
 
     & $newWorkRequest -ProjectPath $tempRoot -Objective "Prepare project for production" -Type AUDIT -Priority P1
     & $generatePlan -ProjectPath $tempRoot -WorkRequestId WR-001
@@ -34,7 +36,7 @@ try{
     & $dispatch -ProjectPath $tempRoot -Apply
 
     & $submit -ProjectPath $tempRoot -Id AICO-001 -Outcome COMPLETED -Summary "Audit completed."
-    & $review -ProjectPath $tempRoot -Id AICO-001 -Recommendation APPROVE -Reviewer "reviewer" -Findings "No blocking findings."
+    Invoke-GroundedFixtureReview -ProjectPath $tempRoot -Id AICO-001 -Recommendation APPROVE -Reviewer "reviewer" -Findings "No blocking findings."
     & $qa -ProjectPath $tempRoot -Id AICO-001 -Outcome PASS -Evidence "Acceptance criteria verified."
     & $security -ProjectPath $tempRoot -Id AICO-001 -Outcome NOT_APPLICABLE -Evidence "No changed security boundary."
     & $finalize -ProjectPath $tempRoot -Id AICO-001 -Decision APPROVE -Verification "Objective and applicable gates verified."

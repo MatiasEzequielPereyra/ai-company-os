@@ -2,7 +2,8 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$SourceTaskId,
 
-    [string]$ProjectPath = "."
+    [string]$ProjectPath = ".",
+    [object]$TaskExecutionLease = $null
 )
 
 $ErrorActionPreference = "Stop"
@@ -405,6 +406,9 @@ function New-TaskContent {
 }
 
 $root = (Resolve-Path $ProjectPath).Path
+. (Join-Path $PSScriptRoot "task-execution-lock.ps1")
+$sourceScope = Enter-TaskExecutionScope -ProjectPath $root -Id $SourceTaskId -Operation "RECONCILE-ENGINEERING-BACKLOG" -Lease $TaskExecutionLease
+try {
 $tasksPath = Join-Path $root "tasks"
 $planPath = Join-Path $root ("docs\engineering\plans\" + $SourceTaskId + "-engineering-backlog.json")
 $mappingPath = Join-Path $root ("docs\engineering\plans\" + $SourceTaskId + "-engineering-backlog-tasks.md")
@@ -556,6 +560,20 @@ $updatedCount = 0
 foreach ($item in $items) {
     $key = [string]$item.key
     $id = [string]$idByKey[$key]
+    $taskScope = Enter-TaskExecutionScope -ProjectPath $root -Id $id -Operation "BACKLOG-RECONCILE-TASK"
+    try {
+    $currentPath = Join-Path $tasksPath ($id + '.md')
+    if (Test-Path -LiteralPath $currentPath) {
+        $currentContent = Get-Content -LiteralPath $currentPath -Raw -Encoding UTF8
+        if ((Read-Field -Content $currentContent -Key 'Status') -ne 'BACKLOG') {
+            throw "Cannot reconcile task $id because it progressed before locked mutation."
+        }
+        if (-not $existingContentByKey.ContainsKey($key) -or $currentContent -cne $existingContentByKey[$key]) {
+            throw "Cannot reconcile task $id because its canonical source changed after preparation."
+        }
+    } elseif ($existingContentByKey.ContainsKey($key)) {
+        throw "Cannot reconcile task $id because its canonical source disappeared."
+    }
     $dependencyIds = @($item.dependencies | ForEach-Object { [string]$idByKey[[string]$_] })
 
     $created = $now
@@ -574,6 +592,7 @@ foreach ($item in $items) {
 
     $content = New-TaskContent -Id $id -Item $item -DependencyIds $dependencyIds -WorkRequestId ([string]$backlog.work_request_id) -SourceTaskId $SourceTaskId -Created $created -Updated $now -TransitionNote $transitionNote
     Write-Utf8NoBom (Join-Path $tasksPath ($id + ".md")) $content
+    } finally { Exit-TaskExecutionScope -Scope $taskScope }
 }
 
 $kindCounts = @{}
@@ -651,3 +670,5 @@ Write-Host ("Mapping: " + $mappingPath)
 if ($orphanDecisionKeys.Count -gt 0) {
     Write-Host ("WARNING orphan decisions: " + ($orphanDecisionKeys -join ", ")) -ForegroundColor Yellow
 }
+
+} finally { Exit-TaskExecutionScope -Scope $sourceScope }

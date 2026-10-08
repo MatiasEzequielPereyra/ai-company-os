@@ -15,6 +15,7 @@ try{
     New-Item -ItemType Directory -Force -Path (Join-Path $tempRoot "tasks")|Out-Null
 
     foreach($name in @(
+        "task-execution-lock.ps1",
         "new-work-request.ps1",
         "generate-plan.ps1",
         "materialize-plan-tasks.ps1",

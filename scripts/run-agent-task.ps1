@@ -6,7 +6,8 @@ param(
     [string]$Provider = "Auto",
     [string]$Model = "",
     [ValidateSet("Auto","ChatGPT","ApiKey")]
-    [string]$AuthMode = "Auto"
+    [string]$AuthMode = "Auto",
+    [object]$TaskExecutionLease = $null
 )
 
 $ErrorActionPreference = "Stop"
@@ -59,6 +60,10 @@ if ($PSBoundParameters.ContainsKey("AuthMode") -and -not $PSBoundParameters.Cont
 }
 
 $root = (Resolve-Path $ProjectPath).Path
+. (Join-Path $PSScriptRoot "task-execution-lock.ps1")
+$writerScope = Enter-TaskExecutionScope -ProjectPath $root -Id $Id -Operation "ANALYSIS" -Lease $TaskExecutionLease
+$taskExecutionLock = $writerScope.Lease
+try {
 $tasksPath = Join-Path $root "tasks"
 $taskPath = Join-Path $tasksPath ($Id + ".md")
 if (-not (Test-Path $taskPath)) { throw "Task not found: $taskPath" }
@@ -70,14 +75,7 @@ if ($status -ne "ACTIVE") { throw "Task $Id must be ACTIVE. Current status: $sta
 if ([string]::IsNullOrWhiteSpace($owner)) { throw "Task $Id has no owner." }
 $requiresConcreteEngineeringPlan = Test-RequiresConcreteEngineeringPlan -Owner $owner -TaskContent $task
 
-$lockHelperPath = Join-Path $PSScriptRoot "task-execution-lock.ps1"
-if (-not (Test-Path $lockHelperPath -PathType Leaf)) {
-    throw "Task execution lock helper not found: $lockHelperPath"
-}
-. $lockHelperPath
-$taskExecutionLock = Enter-TaskExecutionLock -ProjectPath $root -Id $Id -Operation "ANALYSIS"
 
-try {
 $dispatchPath = Join-Path $root ("docs\engineering\dispatch\" + $Id + ".md")
 $rolePath = Join-Path $root (".codex\agents\" + $owner + ".md")
 $schemaName = if ($requiresConcreteEngineeringPlan) {
@@ -460,6 +458,7 @@ $submitArgs = @{
 if ($null -ne $result.execution_blocker) {
     $submitArgs.ExecutionBlockerJson = $result.execution_blocker | ConvertTo-Json -Depth 10
 }
+$submitArgs.TaskExecutionLease = $taskExecutionLock
 & $submit @submitArgs
 
 Write-Host ""
@@ -470,5 +469,5 @@ Write-Host "Model: $modelUsed"
 Write-Host "Report: $changed"
 }
 finally {
-    Exit-TaskExecutionLock -Lock $taskExecutionLock
+    Exit-TaskExecutionScope -Scope $writerScope
 }

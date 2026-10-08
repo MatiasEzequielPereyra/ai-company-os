@@ -35,7 +35,7 @@ try {
         New-Item -ItemType Directory -Force -Path (Join-Path $tempRoot $dir) | Out-Null
     }
 
-    foreach ($name in @("run-gate-agent.ps1","validate-gate-result-semantics.ps1","task-execution-lock.ps1","review-task.ps1","update-task.ps1","advance-task.ps1")) {
+    foreach ($name in @("run-gate-agent.ps1","validate-gate-result-semantics.ps1","review-grounding.ps1","validate-json-contract.ps1","task-execution-lock.ps1","review-task.ps1","update-task.ps1","advance-task.ps1")) {
         Copy-Item (Join-Path $repoRoot ("scripts\" + $name)) (Join-Path $tempRoot ("scripts\" + $name)) -Force
     }
 
@@ -163,6 +163,8 @@ try {
 
     $resultContent = @(
         "# Task Result - AICO-001",
+        "Task: AICO-001",
+        "Owner: pm",
         "",
         "Outcome: COMPLETED",
         "Changed artifacts: $reportRelative",
@@ -204,7 +206,8 @@ param(
     [string]$Model,
     [string]$Role,
     [string]$Workload,
-    [string]$SemanticValidatorPath
+    [string]$SemanticValidatorPath,
+    [object]$SemanticValidationContext
 )
 
 if ([string]::IsNullOrWhiteSpace($SemanticValidatorPath) -or -not (Test-Path $SemanticValidatorPath -PathType Leaf)) {
@@ -214,7 +217,7 @@ if ([string]::IsNullOrWhiteSpace($SemanticValidatorPath) -or -not (Test-Path $Se
 $canonical = "docs/engineering/agent-reports/AICO-001.md"
 
 $hasCanonicalIdentity = (
-    $Context -match [regex]::Escape("Repository-relative path: " + $canonical)
+    $Context -match [regex]::Escape("relative path: " + $canonical)
 )
 
 $hasExplicitReport = (
@@ -264,7 +267,11 @@ $payload = @{
     } else {
         @("Explicit primary report artifact could not be correlated with the task result.")
     })
-} | ConvertTo-Json -Depth 10
+ }
+. (Join-Path $ProjectPath 'scripts/review-grounding.ps1')
+. (Join-Path $ProjectPath 'scripts/grounded-review-fixture.ps1')
+$payload = New-GroundedFixtureJudgment -Context $SemanticValidationContext -Recommendation $payload.recommendation -Findings $payload.findings -Verification $payload.verification
+$payload = $payload | ConvertTo-Json -Depth 40
 
 [System.IO.File]::WriteAllText(
     $OutputPath,
@@ -277,6 +284,7 @@ $payload = @{
     Model = "deterministic"
 }
 '@
+    Copy-Item (Join-Path $repoRoot "test-project/helpers/grounded-review-fixture.ps1") (Join-Path $tempRoot "scripts/grounded-review-fixture.ps1") -Force
     Write-NoBom (Join-Path $tempRoot "scripts\provider-router.ps1") $fakeRouter
 
     & (Join-Path $tempRoot "scripts\run-gate-agent.ps1") -Id "AICO-001" -Gate Review -ProjectPath $tempRoot -Provider OpenRouter
