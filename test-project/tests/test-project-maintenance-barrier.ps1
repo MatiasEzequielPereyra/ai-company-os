@@ -82,6 +82,13 @@ try{
     $early=[IO.Path]::GetFullPath($early);$late=[IO.Path]::GetFullPath($late)
     $oldEarlyHash=(Get-FileHash -LiteralPath $early).Hash
     $auditState=[pscustomobject]@{Apply=$false;Rollback=$false;BackupPath=$null;Copies=[Collections.Generic.List[string]]::new()};$failedApply=$false
+    # TEMP may use a short-name alias on hosted Windows. Exercise the same
+    # spelling-length mismatch deterministically, without requiring NTFS 8.3.
+    $maintenanceTemp=Join-Path $tempRoot 'maintenance-temp'
+    New-Item -ItemType Directory -Path $maintenanceTemp -Force|Out-Null
+    $savedTemp=$env:TEMP
+    $env:TEMP=Join-Path $maintenanceTemp '..\maintenance-temp'
+    Assert ($env:TEMP.Length -ne (Get-Item -LiteralPath $env:TEMP).FullName.Length) 'TEMP alias did not exercise a canonical path length difference.'
     $applySource=Join-Path $repoRoot 'scripts/provider-router.ps1'
     function Copy-Item {
         param([string]$Path,[string]$Destination,[switch]$Force,[switch]$Recurse)
@@ -109,7 +116,7 @@ try{
     }catch{
         Assert ($_.Exception.Message -match 'Runtime update failed and changes were rolled back: Deterministic filesystem failure') "Expected actual apply/rollback failure, received: $($_.Exception.Message)"
         $failedApply=$true
-    }finally{Remove-Item Function:\Copy-Item}
+    }finally{$env:TEMP=$savedTemp;Remove-Item Function:\Copy-Item}
     Assert $auditState.Apply 'Failure occurred before any actual managed replacement.'
     Assert $auditState.Rollback ("Updater did not enter real backup restoration. Observed copies: " + ($auditState.Copies -join ' | '))
     Assert $failedApply 'Filesystem denial did not fail updater.'

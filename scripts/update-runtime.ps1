@@ -542,6 +542,9 @@ else {
 
 $backupRoot = Join-Path $tempBase ("aico-runtime-update-backup-" + [Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Force -Path $backupRoot | Out-Null
+# Enumeration emits provider-normalized FullName paths. Use the same identity
+# for relative restoration paths, even when TEMP contains a short-name alias.
+$backupRoot = (Get-Item -LiteralPath $backupRoot).FullName
 
 $createdPaths = @()
 $changed = 0
