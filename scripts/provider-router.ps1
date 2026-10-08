@@ -10,10 +10,16 @@ param(
     [string]$Role = "",
     [string]$Workload = "general",
     [string]$SemanticValidatorPath = "",
-    [string]$CorrectiveContext = ""
+    [string]$CorrectiveContext = "",
+    [object]$SemanticValidationContext
 )
 
 $ErrorActionPreference = "Stop"
+if ($null -ne $SemanticValidationContext) {
+    if ([string]::IsNullOrWhiteSpace($SemanticValidatorPath)) { throw 'REVIEW_GROUNDING_VALIDATOR_REQUIRED' }
+    . (Join-Path $PSScriptRoot 'review-grounding.ps1')
+    Get-ReviewGroundingManifest -Context $SemanticValidationContext | Out-Null
+}
 
 function Sanitize-ProviderError {
     param([string]$Message)
@@ -31,6 +37,34 @@ function Sanitize-ProviderError {
         }
     }
     return $result
+}
+
+function Save-RejectedReviewAttempt {
+    param([string]$Phase,[string]$Reason)
+    if ($null -eq $SemanticValidationContext) { return }
+    # Retain identity and typed diagnostics only. Provider prose, excerpts,
+    # endpoints, credentials and hidden reasoning never enter this record.
+    $manifest = Get-ReviewGroundingManifest -Context $SemanticValidationContext
+    $directory = Join-Path $ProjectPath '.codex/runtime/rejected-review-attempts'
+    $current = [IO.Path]::GetFullPath($directory)
+    $rootFull = [IO.Path]::GetFullPath((Resolve-Path $ProjectPath).Path)
+    while (-not [string]::Equals($current,$rootFull,(Get-ExecutionPathComparison))) {
+        if (Test-Path -LiteralPath $current) {
+            if ((Get-Item -LiteralPath $current -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'REVIEW_DIAGNOSTIC_PATH_UNSAFE' }
+        }
+        $current=Split-Path $current -Parent
+    }
+    [IO.Directory]::CreateDirectory($directory) | Out-Null
+    $code='REVIEW_UNUSABLE_OUTPUT'
+    if ($Reason -match '^([A-Z][A-Z0-9_]{2,64})(?:[: ]|$)') { $code=$Matches[1] }
+    $digest=''
+    if (Test-Path -LiteralPath $OutputPath -PathType Leaf) { $digest=(Get-FileHash -LiteralPath $OutputPath -Algorithm SHA256).Hash.ToLowerInvariant() }
+    $record=[ordered]@{
+        contract_version='review-grounding-v1';snapshot_id=$manifest.snapshot_id;manifest_digest=$manifest.manifest_digest
+        provider=$candidateName;phase=$Phase;error_code=$code;rejected_output_sha256=$digest
+    }
+    $path=Join-Path $directory ([Guid]::NewGuid().ToString('N')+'.json')
+    [IO.File]::WriteAllText($path,($record|ConvertTo-Json -Depth 5),(New-Object Text.UTF8Encoding($false)))
 }
 
 function Get-ConfiguredModel {
@@ -568,7 +602,7 @@ foreach ($candidate in $attempts) {
     $contextBudget = $null
 
     if (
-        ($Workload -in @("analysis","gate") -and $candidateName -ne "Codex") -or
+        ($Workload -in @("analysis","gate") -and ($candidateName -ne "Codex" -or $null -ne $SemanticValidationContext)) -or
         ($Workload -eq "writable")
     ) {
         $contextBudgetArgs = @{
@@ -654,6 +688,9 @@ foreach ($candidate in $attempts) {
             param([string]$EffectivePrompt)
 
             if ($candidateName -eq "Codex") {
+                if ($null -ne $SemanticValidationContext) {
+                    $EffectivePrompt += [Environment]::NewLine + $candidateContext
+                }
                 if (-not [string]::IsNullOrWhiteSpace($CorrectiveContext)) { $EffectivePrompt += [Environment]::NewLine + $CorrectiveContext }
                 return (& $providerScript -ProjectPath $root -Prompt $EffectivePrompt -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel -TimeoutSeconds $providerTimeoutSeconds)
             }
@@ -675,18 +712,30 @@ foreach ($candidate in $attempts) {
             throw "$candidateName returned without creating the structured output file."
         }
 
-        & $validatorPath -JsonPath $OutputPath -SchemaPath $SchemaPath | Out-Null
+        if ($null -eq $SemanticValidationContext) {
+            & $validatorPath -JsonPath $OutputPath -SchemaPath $SchemaPath | Out-Null
+        }
 
         if (-not [string]::IsNullOrWhiteSpace($SemanticValidatorPath)) {
+            $semanticArgs = @{ JsonPath=$OutputPath }
+            if ($null -ne $SemanticValidationContext) { $semanticArgs.GroundingContext=$SemanticValidationContext }
             try {
-                & $SemanticValidatorPath -JsonPath $OutputPath | Out-Null
+                if ($null -ne $SemanticValidationContext) {
+                    & $validatorPath -JsonPath $OutputPath -SchemaPath $SchemaPath | Out-Null
+                }
+                & $SemanticValidatorPath @semanticArgs | Out-Null
             }
             catch {
                 $semanticError = Sanitize-ProviderError -Message $_.Exception.Message
+                Save-RejectedReviewAttempt -Phase 'initial' -Reason $semanticError
                 $previousOutput = ""
 
                 if (Test-Path $OutputPath -PathType Leaf) {
-                    $previousOutput = Get-Content $OutputPath -Raw -Encoding UTF8
+                    if ($null -ne $SemanticValidationContext) {
+                        $previousOutput = '[Rejected Review content omitted. Regenerate the full judgment from the unchanged engine manifest.]'
+                    } else {
+                        $previousOutput = Sanitize-ProviderError -Message (Get-Content $OutputPath -Raw -Encoding UTF8)
+                    }
                     if ($previousOutput.Length -gt 20000) {
                         $previousOutput = $previousOutput.Substring(0,20000) + [Environment]::NewLine + "[TRUNCATED]"
                     }
@@ -729,7 +778,7 @@ foreach ($candidate in $attempts) {
                 }
 
                 & $validatorPath -JsonPath $OutputPath -SchemaPath $SchemaPath | Out-Null
-                & $SemanticValidatorPath -JsonPath $OutputPath | Out-Null
+                & $SemanticValidatorPath @semanticArgs | Out-Null
             }
         }
 
@@ -760,6 +809,7 @@ foreach ($candidate in $attempts) {
     }
     catch {
         $safe = Sanitize-ProviderError -Message $_.Exception.Message
+        Save-RejectedReviewAttempt -Phase 'repair_or_provider_failure' -Reason $safe
         $errors += ($candidateName + ": " + $safe)
 
         # A failed or timed-out provider must never leave a consumable structured

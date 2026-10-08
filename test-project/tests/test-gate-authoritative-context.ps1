@@ -1,6 +1,10 @@
 param()
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+. (Join-Path $repoRoot 'scripts/task-execution-lock.ps1')
+. (Join-Path $repoRoot 'scripts/review-grounding.ps1')
+. (Join-Path $repoRoot 'test-project/helpers/grounded-review-fixture.ps1')
+$groundedFixture=$null
 $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ('aico-gate-authoritative-' + [guid]::NewGuid().ToString('N'))
 $savedKey = $env:OPENROUTER_API_KEY
 function Write-Text([string]$Path,[string]$Value) { [IO.File]::WriteAllText($Path,$Value,(New-Object Text.UTF8Encoding($false))) }
@@ -12,11 +16,11 @@ function Set-Budget([int]$LocalBudget,[int]$GlobalBudget=22000) {
 function Invoke-Case([string]$Name,[string]$Provider,[string]$Context,[string]$Schema='review-result.schema.json') {
     $script:caseRoot = Join-Path $tempRoot $Name
     New-Item -ItemType Directory -Path $caseRoot | Out-Null
-    & (Join-Path $tempRoot 'scripts/provider-router.ps1') -Provider $Provider -ProjectPath $tempRoot -Prompt 'Deterministic authoritative gate regression' -Context $Context -SchemaPath (Join-Path $tempRoot ('schemas/'+$Schema)) -OutputPath (Join-Path $caseRoot 'result.json') -Role 'engineering-manager' -Workload 'gate'
+    & (Join-Path $tempRoot 'scripts/provider-router.ps1') -Provider $Provider -ProjectPath $tempRoot -Prompt 'Deterministic authoritative gate regression' -Context $Context -SchemaPath (Join-Path $tempRoot ('schemas/'+$Schema)) -OutputPath (Join-Path $caseRoot 'result.json') -Role 'engineering-manager' -Workload 'gate' -SemanticValidatorPath (Join-Path $tempRoot 'scripts/validate-gate-result-semantics.ps1') -SemanticValidationContext $groundedFixture.Context
 }
 try {
     foreach ($dir in @('scripts/providers','scripts/local-runtime','schemas','.codex/runtime')) { New-Item -ItemType Directory -Force -Path (Join-Path $tempRoot $dir) | Out-Null }
-    foreach ($name in @('provider-router.ps1','validate-json-contract.ps1','write-operational-event.ps1')) { Copy-Item (Join-Path $repoRoot ('scripts/'+$name)) (Join-Path $tempRoot ('scripts/'+$name)) }
+    foreach ($name in @('provider-router.ps1','validate-json-contract.ps1','write-operational-event.ps1','validate-gate-result-semantics.ps1')) { Copy-Item (Join-Path $repoRoot ('scripts/'+$name)) (Join-Path $tempRoot ('scripts/'+$name)) }
     foreach ($name in @('review-result.schema.json','qa-gate-result.schema.json','security-gate-result.schema.json')) { Copy-Item (Join-Path $repoRoot ('schemas/'+$name)) (Join-Path $tempRoot ('schemas/'+$name)) }
     Write-Text (Join-Path $tempRoot '.codex/local-runtime-config.json') '{}'
     Write-Text (Join-Path $tempRoot 'scripts/local-runtime/resolve-local-runtime.ps1') @'
@@ -28,7 +32,7 @@ param([string]$Prompt,[string]$Context,[string]$SchemaPath,[string]$OutputPath,[
 $provider = if ($PSCommandPath -match 'ollama') {'Ollama'} else {'OpenRouter'}
 [IO.File]::WriteAllText((Join-Path (Split-Path $OutputPath) ($provider+'.txt')),$Context)
 $payload = switch ([IO.Path]::GetFileName($SchemaPath)) {
- 'review-result.schema.json' { @{recommendation='APPROVE';findings='Complete evidence reviewed';verification='Fake';missing_required_outputs=@();deliverable_defects=@()} }
+ 'review-result.schema.json' { [IO.File]::ReadAllText((Join-Path (Split-Path (Split-Path $OutputPath)) 'fixture-grounded-review.json')) | ConvertFrom-Json }
  'qa-gate-result.schema.json' { @{outcome='PASS';evidence='Fake';findings='Complete evidence';criteria_assessment=@(@{criterion='Non-goals';status='SATISFIED';evidence='Middle preserved'})} }
  'security-gate-result.schema.json' { @{outcome='PASS';evidence='Fake';findings='Complete evidence';security_relevant=$true;deliverable_security_defects=@()} }
 }
@@ -36,6 +40,7 @@ $payload = switch ([IO.Path]::GetFileName($SchemaPath)) {
 [pscustomobject]@{Provider=$provider;Model=$Model}
 '@
     foreach ($name in @('invoke-ollama.ps1','invoke-openrouter.ps1')) { Write-Text (Join-Path $tempRoot ('scripts/providers/'+$name)) $adapter }
+    $groundedFixture=New-GroundedRouterFixture -Root $tempRoot
     $env:OPENROUTER_API_KEY = 'deterministic-fake-not-a-real-key'
     $nl = [Environment]::NewLine
     $report = 'REPORT_START' + $nl + ('X'*4500) + $nl + '## Non-goals' + $nl + 'MIDDLE_NON_GOALS: persistence, telemetry and collaboration are excluded.' + $nl + ('Y'*4500) + $nl + 'REPORT_END'
@@ -98,6 +103,7 @@ $payload = switch ([IO.Path]::GetFileName($SchemaPath)) {
     Write-Host 'PASS: authoritative gate evidence, local rejection, Auto cloud fallback, QA/Security, generic truncation, full large artifact construction' -ForegroundColor Green
 }
 finally {
+    if($null-ne $groundedFixture){Exit-TaskExecutionLock -Lock $groundedFixture.Lease}
     $env:OPENROUTER_API_KEY = $savedKey
     if (Test-Path $tempRoot) { Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue }
 }

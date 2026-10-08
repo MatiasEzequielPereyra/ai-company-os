@@ -41,8 +41,11 @@ function New-GeneratedTask {
     )
 
     $id = Get-NextTaskId $TasksPath
+    $taskScope = Enter-TaskExecutionScope -ProjectPath (Split-Path $TasksPath -Parent) -Id $id -Operation 'MATERIALIZE_PLANNING_TASK'
+    try {
     $now = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
     $filePath = Join-Path $TasksPath ($id + ".md")
+    if (Test-Path -LiteralPath $filePath) { throw "Planning task ID was allocated concurrently: $id" }
     $dependencyLines = "-"
     if ($Dependencies -and $Dependencies.Count -gt 0) {
         $dependencyLines = ($Dependencies | ForEach-Object { "- " + $_ }) -join [Environment]::NewLine
@@ -138,11 +141,19 @@ function New-GeneratedTask {
         "-"
     )
 
+    if ($Owner -in @('qa','security','devops')) {
+        $criterionIndex = [Array]::IndexOf($lines,'- [ ] Role-owned deliverable is produced.')
+        $lines = @($lines[0..($criterionIndex-1)]) + @("- [ ] $Objective") + @($lines[$criterionIndex..($lines.Count-1)])
+    }
     Write-Utf8NoBom $filePath ($lines -join [Environment]::NewLine)
     return $id
+    } finally { Exit-TaskExecutionScope -Scope $taskScope }
 }
 
 $root = (Resolve-Path $ProjectPath).Path
+. (Join-Path $PSScriptRoot 'task-execution-lock.ps1')
+$projectScope = Enter-ProjectExecutionScope -ProjectPath $root -Mode Shared
+try {
 $tasksPath = Join-Path $root "tasks"
 if (-not (Test-Path $tasksPath)) { New-Item -ItemType Directory -Force -Path $tasksPath | Out-Null }
 
@@ -167,6 +178,13 @@ if ($plan -match '(?ms)^## Required Roles\s*\r?\n\s*\r?\n(.+?)(?:\r?\n\r?\n##|\z
     $roles = @($Matches[1] -split '\r?\n' | ForEach-Object { $_.Trim() } | Where-Object { $_ -match '^-\s+' } | ForEach-Object { $_ -replace '^-\s+', '' })
 }
 if ($roles.Count -eq 0) { throw "No required roles found in plan: $planPath" }
+# Versioned concrete planning mapping. Preflight the entire batch before creating
+# tasks; a generic Responsibilities fallback is not a Review v1 declaration.
+foreach ($role in $roles) {
+    if ($role -cnotin @('pm','cto','engineering-manager','qa','security','devops')) {
+        throw "OBLIGATION_SOURCE_NOT_CONCRETE: no v1 concrete planning mapping for role '$role'."
+    }
+}
 
 $existingForRequest = @(Get-ChildItem $tasksPath -Filter "AICO-*.md" -File -ErrorAction SilentlyContinue | Where-Object {
     $taskContent = Get-Content $_.FullName -Raw -Encoding UTF8
@@ -266,3 +284,4 @@ Write-Host "Tasks materialized:" -ForegroundColor Green
 $created | ForEach-Object { Write-Host $_ }
 Write-Host "Mapping:"
 Write-Host $mappingPath
+} finally { Exit-ProjectExecutionScope -Scope $projectScope }

@@ -3,6 +3,7 @@ param()
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+. (Join-Path $repoRoot 'test-project/helpers/grounded-review-fixture.ps1')
 $tempRoot = Join-Path $env:TEMP ("aico-profiles-" + [Guid]::NewGuid().ToString("N"))
 
 try {
@@ -18,7 +19,7 @@ try {
         New-Item -ItemType Directory -Force -Path (Join-Path $tempRoot $relative) | Out-Null
     }
 
-    foreach ($name in @("new-task.ps1","update-task.ps1","advance-task.ps1","security-task.ps1","write-operational-event.ps1")) {
+    foreach ($name in @("new-task.ps1","task-execution-lock.ps1","update-task.ps1","advance-task.ps1","security-task.ps1","write-operational-event.ps1")) {
         Copy-Item (Join-Path $repoRoot ("scripts\" + $name)) (Join-Path $tempRoot ("scripts\" + $name)) -Force
     }
 
@@ -41,6 +42,8 @@ try {
         (Join-Path $tempRoot "docs\engineering\results\AICO-001-result-001.md"),
         @"
 # Result
+Task: AICO-001
+Owner: backend
 Outcome: COMPLETED
 "@,
         (New-Object System.Text.UTF8Encoding($false))
@@ -48,16 +51,14 @@ Outcome: COMPLETED
 
     & $advance -Id AICO-001 -Status REVIEW -Actor "test" -Reason "Profile test transition." -TasksPath $tasksPath
 
-    [System.IO.File]::WriteAllText(
-        (Join-Path $tempRoot "docs\engineering\reviews\AICO-001-review-001.md"),
-        @"
-# Review
-Recommendation: APPROVE
-"@,
-        (New-Object System.Text.UTF8Encoding($false))
-    )
-
-    & $advance -Id AICO-001 -Status QA -Actor "test" -Reason "Profile test transition." -TasksPath $tasksPath
+    # A genuine scoped intake prepares the task for the profile assertions;
+    # a handwritten APPROVE string is no longer transition authority.
+    $taskText=[IO.File]::ReadAllText($taskPath)
+    $taskText=$taskText.Replace('## Acceptance Criteria',"## Acceptance Criteria`n- [ ] Profile enforcement fixture records its scoped verification.")
+    [IO.File]::WriteAllText($taskPath,$taskText,[Text.UTF8Encoding]::new($false))
+    New-Item -ItemType Directory -Force -Path (Join-Path $tempRoot 'docs/engineering/dispatch')|Out-Null
+    [IO.File]::WriteAllText((Join-Path $tempRoot 'docs/engineering/dispatch/AICO-001.md'),"Task: AICO-001`nOwner: backend`nScope: Isolated workflow profile enforcement.",[Text.UTF8Encoding]::new($false))
+    Invoke-GroundedFixtureReview -ProjectPath $tempRoot -Id AICO-001 -Reviewer fixture
 
     [System.IO.File]::WriteAllText(
         (Join-Path $tempRoot "docs\engineering\qa\AICO-001-qa.md"),

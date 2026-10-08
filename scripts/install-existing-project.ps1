@@ -1,7 +1,8 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$TargetProject,
-    [switch]$Force
+    [switch]$Force,
+    [object]$ProjectMaintenanceLease = $null
 )
 
 $ErrorActionPreference = "Stop"
@@ -44,6 +45,11 @@ function Write-ManagedManifest {
 
 $sourceRoot = Split-Path -Parent $PSScriptRoot
 $targetRoot = (Resolve-Path $TargetProject).Path
+# Use package-owned helper, not a target runtime that maintenance may replace.
+. (Join-Path $PSScriptRoot "task-execution-lock.ps1")
+$maintenanceScope = Enter-ProjectExecutionScope -ProjectPath $targetRoot -Mode Maintenance -Lease $ProjectMaintenanceLease
+try {
+
 
 $existingManifestPath = Join-Path $targetRoot ".codex\managed-files.json"
 if (Test-Path $existingManifestPath -PathType Leaf) {
@@ -125,7 +131,7 @@ $scriptNames = @(
     "new-work-request.ps1","generate-plan.ps1","materialize-plan-tasks.ps1","evaluate-readiness.ps1","dispatch-ready-tasks.ps1",
     "submit-task-result.ps1","review-task.ps1","qa-task.ps1","security-task.ps1","finalize-task.ps1","refresh-dependencies.ps1","orchestrate.ps1",
     "run-agent-task.ps1","run-active-agents.ps1","build-agent-context.ps1","build-corrective-analysis-context.ps1","validate-analysis-result-semantics.ps1","provider-router.ps1","run-gate-agent.ps1","run-pending-gates.ps1","generate-engineering-backlog.ps1","materialize-engineering-backlog.ps1","reconcile-engineering-backlog.ps1","repair-artifact-encoding.ps1",
-    "validate-json-contract.ps1","validate-engineering-plan-result.ps1","validate-engineering-backlog-semantics.ps1","validate-gate-result-semantics.ps1","validate-artifacts.ps1","write-operational-event.ps1","summarize-metrics.ps1","new-agent-workspace.ps1","run-writable-agent.ps1","resolve-writable-required-files.ps1","task-execution-lock.ps1"
+    "validate-json-contract.ps1","validate-engineering-plan-result.ps1","validate-engineering-backlog-semantics.ps1","validate-gate-result-semantics.ps1","validate-artifacts.ps1","write-operational-event.ps1","summarize-metrics.ps1","new-agent-workspace.ps1","run-writable-agent.ps1","resolve-writable-required-files.ps1","task-execution-lock.ps1","review-grounding.ps1"
 )
 foreach ($name in $scriptNames) {
     $source = Join-Path $sourceRoot ("scripts\" + $name)
@@ -228,3 +234,5 @@ Write-Host ""
 Write-Host "Next:"
 Write-Host ("cd " + [char]34 + $targetRoot + [char]34)
 Write-Host ".\scripts\initialize-project.ps1"
+
+} finally { Exit-ProjectExecutionScope -Scope $maintenanceScope }

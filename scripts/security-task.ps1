@@ -3,7 +3,8 @@ param(
     [Parameter(Mandatory = $true)][ValidateSet("PASS","FAIL","NOT_APPLICABLE")][string]$Outcome,
     [Parameter(Mandatory = $true)][string]$Evidence,
     [string]$Findings = "NONE",
-    [string]$ProjectPath = "."
+    [string]$ProjectPath = ".",
+    [object]$TaskExecutionLease = $null
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,6 +13,9 @@ function Write-Utf8NoBom { param([string]$Path,[string]$Value) [System.IO.File]:
 function Read-Field { param([string]$Content,[string]$Key) $p="(?m)^"+[regex]::Escape($Key)+":\s*(.+)$"; if($Content -match $p){return $Matches[1].Trim()}; return "" }
 
 $root=(Resolve-Path $ProjectPath).Path
+. (Join-Path $PSScriptRoot "task-execution-lock.ps1")
+$writerScope = Enter-TaskExecutionScope -ProjectPath $root -Id $Id -Operation "SECURITY-TASK" -Lease $TaskExecutionLease
+try {
 $tasksPath=Join-Path $root "tasks"
 $taskPath=Join-Path $tasksPath ($Id+".md")
 if(-not(Test-Path $taskPath)){throw "Task not found: $taskPath"}
@@ -51,10 +55,12 @@ $update=Join-Path $PSScriptRoot "update-task.ps1"
 $advance=Join-Path $PSScriptRoot "advance-task.ps1"
 $relative="docs/engineering/security/"+(Split-Path $path -Leaf)
 
-& $update -Id $Id -Evidence ("Security artifact: "+$relative+"; Outcome="+$Outcome) -TasksPath $tasksPath
+& $update -Id $Id -Evidence ("Security artifact: "+$relative+"; Outcome="+$Outcome) -TasksPath $tasksPath -TaskExecutionLease $writerScope.Lease
 
 if($Outcome -eq "FAIL"){
-    & $advance -Id $Id -Status READY -Actor "security" -Reason ("Security gate failed. "+$Findings) -Evidence ("Security artifact: "+$relative) -TasksPath $tasksPath
+    & $advance -Id $Id -Status READY -Actor "security" -Reason ("Security gate failed. "+$Findings) -Evidence ("Security artifact: "+$relative) -TasksPath $tasksPath -TaskExecutionLease $writerScope.Lease
 }
 
 Write-Host "Security gate recorded: $Outcome" -ForegroundColor Green
+
+} finally { Exit-TaskExecutionScope -Scope $writerScope }

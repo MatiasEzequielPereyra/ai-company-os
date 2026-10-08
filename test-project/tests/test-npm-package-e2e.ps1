@@ -43,6 +43,9 @@ $requiredProjectRuntimeArtifacts = @(
     ".codex\workflow-profiles.json",
     ".codex\writable-policy.json",
     "scripts\provider-router.ps1",
+        "scripts\review-grounding.ps1",
+        "scripts\task-execution-lock.ps1",
+        "schemas\review-result.schema.json",
     "scripts\validate-engineering-plan-result.ps1",
     "scripts\validate-analysis-result-semantics.ps1",
     "scripts\build-corrective-analysis-context.ps1",
@@ -68,13 +71,26 @@ function Assert-ManagedProjectRuntime {
         }
     }
 
-    foreach ($relative in @('scripts/providers/invoke-codex.ps1', 'schemas/agent-result.schema.json', 'schemas/engineering-plan-result.schema.json')) {
+    foreach ($relative in @('scripts/providers/invoke-codex.ps1', 'schemas/agent-result.schema.json', 'schemas/engineering-plan-result.schema.json','scripts/review-grounding.ps1','scripts/task-execution-lock.ps1','schemas/review-result.schema.json')) {
         $expectedHash = (Get-FileHash (Join-Path $repoRoot $relative) -Algorithm SHA256).Hash
         $installedHash = (Get-FileHash (Join-Path $ProjectPath $relative) -Algorithm SHA256).Hash
         if ($installedHash -ne $expectedHash) {
             throw "$Scenario has stale Codex schema portability runtime: $relative"
         }
     }
+
+    $ownership=Get-Content (Join-Path $ProjectPath '.codex/managed-files.json') -Raw -Encoding UTF8|ConvertFrom-Json
+    foreach($relative in @('scripts/review-grounding.ps1','scripts/task-execution-lock.ps1','schemas/review-result.schema.json')){
+        if(@($ownership.managed_files)-cnotcontains $relative){throw "$Scenario missing grounding/barrier ownership: $relative"}
+    }
+    . (Join-Path $ProjectPath 'scripts/task-execution-lock.ps1')
+    $shared=Enter-ProjectExecutionLease -ProjectPath $ProjectPath -Mode Shared
+    try{
+        $reason='';try{$unexpected=Enter-ProjectExecutionLease -ProjectPath $ProjectPath -Mode Maintenance;Exit-ProjectExecutionLease $unexpected}catch{$reason=$_.Exception.Message}
+        if($reason-notmatch 'project maintenance cannot run while project executions are active'){throw "$Scenario shipped barrier did not reject maintenance contention."}
+    }finally{Exit-ProjectExecutionLease $shared}
+    $maintenance=Enter-ProjectExecutionLease -ProjectPath $ProjectPath -Mode Maintenance
+    Exit-ProjectExecutionLease $maintenance
 
     $providerConfig = Get-Content (Join-Path $ProjectPath ".codex/provider-config.json") -Raw -Encoding UTF8 | ConvertFrom-Json
     if ((@($providerConfig.analysis_auto_order_by_role.cto) -join ",") -ne "Ollama,OpenRouter,Gemini,Codex,DeepSeek,Grok") {
@@ -261,6 +277,9 @@ try {
     foreach ($managedEntry in @(
         ".codex/provider-config.json",
         "scripts/provider-router.ps1",
+        "scripts/review-grounding.ps1",
+        "scripts/task-execution-lock.ps1",
+        "schemas/review-result.schema.json",
         "scripts/validate-engineering-plan-result.ps1",
         "scripts/validate-engineering-backlog-semantics.ps1",
         "scripts/validate-gate-result-semantics.ps1",
@@ -305,6 +324,11 @@ try {
     if ($driftedHash -eq $sourceHash) {
         throw "Release E2E could not create managed runtime drift before update."
     }
+    foreach($relative in @('scripts/review-grounding.ps1','scripts/task-execution-lock.ps1','schemas/review-result.schema.json')){
+        $target=Join-Path $projectPath $relative
+        [IO.File]::AppendAllText($target,[Environment]::NewLine,(New-Object Text.UTF8Encoding($false)))
+        if((Get-FileHash $target).Hash -ceq (Get-FileHash (Join-Path $installedPackageRoot $relative)).Hash){throw "Could not create grounding/barrier update drift: $relative"}
+    }
 
     Push-Location $projectPath
     try {
@@ -318,6 +342,7 @@ try {
     }
 
     $userHashAfter = (Get-FileHash $userOwnedPath -Algorithm SHA256).Hash
+    Assert-ManagedProjectRuntime -ProjectPath $projectPath -Scenario 'Packaged aico update'
     if ($userHashAfter -ne $userHashBefore) {
         throw "Packaged aico update modified a project-owned file."
     }

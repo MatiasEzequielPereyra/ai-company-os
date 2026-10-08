@@ -3,6 +3,10 @@ param()
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+. (Join-Path $repoRoot 'scripts/task-execution-lock.ps1')
+. (Join-Path $repoRoot 'scripts/review-grounding.ps1')
+. (Join-Path $repoRoot 'test-project/helpers/grounded-review-fixture.ps1')
+$groundedFixture=$null
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) (
     "aico-gate-evidence-preservation-" +
     [Guid]::NewGuid().ToString("N")
@@ -37,6 +41,7 @@ try {
     foreach ($name in @(
         "provider-router.ps1",
         "validate-json-contract.ps1",
+        "validate-gate-result-semantics.ps1",
         "write-operational-event.ps1"
     )) {
         Copy-Item `
@@ -118,13 +123,7 @@ try {
         '    (New-Object System.Text.UTF8Encoding($false))'
         ')'
         ''
-        '$payload = @{'
-        '    recommendation = "APPROVE"'
-        '    findings = "Evidence preservation fixture."'
-        '    verification = "Fixture."'
-        '    missing_required_outputs = @()'
-        '    deliverable_defects = @()'
-        '} | ConvertTo-Json -Depth 10'
+        '$payload = [IO.File]::ReadAllText((Join-Path $fixtureRoot "fixture-grounded-review.json"))'
         ''
         '[System.IO.File]::WriteAllText('
         '    $OutputPath,'
@@ -187,7 +186,10 @@ try {
 
     $outputPath = Join-Path $tempRoot "review-result.json"
 
+    $groundedFixture=New-GroundedRouterFixture -Root $tempRoot
     $routerArgs = @{
+        SemanticValidationContext=$groundedFixture.Context
+        SemanticValidatorPath=Join-Path $tempRoot "scripts/validate-gate-result-semantics.ps1"
         Provider = "Auto"
         ProjectPath = $tempRoot
         Prompt = "Gate evidence preservation fixture"
@@ -256,6 +258,7 @@ try {
     ) -ForegroundColor Green
 }
 finally {
+    if($null-ne $groundedFixture){Exit-TaskExecutionLock -Lock $groundedFixture.Lease}
     if (Test-Path $tempRoot) {
         Remove-Item `
             $tempRoot `

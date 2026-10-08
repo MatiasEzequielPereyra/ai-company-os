@@ -3,6 +3,7 @@ param()
 $ErrorActionPreference="Stop"
 
 $repoRoot=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+. (Join-Path $repoRoot 'test-project/helpers/grounded-review-fixture.ps1')
 $newWorkRequest=Join-Path $repoRoot "scripts\new-work-request.ps1"
 $generatePlan=Join-Path $repoRoot "scripts\generate-plan.ps1"
 $materializePlan=Join-Path $repoRoot "scripts\materialize-plan-tasks.ps1"
@@ -38,7 +39,7 @@ try{
 
     foreach($id in @("AICO-001","AICO-002","AICO-003","AICO-004","AICO-005")){
         & $submit -ProjectPath $tempRoot -Id $id -Outcome COMPLETED -Summary "Audit completed."
-        & $review -ProjectPath $tempRoot -Id $id -Recommendation APPROVE -Reviewer "reviewer" -Findings "No blocking findings."
+        Invoke-GroundedFixtureReview -ProjectPath $tempRoot -Id $id -Recommendation APPROVE -Reviewer "reviewer" -Findings "No blocking findings."
         & $qa -ProjectPath $tempRoot -Id $id -Outcome PASS -Evidence "Acceptance criteria verified."
         & $security -ProjectPath $tempRoot -Id $id -Outcome NOT_APPLICABLE -Evidence "No changed security boundary."
         & $finalize -ProjectPath $tempRoot -Id $id -Decision APPROVE -Verification "Objective and applicable gates verified."

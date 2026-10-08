@@ -1,5 +1,17 @@
 # Company State
 
+## Review Grounded Evidence v1 implementation checkpoint
+
+Updated: 2026-10-08T19:51:08Z
+Revision: 2
+Updated by: CODEX-ORCHESTRATOR
+
+- Current handoff: [grounded Review checkout preservation successor](../../docs/engineering/handoffs/ai-company-os/review-grounded-evidence-v1-checkout-preservation-2026-10-08.md).
+- Authorized base: 62485cdc7de9d3bc01b0aed4a1d5e7e710365fc9; branch fix/review-grounded-evidence-v1. Final commit and PR are supplied in the external delivery.
+- Both architecture stops explicitly resolved by human authority; project shared/task exclusive and maintenance exclusive barriers implemented and proved.
+- Verification: A–Z across WinPS/PS7 PASS, 170 dedicated assertions/runtime; WinPS smoke66/66, Python204, npm2 and exact installed tarball new/install/update PASS.
+- Receipt PENDING; next owner External Orchestrator. No providers, historical changes, Headless Run A/B continuation or merge. This derived index grants no authorization.
+
 Generated: 2026-09-25T12:54:18Z
 
 ## Source of Truth

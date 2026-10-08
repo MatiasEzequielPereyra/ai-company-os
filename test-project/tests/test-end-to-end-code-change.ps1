@@ -3,6 +3,7 @@ param()
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+. (Join-Path $repoRoot 'test-project/helpers/grounded-review-fixture.ps1')
 $tempRoot = Join-Path $env:TEMP ("aico-e2e-code-change-" + [Guid]::NewGuid().ToString("N"))
 
 try {
@@ -25,13 +26,13 @@ try {
     foreach ($name in @(
         "new-task.ps1",
         "update-task.ps1",
+        "task-execution-lock.ps1",
         "advance-task.ps1",
         "submit-task-result.ps1",
         "review-task.ps1",
         "qa-task.ps1",
         "security-task.ps1",
         "finalize-task.ps1",
-        "task-execution-lock.ps1",
         "sync-company-state.ps1",
         "write-operational-event.ps1",
         "validate-json-contract.ps1",
@@ -56,6 +57,11 @@ try {
 
     $tasksPath = Join-Path $tempRoot "tasks"
     & (Join-Path $tempRoot "scripts\new-task.ps1") -Title "Fix calculator addition" -Owner backend -Priority P1 -WorkflowProfile standard -Objective "Make Add-Numbers return the sum of its two inputs." -TasksPath $tasksPath
+    $taskPath=Join-Path $tasksPath 'AICO-001.md'
+    $taskText=[IO.File]::ReadAllText($taskPath)
+    $taskText=$taskText.Replace('## Acceptance Criteria','## Acceptance Criteria' + [Environment]::NewLine + [Environment]::NewLine + '- [ ] Executing Add-Numbers 2 3 returns 5.')
+    [IO.File]::WriteAllText($taskPath,$taskText,[Text.UTF8Encoding]::new($false))
+
 
     & (Join-Path $tempRoot "scripts\advance-task.ps1") -Id AICO-001 -Status READY -Actor "engineering-manager" -Reason "Fixture acceptance criteria are explicit." -TasksPath $tasksPath
     & (Join-Path $tempRoot "scripts\advance-task.ps1") -Id AICO-001 -Status ACTIVE -Actor "engineering-manager" -Reason "Implementation authorized for isolated fixture." -TasksPath $tasksPath
@@ -70,7 +76,15 @@ try {
 
     & (Join-Path $tempRoot "scripts\submit-task-result.ps1") -ProjectPath $tempRoot -Id AICO-001 -Outcome COMPLETED -Summary "Fixed calculator addition." -ChangedArtifacts "src/calculator.ps1" -Verification "Executed Add-Numbers 2 3 and received 5." -Decisions "NONE" -Blockers "NONE" -RecommendedNext "REVIEW"
 
-    & (Join-Path $tempRoot "scripts\review-task.ps1") -ProjectPath $tempRoot -Id AICO-001 -Recommendation APPROVE -Reviewer "engineering-manager" -Findings "Implementation is scoped and verified." -Verification "Reviewed source diff and execution evidence."
+    # This legacy lifecycle fixture uses a direct local implementation rather
+    # than a writable candidate; its owner deliverable contains the executed
+    # source and exact result, with an explicit canonical dispatch identity.
+    Initialize-GroundedReviewFixture -Root $tempRoot -Id AICO-001
+    New-Item -ItemType Directory -Force -Path (Join-Path $tempRoot 'docs/engineering/dispatch') | Out-Null
+    [IO.File]::WriteAllText((Join-Path $tempRoot 'docs/engineering/dispatch/AICO-001.md'),"Task: AICO-001`nOwner: backend`nScope: Fix calculator addition in isolated fixture.",[Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $tempRoot 'docs/engineering/agent-reports/AICO-001.md'),("# Agent Report - AICO-001`nOwner: backend`nFixed source:`n"+$implementation+"`nVerification: Add-Numbers 2 3 returned 5. Scope: arithmetic addition only. Blockers: NONE."),[Text.UTF8Encoding]::new($false))
+
+    Invoke-GroundedFixtureReview -ProjectPath $tempRoot -Id AICO-001 -Recommendation APPROVE -Reviewer "engineering-manager" -Findings "Implementation is scoped and verified." -Verification "Reviewed source diff and execution evidence."
 
     & (Join-Path $tempRoot "scripts\qa-task.ps1") -ProjectPath $tempRoot -Id AICO-001 -Outcome PASS -Evidence "Add-Numbers 2 3 returned 5." -Findings "Acceptance behavior verified."
 

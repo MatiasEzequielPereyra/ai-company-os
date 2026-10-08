@@ -14,7 +14,8 @@ param(
 
     [string]$Evidence,
 
-    [string]$TasksPath = "tasks"
+    [string]$TasksPath = "tasks",
+    [object]$TaskExecutionLease = $null
 )
 
 $ErrorActionPreference = "Stop"
@@ -66,6 +67,9 @@ function Append-SectionLine {
     return "$Content`n`n## $Section`n`n- $Line`n"
 }
 
+. (Join-Path $PSScriptRoot "task-execution-lock.ps1")
+$writerScope = Enter-TaskExecutionScope -ProjectPath (Split-Path -Parent (Resolve-Path $TasksPath).Path) -Id $Id -Operation "UPDATE-TASK" -Lease $TaskExecutionLease
+try {
 $filePath = Join-Path $TasksPath "$Id.md"
 
 if (-not (Test-Path $filePath)) {
@@ -126,3 +130,5 @@ if ($summaryParts.Count -gt 0) {
 
 Write-Host "Task updated:" -ForegroundColor Green
 Write-Host $filePath
+
+} finally { Exit-TaskExecutionScope -Scope $writerScope }

@@ -169,3 +169,13 @@ Current release/package validation exercises the exact npm tarball and verifies:
 - preservation of a user-owned file through update.
 
 The dedicated update contract also checks fail-closed ownership and configuration migration behavior.
+
+## Project maintenance coordination
+
+`aico install` (including `--force`) and `aico update` are project-wide maintenance. Barrier-aware task operations hold a shared project execution lease before their exclusive per-task lease. Maintenance uses the same persistent `.codex/runtime/locks/project-maintenance.lock` exclusively before target preflight reads, and keeps it through apply, rollback and completion. Different tasks retain shared/shared concurrency.
+
+Installation or update fails before framework mutation while participating task operations are active. Finish those operations and retry; `--force` does not bypass coordination. New task operations fail while maintenance owns the project barrier. Applying `repair-artifact-encoding.ps1` also uses exclusive project maintenance; its read-only report does not.
+
+The package-owned maintenance helper can replace target runtime helpers without releasing its handle. The persistent coordination file is never deleted or recreated on release. No active-task lock enumeration is used as synchronization.
+
+First upgrade from a pre-barrier runtime requires an operationally quiescent project: old task helpers cannot retroactively honor a project barrier they do not know about. The invariant applies once barrier-aware runtime is installed. External/manual filesystem edits remain outside participating coordination and are handled by grounding snapshot/raw-identity drift guards.

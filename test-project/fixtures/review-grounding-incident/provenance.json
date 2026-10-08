@@ -1,0 +1,37 @@
+{
+  "fixture_version": 1,
+  "incident": "AICO-002 incomplete CTO report falsely approved",
+  "sanitation_policy": "Strict UTF8 LF; strip provider/model/timestamps. Approval extraction uses message.content only, never hidden reasoning or transport/account/endpoint/telemetry. Task preserves exact Objective/Acceptance Criteria; metadata reconstructed REVIEW for isolated replay, dependencies/history omitted. No report body repair, no contradiction removal. Relative locators only.",
+  "entries": [
+    {
+      "extraction_locator": "fixture/docs/engineering/agent-reports/AICO-002.md",
+      "original_raw_sha256": "ab81f292d8ee67c03c12f58a047947bcf9befee6f3c7bc6aae6691c5ce571af7",
+      "sanitized_file": "primary-report.md",
+      "sanitized_sha256": "24e9b52d6e1b9e7f4ce9b33ab8d70076303f27ae63ba528ce56bd9679dbf74d4"
+    },
+    {
+      "extraction_locator": "fixture/docs/engineering/results/AICO-002-result-002.md",
+      "original_raw_sha256": "3dab30b3a4feb4a4c2cff9673fa89352aec100ef743b688012f7ca7851ff3b63",
+      "sanitized_file": "secondary-result.md",
+      "sanitized_sha256": "52a770cd3c08dcaf1094d2342c0862448acabc34c3cea398e5fe1cb5860aaec9"
+    },
+    {
+      "extraction_locator": "fixture/.codex/agents/cto.md",
+      "original_raw_sha256": "b22a27a23c822127f08174af30e1390c6b0b65f930c5d0a11e83b1ebee356360",
+      "sanitized_file": "cto-role.md",
+      "sanitized_sha256": "fccfbe0c54d8213f3eb497075495a90452f1ab5e9620d9c88f5a4776939d614e"
+    },
+    {
+      "extraction_locator": "03-cto-corrected-review/transport/a7845488f12a479580ec8e25931fa3a8-response.json#/choices/0/message/content",
+      "original_raw_sha256": "5a528944c3d8bc8ee38c95da3e6d7b30505d7d577c0e2a1fd13f1ff1d125358f",
+      "sanitized_file": "legacy-approval.json",
+      "sanitized_sha256": "8ca44bffe8a9b92784433deda5121aeec31e3e36438c7501b63c8f860b7ebda0"
+    },
+    {
+      "extraction_locator": "fixture/tasks/AICO-002.md#Objective,Acceptance Criteria",
+      "original_raw_sha256": "5784952f94a234864e127cc1de3e4b883f3f1eb9f971f00ccbc2ef6742e62144",
+      "sanitized_file": "task.md",
+      "sanitized_sha256": "2eb6668941c90c0ab0c9e2356b3a786966d11988429aa64a04ab4f7c39ad7e5f"
+    }
+  ]
+}

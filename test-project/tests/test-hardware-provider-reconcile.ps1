@@ -108,8 +108,9 @@ if ($gateRunner -notmatch 'ValidateSet\("Auto","Codex","OpenRouter","Gemini","Ol
 foreach ($needle in @(
     'local-runtime\\resolve-local-runtime\.ps1',
     'local-runtime-config\.json',
-    '-Role \$reviewerRole',
-    '-Workload "gate"'
+    'Role\s*=\s*\$reviewerRole',
+    'Workload\s*=\s*[''"'']gate[''"'']',
+    '& \$routerPath @routerArgs'
 )) {
     if ($gateRunner -notmatch $needle) {
         throw "Gate runner reconciliation contract missing: $needle"
@@ -121,7 +122,8 @@ foreach ($needle in @(
 if ($router -notmatch 'GateContextMaxChars' -or $router -notmatch 'Limit-GateProviderContext') {
     throw "Provider router must enforce the hardware gate context budget"
 }
-if ($gateRunner -match '\$content\s*=\s*\$content\.Substring') {
+if ($gateRunner -match '\$content\s*=\s*\$content\.Substring\((?!1\s*\))' -or
+    $gateRunner -notmatch 'Get-ReviewGroundingPrompt -Context \$groundingContext') {
     throw "Gate runner must not truncate authoritative artifacts before routing"
 }
 

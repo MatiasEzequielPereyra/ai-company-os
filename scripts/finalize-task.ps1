@@ -2,7 +2,8 @@ param(
     [Parameter(Mandatory = $true)][string]$Id,
     [Parameter(Mandatory = $true)][ValidateSet("APPROVE","REJECT")][string]$Decision,
     [Parameter(Mandatory = $true)][string]$Verification,
-    [string]$ProjectPath = "."
+    [string]$ProjectPath = ".",
+    [object]$TaskExecutionLease = $null
 )
 
 $ErrorActionPreference = "Stop"
@@ -11,6 +12,10 @@ function Write-Utf8NoBom { param([string]$Path,[string]$Value) [System.IO.File]:
 function Read-Field { param([string]$Content,[string]$Key) $p="(?m)^"+[regex]::Escape($Key)+":\s*(.+)$"; if($Content -match $p){return $Matches[1].Trim()}; return "" }
 
 $root=(Resolve-Path $ProjectPath).Path
+. (Join-Path $PSScriptRoot "task-execution-lock.ps1")
+$writerScope = Enter-TaskExecutionScope -ProjectPath $root -Id $Id -Operation "FINALIZE" -Lease $TaskExecutionLease
+$taskExecutionLock = $writerScope.Lease
+try {
 $tasksPath=Join-Path $root "tasks"
 $taskPath=Join-Path $tasksPath ($Id+".md")
 if(-not(Test-Path $taskPath)){throw "Task not found: $taskPath"}
@@ -21,14 +26,7 @@ $profile=Read-Field $content "Workflow profile"
 if([string]::IsNullOrWhiteSpace($profile)){$profile="standard"}
 if($status -ne "SECURITY"){throw "Task $Id must be SECURITY for final approval. Current status: $status"}
 
-$lockHelperPath = Join-Path $PSScriptRoot "task-execution-lock.ps1"
-if (-not (Test-Path $lockHelperPath -PathType Leaf)) {
-    throw "Task execution lock helper not found: $lockHelperPath"
-}
-. $lockHelperPath
-$taskExecutionLock = Enter-TaskExecutionLock -ProjectPath $root -Id $Id -Operation "FINALIZE"
 
-try {
 
 $qaPath=Join-Path $root ("docs\engineering\qa\"+$Id+"-qa.md")
 $securityPath=Join-Path $root ("docs\engineering\security\"+$Id+"-security.md")
@@ -68,16 +66,16 @@ $advance=Join-Path $PSScriptRoot "advance-task.ps1"
 $relative="docs/engineering/final-approvals/"+(Split-Path $path -Leaf)
 
 if($Decision -eq "APPROVE"){
-    & $advance -Id $Id -Status DONE -Actor "ceo" -Reason "CEO final verification approved all applicable gates." -Evidence ("Final approval: "+$relative) -TasksPath $tasksPath
+    & $advance -Id $Id -Status DONE -Actor "ceo" -Reason "CEO final verification approved all applicable gates." -Evidence ("Final approval: "+$relative) -TasksPath $tasksPath -TaskExecutionLease $taskExecutionLock
 
     $refresh=Join-Path $PSScriptRoot "refresh-dependencies.ps1"
     if(Test-Path $refresh){ & $refresh -ProjectPath $root }
 }else{
-    & $advance -Id $Id -Status READY -Actor "ceo" -Reason "CEO final verification rejected the task." -Evidence ("Final approval: "+$relative) -TasksPath $tasksPath
+    & $advance -Id $Id -Status READY -Actor "ceo" -Reason "CEO final verification rejected the task." -Evidence ("Final approval: "+$relative) -TasksPath $tasksPath -TaskExecutionLease $taskExecutionLock
 }
 
 Write-Host "Final approval recorded: $Decision" -ForegroundColor Green
 }
 finally {
-    Exit-TaskExecutionLock -Lock $taskExecutionLock
+    Exit-TaskExecutionScope -Scope $writerScope
 }

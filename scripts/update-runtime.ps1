@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory = $true)]
-    [string]$TargetProject
+    [string]$TargetProject,
+    [object]$ProjectMaintenanceLease = $null
 )
 
 $ErrorActionPreference = "Stop"
@@ -222,6 +223,11 @@ function Test-FrameworkRuntimeNamespace {
 
 $sourceRoot = Split-Path -Parent $PSScriptRoot
 $targetRoot = (Resolve-Path $TargetProject).Path
+# Use package-owned helper, not a target runtime that maintenance may replace.
+. (Join-Path $PSScriptRoot "task-execution-lock.ps1")
+$maintenanceScope = Enter-ProjectExecutionScope -ProjectPath $targetRoot -Mode Maintenance -Lease $ProjectMaintenanceLease
+try {
+
 
 if (-not (Test-Path $targetRoot -PathType Container)) {
     throw "Target project does not exist: $TargetProject"
@@ -313,7 +319,8 @@ $scriptNames = @(
     "new-agent-workspace.ps1",
     "run-writable-agent.ps1",
     "resolve-writable-required-files.ps1",
-    "task-execution-lock.ps1"
+    "task-execution-lock.ps1",
+    "review-grounding.ps1"
 )
 
 $directSources = @{}
@@ -708,3 +715,5 @@ Write-Host ("Merged configs: " + $configUpdated)
 Write-Host ("Removed deprecated runtime files: " + $removed)
 Write-Host ("Unchanged managed files: " + $unchanged)
 Write-Host "Project source, tasks, work requests, docs, evidence and state were not modified."
+
+} finally { Exit-ProjectExecutionScope -Scope $maintenanceScope }

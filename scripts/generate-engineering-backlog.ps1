@@ -9,7 +9,8 @@ param(
 
     [string]$Model = "",
 
-    [switch]$ReuseExistingOutput
+    [switch]$ReuseExistingOutput,
+    [object]$TaskExecutionLease = $null
 )
 
 $ErrorActionPreference = "Stop"
@@ -296,6 +297,9 @@ function Resolve-ImplementationAuthorizationKey {
 
 
 $root = (Resolve-Path $ProjectPath).Path
+. (Join-Path $PSScriptRoot "task-execution-lock.ps1")
+$sourceScope = Enter-TaskExecutionScope -ProjectPath $root -Id $SourceTaskId -Operation "GENERATE-ENGINEERING-BACKLOG" -Lease $TaskExecutionLease
+try {
 $taskPath = Join-Path $root ("tasks\" + $SourceTaskId + ".md")
 $reportPath = Join-Path $root ("docs\engineering\agent-reports\" + $SourceTaskId + ".md")
 $schemaPath = Join-Path $root "schemas\engineering-backlog.schema.json"
@@ -542,3 +546,5 @@ else {
     Write-Host "Provider: REUSED_EXISTING_OUTPUT"
     Write-Host "Model: N/A"
 }
+
+} finally { Exit-TaskExecutionScope -Scope $sourceScope }

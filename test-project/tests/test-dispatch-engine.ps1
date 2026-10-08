@@ -19,6 +19,7 @@ try{
     }
 
     Copy-Item $advance (Join-Path $tempRoot "scripts\advance-task.ps1") -Force
+    Copy-Item (Join-Path $repoRoot "scripts/task-execution-lock.ps1") (Join-Path $tempRoot "scripts/task-execution-lock.ps1") -Force
 
     & $newWorkRequest -ProjectPath $tempRoot -Objective "Prepare project for production" -Type AUDIT -Priority P1
     & $generatePlan -ProjectPath $tempRoot -WorkRequestId WR-001

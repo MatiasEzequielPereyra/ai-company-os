@@ -9,7 +9,8 @@ param(
     [ValidateSet("Auto","Ollama","OpenRouter","Gemini")]
     [string]$Provider = "Auto",
 
-    [string]$Model = ""
+    [string]$Model = "",
+    [object]$TaskExecutionLease = $null
 )
 
 $ErrorActionPreference = "Stop"
@@ -500,6 +501,10 @@ function Restore-PlannedFiles {
 }
 
 $root = (Resolve-Path $ProjectPath).Path
+. (Join-Path $PSScriptRoot "task-execution-lock.ps1")
+$writerScope = Enter-TaskExecutionScope -ProjectPath $root -Id $Id -Operation "WRITABLE" -Lease $TaskExecutionLease
+$taskExecutionLock = $writerScope.Lease
+try {
 $tasksPath = Join-Path $root "tasks"
 $taskPath = Join-Path $tasksPath ($Id + ".md")
 
@@ -533,14 +538,7 @@ if ([string]::IsNullOrWhiteSpace($owner)) {
     throw "Task $Id has no owner."
 }
 
-$lockHelperPath = Join-Path $PSScriptRoot "task-execution-lock.ps1"
-if (-not (Test-Path $lockHelperPath -PathType Leaf)) {
-    throw "Task execution lock helper not found: $lockHelperPath"
-}
-. $lockHelperPath
-$taskExecutionLock = Enter-TaskExecutionLock -ProjectPath $root -Id $Id -Operation "WRITABLE"
 
-try {
 
 if ([string]::IsNullOrWhiteSpace($WorkspacePath)) {
     $workspaceRoot = Join-Path (Split-Path -Parent $root) ((Split-Path $root -Leaf) + "-worktrees")
@@ -605,7 +603,7 @@ if ($status -eq "READY") {
     $advance = Join-Path $PSScriptRoot "advance-task.ps1"
     if (-not (Test-Path $advance)) { throw "advance-task.ps1 not found: $advance" }
 
-    & $advance -Id $Id -Status ACTIVE -Actor $owner -Reason "Writable implementation execution started in isolated task worktree." -Evidence ("Worktree: " + $workspace) -TasksPath $tasksPath
+    & $advance -Id $Id -Status ACTIVE -Actor $owner -Reason "Writable implementation execution started in isolated task worktree." -Evidence ("Worktree: " + $workspace) -TasksPath $tasksPath -TaskExecutionLease $taskExecutionLock
 
     $task = Get-Content $taskPath -Raw -Encoding UTF8
     $status = Read-Field -Content $task -Key "Status"
@@ -870,7 +868,7 @@ if ($result.outcome -eq "BLOCKED") {
 
     Write-Utf8NoBom -Path $evidencePath -Value $blockedReport
 
-    & $submitPath -ProjectPath $root -Id $Id -Outcome BLOCKED -Summary ([string]$result.summary) -ChangedArtifacts ("docs/engineering/writable-evidence/" + (Split-Path $evidencePath -Leaf)) -Verification ([string]$result.verification) -Decisions ([string]$result.decisions) -Blockers ([string]$result.blockers) -RecommendedNext ([string]$result.recommended_next)
+    & $submitPath -ProjectPath $root -Id $Id -Outcome BLOCKED -Summary ([string]$result.summary) -ChangedArtifacts ("docs/engineering/writable-evidence/" + (Split-Path $evidencePath -Leaf)) -Verification ([string]$result.verification) -Decisions ([string]$result.decisions) -Blockers ([string]$result.blockers) -RecommendedNext ([string]$result.recommended_next) -TaskExecutionLease $taskExecutionLock
     return
 }
 
@@ -1144,7 +1142,7 @@ try {
 
     $verificationSummary = "git diff --check PASS. " + (($verificationCommands | ForEach-Object { $_ + " PASS" }) -join "; ")
 
-    & $submitPath -ProjectPath $root -Id $Id -Outcome COMPLETED -Summary ([string]$result.summary) -ChangedArtifacts $changedArtifacts -Verification $verificationSummary -Decisions ([string]$result.decisions) -Blockers "NONE" -RecommendedNext "REVIEW"
+    & $submitPath -ProjectPath $root -Id $Id -Outcome COMPLETED -Summary ([string]$result.summary) -ChangedArtifacts $changedArtifacts -Verification $verificationSummary -Decisions ([string]$result.decisions) -Blockers "NONE" -RecommendedNext "REVIEW" -TaskExecutionLease $taskExecutionLock
 
     Write-Host ""
     Write-Host "Writable implementation completed safely." -ForegroundColor Green
@@ -1160,5 +1158,5 @@ catch {
 }
 }
 finally {
-    Exit-TaskExecutionLock -Lock $taskExecutionLock
+    Exit-TaskExecutionScope -Scope $writerScope
 }

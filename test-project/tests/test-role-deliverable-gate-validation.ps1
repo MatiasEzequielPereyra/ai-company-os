@@ -105,6 +105,8 @@ function New-GateFixture {
     foreach ($scriptName in @(
         "run-gate-agent.ps1",
         "validate-gate-result-semantics.ps1",
+        "review-grounding.ps1",
+        "validate-json-contract.ps1",
         "task-execution-lock.ps1",
         "review-task.ps1",
         "qa-task.ps1",
@@ -363,6 +365,7 @@ function New-GateFixture {
         (Join-Path $root ".codex\fixture-mode.txt") `
         $Mode
 
+    Copy-Item (Join-Path $repoRoot 'test-project/helpers/grounded-review-fixture.ps1') (Join-Path $root 'scripts/grounded-review-fixture.ps1') -Force
     $routerLines = @(
         'param(',
         '    [string]$Provider,',
@@ -374,7 +377,8 @@ function New-GateFixture {
         '    [string]$Model,',
         '    [string]$Role,',
         '    [string]$Workload,',
-        '    [string]$SemanticValidatorPath',
+        '    [string]$SemanticValidatorPath,',
+        '    [object]$SemanticValidationContext',
         ')',
         '',
         'if ([string]::IsNullOrWhiteSpace($SemanticValidatorPath)) {',
@@ -403,7 +407,7 @@ function New-GateFixture {
         'if ($mode -eq "semantic-review") {',
         '    $hasRoleContract = (',
         '        $Context -match [regex]::Escape("===== ORIGINAL OWNER ROLE CONTRACT =====") -and',
-        '        $Context -match [regex]::Escape("Repository-relative path: .codex/agents/cto.md") -and',
+        '        $Context -match [regex]::Escape(".codex/agents/cto.md") -and',
         '        $Context -match [regex]::Escape("## Output") -and',
         '        $Context -match [regex]::Escape("Architecture proposal.") -and',
         '        $Context -match [regex]::Escape("Technical implementation plan.") -and',
@@ -512,6 +516,11 @@ function New-GateFixture {
         '    throw "Unknown fixture mode: $mode"',
         '}',
         '',
+        'if ($mode -eq "semantic-review") {',
+        '    . (Join-Path $ProjectPath "scripts/review-grounding.ps1")',
+        '    . (Join-Path $ProjectPath "scripts/grounded-review-fixture.ps1")',
+        '    $payload = New-GroundedFixtureJudgment -Context $SemanticValidationContext -Recommendation $payload.recommendation -Findings $payload.findings -Verification $payload.verification',
+        '}',
         '$json = $payload | ConvertTo-Json -Depth 20',
         '',
         '[System.IO.File]::WriteAllText(',
@@ -553,7 +562,7 @@ Write-Host "=== STATIC STRUCTURED CONTRACTS ===" -ForegroundColor Cyan
 $gateRunner = Get-Content (Join-Path $repoRoot "scripts\run-gate-agent.ps1") -Raw -Encoding UTF8
 [void](Assert-True ($gateRunner -match [regex]::Escape("validate-gate-result-semantics.ps1")) "Gate runner requires the semantic gate validator")
 [void](Assert-True ($gateRunner -match "SemanticValidatorPath") "Gate runner routes semantic validation through provider routing")
-[void](Assert-True ($gateRunner -match '& \$gateSemanticValidatorPath -JsonPath') "Gate runner revalidates semantic output before lifecycle mutation")
+[void](Assert-True ($gateRunner -match '& \$gateSemanticValidatorPath @finalValidatorArgs') "Gate runner revalidates semantic output before lifecycle mutation")
 
 $reviewSchema = Get-Content `
     (Join-Path $repoRoot "schemas\review-result.schema.json") `
@@ -685,7 +694,7 @@ try {
             "Gate context includes ORIGINAL OWNER ROLE CONTRACT")
 
         [void](Assert-True `
-            ($capturedContext -match [regex]::Escape("Repository-relative path: .codex/agents/cto.md")) `
+            ($capturedContext -match [regex]::Escape(".codex/agents/cto.md")) `
             "Original owner role contract uses canonical repository-relative path")
 
         [void](Assert-True `

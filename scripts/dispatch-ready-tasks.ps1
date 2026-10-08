@@ -25,6 +25,7 @@ function Read-Section {
 }
 
 $root=(Resolve-Path $ProjectPath).Path
+. (Join-Path $PSScriptRoot "task-execution-lock.ps1")
 $tasksPath=Join-Path $root "tasks"
 $dispatchDir=Join-Path $root "docs\engineering\dispatch"
 
@@ -62,6 +63,10 @@ $now=(Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 $generated=@()
 
 foreach($task in ($ready|Sort-Object ID)){
+    $packetScope = Enter-TaskExecutionScope -ProjectPath $root -Id $task.ID -Operation "DISPATCH"
+    try {
+    $currentTask = Get-Content -LiteralPath (Join-Path $tasksPath ($task.ID + '.md')) -Raw -Encoding UTF8
+    if ((Read-Field $currentTask 'Status') -ne 'READY') { throw "Dispatch task changed before packet preparation: $($task.ID)" }
     $packetPath=Join-Path $dispatchDir ($task.ID + ".md")
     $agentInstructions=".codex/agents/" + $task.Owner + ".md"
     if($task.Owner -eq "engineering-manager"){
@@ -140,6 +145,7 @@ foreach($task in ($ready|Sort-Object ID)){
 
     Write-Utf8NoBom $packetPath ($lines -join [Environment]::NewLine)
     $generated += $task.ID
+    } finally { Exit-TaskExecutionScope -Scope $packetScope }
 }
 
 Write-Host "Execution packets prepared:" -ForegroundColor Green
@@ -150,6 +156,8 @@ if($Apply){
     if(-not(Test-Path $advance)){throw "advance-task.ps1 not found: $advance"}
 
     foreach($task in ($ready|Sort-Object ID)){
+        $packetScope = Enter-TaskExecutionScope -ProjectPath $root -Id $task.ID -Operation "DISPATCH-ACTIVATE"
+        try {
         $packetPath = Join-Path $dispatchDir ($task.ID + ".md")
         if(-not(Test-Path $packetPath)){
             throw "Dispatch packet missing immediately before activation: $packetPath"
@@ -160,7 +168,8 @@ if($Apply){
             throw "Dispatch packet task identity mismatch for $($task.ID): $packetPath"
         }
 
-        & $advance -Id $task.ID -Status ACTIVE -Actor "engineering-manager" -Reason "Execution packet prepared and dispatch explicitly applied." -Evidence ("Execution request: docs/engineering/dispatch/" + $task.ID + ".md") -TasksPath $tasksPath
+        & $advance -Id $task.ID -Status ACTIVE -Actor "engineering-manager" -Reason "Execution packet prepared and dispatch explicitly applied." -Evidence ("Execution request: docs/engineering/dispatch/" + $task.ID + ".md") -TasksPath $tasksPath -TaskExecutionLease $packetScope.Lease
+        } finally { Exit-TaskExecutionScope -Scope $packetScope }
     }
 
     Write-Host ""

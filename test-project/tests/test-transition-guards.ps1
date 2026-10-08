@@ -3,6 +3,7 @@ param()
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+. (Join-Path $repoRoot 'test-project/helpers/grounded-review-fixture.ps1')
 $advanceSource = Join-Path $repoRoot "scripts\advance-task.ps1"
 
 if (-not (Test-Path $advanceSource)) {
@@ -133,19 +134,25 @@ try {
 
     Set-Content -Path (Join-Path $tempRoot "docs\engineering\results\AICO-001-result-001.md") -Encoding UTF8 -Value @"
 # Result
+Task: AICO-001
+Owner: backend
 Outcome: COMPLETED
 "@
     & $advance -Id AICO-001 -Status REVIEW -TasksPath (Join-Path $tempRoot "tasks")
 
     Expect-Failure {
         & $advance -Id AICO-001 -Status QA -TasksPath (Join-Path $tempRoot "tasks")
-    } "cannot enter QA without a review artifact"
+    } "registered process-local grounded receipt"
 
     Set-Content -Path (Join-Path $tempRoot "docs\engineering\reviews\AICO-001-review-001.md") -Encoding UTF8 -Value @"
 # Review
 Recommendation: APPROVE
 "@
-    & $advance -Id AICO-001 -Status QA -TasksPath (Join-Path $tempRoot "tasks")
+    Expect-Failure {
+        & $advance -Id AICO-001 -Status QA -TasksPath (Join-Path $tempRoot "tasks")
+    } "registered process-local grounded receipt"
+    Set-Content -Path (Join-Path $tempRoot "docs\engineering\dispatch\AICO-001.md") -Encoding UTF8 -Value "Task: AICO-001`nOwner: backend`nScope: Guard fixture verification."
+    Invoke-GroundedFixtureReview -ProjectPath $tempRoot -Id AICO-001 -Recommendation APPROVE
 
     Expect-Failure {
         & $advance -Id AICO-001 -Status SECURITY -TasksPath (Join-Path $tempRoot "tasks")
