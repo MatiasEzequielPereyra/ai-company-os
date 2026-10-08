@@ -8,7 +8,7 @@ if ($null -eq (Get-Command git -ErrorAction SilentlyContinue)) {
 }
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$tempParent = Join-Path $env:TEMP ("aico-writable-auth-" + [Guid]::NewGuid().ToString("N"))
+$tempParent = Join-Path ([IO.Path]::GetTempPath()) ("aico-writable-auth-" + [Guid]::NewGuid().ToString("N"))
 $fixtureRepo = Join-Path $tempParent "repo"
 $workspaces = Join-Path $tempParent "worktrees"
 $savedOpenRouter = $env:OPENROUTER_API_KEY
