@@ -12,7 +12,7 @@ if ($null -eq (Get-Command python -ErrorAction SilentlyContinue)) {
 }
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$tempParent = Join-Path $env:TEMP ("aico-debug-runtime-" + [Guid]::NewGuid().ToString("N"))
+$tempParent = Join-Path ([IO.Path]::GetTempPath()) ("aico-debug-runtime-" + [Guid]::NewGuid().ToString("N"))
 $fixtureRepo = Join-Path $tempParent "repo"
 $workspaces = Join-Path $tempParent "worktrees"
 $savedOpenRouter = $env:OPENROUTER_API_KEY
@@ -100,6 +100,7 @@ function New-BugResult {
         [string]$SourceFile,
         [string]$FixedContent,
         [string]$ReproductionCommand,
+        [string]$HypothesisCommand,
         [string]$VerificationCommand = "git diff --check"
     )
 
@@ -131,10 +132,10 @@ function New-BugResult {
                 [ordered]@{
                     id = "H1"
                     statement = "The source returns the wrong value."
-                    prediction = "The regression command exits non-zero before the repair."
-                    falsifier = "The regression command exits zero before the repair."
-                    experiment_command = $ReproductionCommand
-                    supported_when = "EXIT_NONZERO"
+                    prediction = "A direct causal probe confirms the implementation returns the known wrong value."
+                    falsifier = "The direct causal probe does not observe the known wrong value."
+                    experiment_command = $HypothesisCommand
+                    supported_when = "EXIT_ZERO"
                 }
             )
             cause = [ordered]@{
@@ -155,7 +156,7 @@ try {
     foreach ($dir in @(
         "scripts","schemas","tasks",".codex",".codex\agents",
         "docs\engineering\dispatch","docs\engineering\reviews",
-        "tests_bug","tests_ok","tests_still_broken"
+        "tests_bug","tests_ok","tests_still_broken","tests_probe_901","tests_probe_902","tests_probe_903"
     )) {
         New-Item -ItemType Directory -Force -Path (Join-Path $fixtureRepo $dir) | Out-Null
     }
@@ -250,6 +251,13 @@ class Regression(unittest.TestCase):
         self.assertEqual(ns["value"](), 2)
 '@
 
+    Write-NoBom (Join-Path $fixtureRepo "tests_probe_901\test_probe.py") ("import pathlib" + $nl + "import unittest" + $nl + $nl + "class CauseProbe(unittest.TestCase):" + $nl + "    def test_wrong_value_is_present(self):" + $nl + "        ns = {}" + $nl + "        exec(pathlib.Path(`"bug_value.py`").read_text(encoding=`"utf-8`"), ns)" + $nl + "        self.assertEqual(ns[`"value`"](), 1)" + $nl)
+
+    Write-NoBom (Join-Path $fixtureRepo "tests_probe_902\test_probe.py") ("import pathlib" + $nl + "import unittest" + $nl + $nl + "class CauseProbe(unittest.TestCase):" + $nl + "    def test_wrong_value_is_present(self):" + $nl + "        ns = {}" + $nl + "        exec(pathlib.Path(`"bug_value2.py`").read_text(encoding=`"utf-8`"), ns)" + $nl + "        self.assertEqual(ns[`"value`"](), 1)" + $nl)
+
+    Write-NoBom (Join-Path $fixtureRepo "tests_probe_903\test_probe.py") ("import pathlib" + $nl + "import unittest" + $nl + $nl + "class CauseProbe(unittest.TestCase):" + $nl + "    def test_wrong_value_is_present(self):" + $nl + "        ns = {}" + $nl + "        exec(pathlib.Path(`"bug_value3.py`").read_text(encoding=`"utf-8`"), ns)" + $nl + "        self.assertEqual(ns[`"value`"](), 1)" + $nl)
+
+
     New-BugTask -Id "AICO-901" -SourceFile "bug_value.py" -TestDir "tests_bug"
     New-BugTask -Id "AICO-902" -SourceFile "bug_value2.py" -TestDir "tests_ok"
     New-BugTask -Id "AICO-903" -SourceFile "bug_value3.py" -TestDir "tests_still_broken"
@@ -269,7 +277,7 @@ class Regression(unittest.TestCase):
 
     $repro901 = "python -B -m unittest discover -s tests_bug"
     $fixed901 = "def value():" + $nl + "    return 2" + $nl
-    Set-FakeResult (New-BugResult -SourceFile "bug_value.py" -FixedContent $fixed901 -ReproductionCommand $repro901 -VerificationCommand $repro901)
+    Set-FakeResult (New-BugResult -SourceFile "bug_value.py" -FixedContent $fixed901 -ReproductionCommand $repro901 -HypothesisCommand "python -B -m unittest discover -s tests_probe_901" -VerificationCommand $repro901)
     Invoke-Runner -Id "AICO-901"
 
     if ((Get-Content (Join-Path $fixtureRepo "bug_value.py") -Raw) -notmatch "return 1") {
@@ -296,7 +304,7 @@ class Regression(unittest.TestCase):
 
     $repro902 = "python -B -m unittest discover -s tests_ok"
     $fixed902 = "def value():" + $nl + "    return 2" + $nl
-    Set-FakeResult (New-BugResult -SourceFile "bug_value2.py" -FixedContent $fixed902 -ReproductionCommand $repro902)
+    Set-FakeResult (New-BugResult -SourceFile "bug_value2.py" -FixedContent $fixed902 -ReproductionCommand $repro902 -HypothesisCommand "python -B -m unittest discover -s tests_probe_902")
     $notReproduced = $false
     try { Invoke-Runner -Id "AICO-902" }
     catch {
@@ -312,7 +320,7 @@ class Regression(unittest.TestCase):
 
     $repro903 = "python -B -m unittest discover -s tests_still_broken"
     $wrong903 = "def value():" + $nl + "    return 3" + $nl
-    Set-FakeResult (New-BugResult -SourceFile "bug_value3.py" -FixedContent $wrong903 -ReproductionCommand $repro903 -VerificationCommand "git diff --check")
+    Set-FakeResult (New-BugResult -SourceFile "bug_value3.py" -FixedContent $wrong903 -ReproductionCommand $repro903 -HypothesisCommand "python -B -m unittest discover -s tests_probe_903" -VerificationCommand "git diff --check")
     $postFixRejected = $false
     try { Invoke-Runner -Id "AICO-903" }
     catch {
