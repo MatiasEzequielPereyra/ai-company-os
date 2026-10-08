@@ -37,7 +37,7 @@ function New-ValidEvidence {
         }
         receipts = @(
             [ordered]@{ id="pre"; phase="PRE_FIX"; source="RUNTIME"; command="python -B -m unittest discover -s tests_bug"; exit_code=1; output_sha256=("b"*64); output_excerpt="failed" },
-            [ordered]@{ id="h1"; phase="HYPOTHESIS"; source="RUNTIME"; command="python -B -m unittest discover -s tests_bug"; exit_code=1; output_sha256=("c"*64); output_excerpt="failed" },
+            [ordered]@{ id="h1"; phase="HYPOTHESIS"; source="RUNTIME"; command="python -B -m unittest tests_bug.test_root_cause_probe"; exit_code=1; output_sha256=("c"*64); output_excerpt="failed" },
             [ordered]@{ id="reg"; phase="REGRESSION"; source="RUNTIME"; command="python -B -m unittest discover -s tests_bug"; exit_code=0; output_sha256=("d"*64); output_excerpt="passed" },
             [ordered]@{ id="post"; phase="POST_FIX"; source="RUNTIME"; command="python -B -m unittest discover -s tests_bug"; exit_code=0; output_sha256=("e"*64); output_excerpt="passed" }
         )
@@ -51,7 +51,7 @@ function New-ValidEvidence {
                         statement="The implementation returns the wrong value."
                         prediction="The regression fails before correction."
                         falsifier="The regression passes before correction."
-                        experiment_command="python -B -m unittest discover -s tests_bug"
+                        experiment_command="python -B -m unittest tests_bug.test_root_cause_probe"
                         supported_when="EXIT_NONZERO"
                         result="SUPPORTED"
                         receipt_ref="h1"
@@ -100,6 +100,7 @@ try {
     Assert-Rejected -Payload $changedSignal -Pattern "exact frozen reproduction signal" -Label "Signal substitution"
 
     $unsupportedCause = New-ValidEvidence
+    $unsupportedCause.receipts[1].exit_code = 0
     $unsupportedCause.attempts[0].hypotheses[0].result = "FALSIFIED"
     Assert-Rejected -Payload $unsupportedCause -Pattern "SUPPORTED hypotheses" -Label "Confirmed cause from falsified hypothesis"
 
@@ -126,6 +127,7 @@ try {
 
     $failedPostFix = New-ValidEvidence
     $failedPostFix.state = "FAILED_POST_FIX"
+    $failedPostFix.receipts[3].exit_code = 1
     $failedPostFix.post_fix_replay.observation = "BROKEN_OBSERVED"
     & $validator -JsonPath (Write-Fixture -Name "failed-post-fix" -Payload $failedPostFix) | Out-Null
 

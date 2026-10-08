@@ -34,7 +34,7 @@ if ($type -ne "BUG" -or $workKind -ne "IMPLEMENTATION") {
 
 $diagnosticPath = Join-Path $root ("docs\engineering\diagnostics\" + $Id + "-diagnostic-v1.json")
 if (-not (Test-Path -LiteralPath $diagnosticPath -PathType Leaf)) {
-    throw "BUG diagnostic evidence artifact is required before $Stage: $diagnosticPath"
+    throw "BUG diagnostic evidence artifact is required before ${Stage}: $diagnosticPath"
 }
 
 $validatorPath = Join-Path $PSScriptRoot "validate-diagnostic-evidence.ps1"
