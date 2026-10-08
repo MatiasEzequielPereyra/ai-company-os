@@ -86,7 +86,7 @@ foreach ($invocationLine in $providerInvocationLines) {
     }
 }
 
-$tempRoot = Join-Path $env:TEMP ("aico-provider-timeout-" + [Guid]::NewGuid().ToString("N"))
+$tempRoot = Join-Path ([IO.Path]::GetTempPath()) ("aico-provider-timeout-" + [Guid]::NewGuid().ToString("N"))
 $savedPath = $env:PATH
 $savedOpenRouterKey = $env:OPENROUTER_API_KEY
 $savedChildPidFile = $env:AICO_FAKE_CODEX_CHILD_PID_FILE
