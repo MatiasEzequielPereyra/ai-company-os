@@ -73,22 +73,33 @@ try{
     Exit-ProjectExecutionLease -Lease $exclusive;$exclusive=$null
     # Intercept only the controlled fixture's actual apply Copy-Item boundary.
     # All other copies, including rollback, use the real filesystem cmdlet.
-    $early=Join-Path $project 'scripts/advance-task.ps1';$late=Join-Path $project 'scripts/provider-router.ps1'
+    # Deliberately use an equivalent noncanonical spelling. The updater restores
+    # to GetFullPath destinations; raw spelling equality must not hide rollback.
+    $early=Join-Path $project './scripts/advance-task.ps1';$late=Join-Path $project 'scripts/provider-router.ps1'
     [IO.File]::WriteAllText($early,"# old early runtime`n"+(Get-Content -LiteralPath $early -Raw),[Text.UTF8Encoding]::new($false))
     [IO.File]::WriteAllText($late,"# old late runtime`n"+(Get-Content -LiteralPath $late -Raw),[Text.UTF8Encoding]::new($false))
     $beforeRollback=Snapshot
-    $auditState=[pscustomobject]@{Apply=$false;Rollback=$false};$failedApply=$false
+    $early=[IO.Path]::GetFullPath($early);$late=[IO.Path]::GetFullPath($late)
+    $oldEarlyHash=(Get-FileHash -LiteralPath $early).Hash
+    $auditState=[pscustomobject]@{Apply=$false;Rollback=$false;BackupPath=$null;Copies=[Collections.Generic.List[string]]::new()};$failedApply=$false
     $applySource=Join-Path $repoRoot 'scripts/provider-router.ps1'
     function Copy-Item {
         param([string]$Path,[string]$Destination,[switch]$Force,[switch]$Recurse)
-        if($Path -eq $applySource -and $Destination -eq $late){
+        $sourceFull=[IO.Path]::GetFullPath($Path);$destinationFull=[IO.Path]::GetFullPath($Destination)
+        $auditState.Copies.Add("$sourceFull -> $destinationFull")
+        if($sourceFull -eq $early -and $destinationFull -ne $early){
+            Assert ((Get-FileHash -LiteralPath $sourceFull).Hash -eq $oldEarlyHash) 'Updater backed up different early runtime bytes.'
+            $auditState.BackupPath=$destinationFull
+        }
+        if($sourceFull -eq [IO.Path]::GetFullPath($applySource) -and $destinationFull -eq $late){
             $auditState.Apply=$true
             Assert ((Get-FileHash -LiteralPath $early).Hash -eq (Get-FileHash -LiteralPath (Join-Path $repoRoot 'scripts/advance-task.ps1')).Hash) 'Failure injection preceded any actual replacement.'
             Assert-MaintenanceExcludesTask
             throw 'Deterministic filesystem failure at updater apply boundary.'
         }
-        if($Destination -eq $early -and $Path -ne (Join-Path $repoRoot 'scripts/advance-task.ps1')){
+        if($destinationFull -eq $early -and $sourceFull -eq $auditState.BackupPath){
             $auditState.Rollback=$true
+            Assert ((Get-FileHash -LiteralPath $sourceFull).Hash -eq $oldEarlyHash) 'Rollback source does not contain original early runtime bytes.'
             Assert-MaintenanceExcludesTask
         }
         Microsoft.PowerShell.Management\Copy-Item -LiteralPath $Path -Destination $Destination -Force:$Force -Recurse:$Recurse
@@ -100,7 +111,7 @@ try{
         $failedApply=$true
     }finally{Remove-Item Function:\Copy-Item}
     Assert $auditState.Apply 'Failure occurred before any actual managed replacement.'
-    Assert $auditState.Rollback 'Updater did not enter real backup restoration.'
+    Assert $auditState.Rollback ("Updater did not enter real backup restoration. Observed copies: " + ($auditState.Copies -join ' | '))
     Assert $failedApply 'Filesystem denial did not fail updater.'
     Assert ((Snapshot) -ceq $beforeRollback) 'Updater rollback did not restore authoritative target bytes.'
     Assert (Test-Path -LiteralPath $barrierPath) 'Maintenance release deleted persistent barrier.'
