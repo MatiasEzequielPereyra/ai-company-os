@@ -298,6 +298,8 @@ $scriptNames = @(
     "build-agent-context.ps1",
     "build-corrective-analysis-context.ps1",
     "validate-analysis-result-semantics.ps1",
+    "validate-diagnostic-evidence.ps1",
+    "assert-bug-diagnostic-evidence.ps1",
     "provider-router.ps1",
     "run-gate-agent.ps1",
     "run-pending-gates.ps1",
@@ -526,12 +528,7 @@ $mergedConfigText[".codex/workflow-profiles.json"] = (
 # Transaction-like apply
 # ----------------------------
 
-$tempBase = if (-not [string]::IsNullOrWhiteSpace($env:TEMP)) {
-    $env:TEMP
-}
-else {
-    [System.IO.Path]::GetTempPath()
-}
+$tempBase = [System.IO.Path]::GetTempPath()
 
 $backupRoot = Join-Path $tempBase ("aico-runtime-update-backup-" + [Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Force -Path $backupRoot | Out-Null

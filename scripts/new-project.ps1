@@ -190,6 +190,7 @@ $ScriptFiles = @(
     "build-corrective-analysis-context.ps1",
     "validate-analysis-result-semantics.ps1",
     "validate-diagnostic-evidence.ps1",
+    "assert-bug-diagnostic-evidence.ps1",
     "provider-router.ps1",
     "run-gate-agent.ps1",
     "run-pending-gates.ps1",

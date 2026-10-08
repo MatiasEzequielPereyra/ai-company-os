@@ -19,9 +19,6 @@ if ($null -eq $npmCommand) {
 $tempBase = if (-not [string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
     $env:RUNNER_TEMP
 }
-elseif (-not [string]::IsNullOrWhiteSpace($env:TEMP)) {
-    $env:TEMP
-}
 else {
     [System.IO.Path]::GetTempPath()
 }
@@ -48,6 +45,8 @@ $requiredProjectRuntimeArtifacts = @(
     "scripts\build-corrective-analysis-context.ps1",
     "scripts\validate-engineering-backlog-semantics.ps1",
     "scripts\validate-gate-result-semantics.ps1",
+    "scripts\validate-diagnostic-evidence.ps1",
+    "scripts\assert-bug-diagnostic-evidence.ps1",
     "scripts\providers\invoke-codex.ps1",
     "scripts\providers\invoke-ollama.ps1",
     "schemas\agent-result.schema.json",
@@ -68,11 +67,28 @@ function Assert-ManagedProjectRuntime {
         }
     }
 
-    foreach ($relative in @('scripts/providers/invoke-codex.ps1', 'schemas/agent-result.schema.json', 'schemas/engineering-plan-result.schema.json')) {
+    foreach ($relative in @(
+        'scripts/providers/invoke-codex.ps1',
+        'schemas/agent-result.schema.json',
+        'schemas/engineering-plan-result.schema.json',
+        'scripts/validate-diagnostic-evidence.ps1',
+        'scripts/assert-bug-diagnostic-evidence.ps1'
+    )) {
         $expectedHash = (Get-FileHash (Join-Path $repoRoot $relative) -Algorithm SHA256).Hash
         $installedHash = (Get-FileHash (Join-Path $ProjectPath $relative) -Algorithm SHA256).Hash
         if ($installedHash -ne $expectedHash) {
             throw "$Scenario has stale Codex schema portability runtime: $relative"
+        }
+    }
+
+    $installedManifestPath = Join-Path $ProjectPath ".codex\managed-files.json"
+    $installedManifest = Get-Content -LiteralPath $installedManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    foreach ($relative in @(
+        "scripts/validate-diagnostic-evidence.ps1",
+        "scripts/assert-bug-diagnostic-evidence.ps1"
+    )) {
+        if (@($installedManifest.managed_files) -notcontains $relative) {
+            throw "$Scenario is missing diagnostic managed-file ownership: $relative"
         }
     }
 
@@ -316,6 +332,8 @@ try {
     finally {
         Pop-Location
     }
+
+    Assert-ManagedProjectRuntime -ProjectPath $projectPath -Scenario "Packaged aico update"
 
     $userHashAfter = (Get-FileHash $userOwnedPath -Algorithm SHA256).Hash
     if ($userHashAfter -ne $userHashBefore) {
