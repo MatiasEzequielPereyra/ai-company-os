@@ -13,6 +13,7 @@ test("npm package contains required AI Company OS runtime", () => {
     "scripts/new-project.ps1",
     "scripts/update-runtime.ps1",
     "scripts/provider-router.ps1",
+    "scripts/single-attempt-execution.ps1",
     "scripts/validate-engineering-plan-result.ps1",
     "scripts/validate-analysis-result-semantics.ps1",
     "scripts/build-corrective-analysis-context.ps1",

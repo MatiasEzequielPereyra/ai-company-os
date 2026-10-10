@@ -6,10 +6,21 @@ param(
     [string]$Model = "llama3.1:8b",
     [int]$NumCtx = 8192,
     [int]$NumPredict = 1024,
+    [switch]$SingleAttempt,
+    [object]$SingleAttemptContext,
     [ValidateRange(1,3600)][int]$TimeoutSeconds = 1800
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($SingleAttempt) {
+    . (Join-Path (Split-Path $PSScriptRoot -Parent) 'single-attempt-execution.ps1')
+    if (-not $PSBoundParameters.ContainsKey('Model') -or [string]::IsNullOrWhiteSpace($Model)) { throw 'SINGLE_ATTEMPT_MODEL_REQUIRED' }
+    if ($Model -notmatch '^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,255}$') { throw 'SINGLE_ATTEMPT_AMBIGUOUS_MODEL' }
+    if ($null -eq $SingleAttemptContext) { throw 'SINGLE_ATTEMPT_CONTEXT_REQUIRED' }
+    Assert-SingleAttemptConfiguration -Context $SingleAttemptContext -Provider 'Ollama' -Model $Model
+}
+
 
 function Get-HttpStatusCode {
     param([System.Management.Automation.ErrorRecord]$ErrorRecord)
@@ -43,7 +54,9 @@ function Get-HttpErrorBody {
 
     try {
         $response = $ErrorRecord.Exception.Response
-        if ($null -eq $response) { return "" }
+
+
+if ($null -eq $response) { return "" }
 
         $stream = $response.GetResponseStream()
         if ($null -eq $stream) { return "" }
@@ -67,6 +80,7 @@ else {
     $env:OLLAMA_BASE_URL.TrimEnd('/')
 }
 
+if ($SingleAttempt -and ($NumCtx -le 0 -or $NumPredict -le 0)) { throw 'SINGLE_ATTEMPT_BUDGET_INVALID' }
 if ($NumCtx -le 0) { $NumCtx = 8192 }
 if ($NumPredict -le 0) { $NumPredict = 1024 }
 
@@ -106,7 +120,7 @@ catch { throw "Ollama request payload is invalid JSON before transport: $($_.Exc
 
 $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($body)
 $response = $null
-$maxAttempts = 3
+$maxAttempts = if ($SingleAttempt) { 1 } else { 3 }
 $timeoutSeconds = $TimeoutSeconds
 
 # Backward compatibility for direct adapter invocation. The provider router always
@@ -127,11 +141,19 @@ Write-Host "Ollama inference running..." -ForegroundColor DarkGray
 
 for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
     try {
-        $response = Invoke-RestMethod -Method Post -Uri ($baseUrl + "/api/chat") -ContentType "application/json; charset=utf-8" -Body $bodyBytes -TimeoutSec $timeoutSeconds
+        if ($SingleAttempt) { Set-SingleAttemptProviderMetadata -Context $SingleAttemptContext -Result ([PSCustomObject]@{ OutputLimit=$NumPredict }) }
+        if ($SingleAttempt) { Start-SingleAttemptProviderCall -Context $SingleAttemptContext -Provider 'Ollama' -Model $Model }
+        $singleTransport = @{}
+        if ($SingleAttempt) { $singleTransport.MaximumRedirection = 0; if ($PSVersionTable.PSVersion.Major -ge 7) { $singleTransport.MaximumRetryCount = 0 } }
+        $response = Invoke-RestMethod @singleTransport -Method Post -Uri ($baseUrl + "/api/chat") -ContentType "application/json; charset=utf-8" -Body $bodyBytes -TimeoutSec $timeoutSeconds
         break
     }
     catch {
         $statusCode = Get-HttpStatusCode -ErrorRecord $_
+        if ($SingleAttempt) {
+            if ($_.Exception -is [TimeoutException] -or [string]$_.Exception.Message -match '(?i)timed out|timeout|tiempo.*agotado') { throw 'SINGLE_ATTEMPT_TIMEOUT' }
+            throw ('SINGLE_ATTEMPT_TRANSPORT_FAILURE: HTTP ' + $statusCode)
+        }
         $message = Get-HttpErrorBody -ErrorRecord $_
         if ([string]::IsNullOrWhiteSpace($message)) { $message = $_.Exception.Message }
 
@@ -151,14 +173,25 @@ for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
     }
 }
 
+if ($SingleAttempt) {
+    $actualModel = if ($null -ne $response.model) { [string]$response.model } else { $null }
+    $finish = if ($null -ne $response.done_reason) { [string]$response.done_reason } else { $null }
+    $meta = [PSCustomObject]@{ Model=$actualModel; FinishReason=$finish; OutputLimit=$NumPredict; PromptTokens=$response.prompt_eval_count; CompletionTokens=$response.eval_count; TotalTokens=$null; ReasoningTokens=$null }
+    Set-SingleAttemptProviderMetadata -Context $SingleAttemptContext -Result $meta
+    if ($null -ne $actualModel -and $actualModel -cne $Model) { throw 'SINGLE_ATTEMPT_MODEL_MISMATCH' }
+    if ($finish -match '(?i)^length$|max.*token|token.*limit') { throw 'SINGLE_ATTEMPT_TRUNCATED_RESPONSE' }
+    if ($null -eq $response.done -or $response.done -ne $true -or $finish -cne 'stop') { throw 'SINGLE_ATTEMPT_INCOMPLETE_RESPONSE' }
+}
+
+
 if ($null -eq $response) {
     throw "Ollama request failed without a response after $maxAttempts attempts."
 }
 
 $done = if ($null -ne $response.done) { [bool]$response.done } else { $true }
 $doneReason = if ($null -ne $response.done_reason) { [string]$response.done_reason } else { "" }
-$promptEvalCount = if ($null -ne $response.prompt_eval_count) { [int]$response.prompt_eval_count } else { 0 }
-$evalCount = if ($null -ne $response.eval_count) { [int]$response.eval_count } else { 0 }
+$promptEvalCount = if ($null -ne $response.prompt_eval_count) { [int]$response.prompt_eval_count } elseif ($SingleAttempt) { $null } else { 0 }
+$evalCount = if ($null -ne $response.eval_count) { [int]$response.eval_count } elseif ($SingleAttempt) { $null } else { 0 }
 
 Write-Host (
     "Ollama response: done=" + $done +

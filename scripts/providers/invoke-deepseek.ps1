@@ -4,10 +4,21 @@ param(
     [Parameter(Mandatory = $true)][string]$SchemaPath,
     [Parameter(Mandatory = $true)][string]$OutputPath,
     [string]$Model = "deepseek-flash",
+    [switch]$SingleAttempt,
+    [object]$SingleAttemptContext,
     [ValidateRange(1,3600)][int]$TimeoutSeconds = 300
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($SingleAttempt) {
+    . (Join-Path (Split-Path $PSScriptRoot -Parent) 'single-attempt-execution.ps1')
+    if (-not $PSBoundParameters.ContainsKey('Model') -or [string]::IsNullOrWhiteSpace($Model)) { throw 'SINGLE_ATTEMPT_MODEL_REQUIRED' }
+    if ($Model -notmatch '^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,255}$') { throw 'SINGLE_ATTEMPT_AMBIGUOUS_MODEL' }
+    if ($null -eq $SingleAttemptContext) { throw 'SINGLE_ATTEMPT_CONTEXT_REQUIRED' }
+    Assert-SingleAttemptConfiguration -Context $SingleAttemptContext -Provider 'DeepSeek' -Model $Model
+}
+
 
 function Get-HttpStatusCode {
     param([System.Management.Automation.ErrorRecord]$ErrorRecord)
@@ -41,7 +52,9 @@ function Get-HttpErrorBody {
 
     try {
         $response = $ErrorRecord.Exception.Response
-        if ($null -eq $response) { return "" }
+
+
+if ($null -eq $response) { return "" }
 
         $stream = $response.GetResponseStream()
         if ($null -eq $stream) { return "" }
@@ -100,15 +113,23 @@ $headers = @{
 }
 
 $response = $null
-$maxAttempts = 3
+$maxAttempts = if ($SingleAttempt) { 1 } else { 3 }
 
 for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
     try {
-        $response = Invoke-RestMethod -Method Post -Uri "https://api.deepseek.com/chat/completions" -Headers $headers -ContentType "application/json; charset=utf-8" -Body $bodyBytes -TimeoutSec $TimeoutSeconds
+        if ($SingleAttempt) { Set-SingleAttemptProviderMetadata -Context $SingleAttemptContext -Result ([PSCustomObject]@{ OutputLimit=12000 }) }
+        if ($SingleAttempt) { Start-SingleAttemptProviderCall -Context $SingleAttemptContext -Provider 'DeepSeek' -Model $Model }
+        $singleTransport = @{}
+        if ($SingleAttempt) { $singleTransport.MaximumRedirection = 0; if ($PSVersionTable.PSVersion.Major -ge 7) { $singleTransport.MaximumRetryCount = 0 } }
+        $response = Invoke-RestMethod @singleTransport -Method Post -Uri "https://api.deepseek.com/chat/completions" -Headers $headers -ContentType "application/json; charset=utf-8" -Body $bodyBytes -TimeoutSec $TimeoutSeconds
         break
     }
     catch {
         $statusCode = Get-HttpStatusCode -ErrorRecord $_
+        if ($SingleAttempt) {
+            if ($_.Exception -is [TimeoutException] -or [string]$_.Exception.Message -match '(?i)timed out|timeout|tiempo.*agotado') { throw 'SINGLE_ATTEMPT_TIMEOUT' }
+            throw ('SINGLE_ATTEMPT_TRANSPORT_FAILURE: HTTP ' + $statusCode)
+        }
         $message = Get-HttpErrorBody -ErrorRecord $_
         if ([string]::IsNullOrWhiteSpace($message)) { $message = $_.Exception.Message }
 
@@ -123,6 +144,20 @@ for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
         throw "DeepSeek request failed: $message"
     }
 }
+
+if ($SingleAttempt) {
+    $actualModel = if ($null -ne $response.model) { [string]$response.model } else { $null }
+    $finish = if ($null -ne $response.choices -and $response.choices.Count -gt 0) { [string]$response.choices[0].finish_reason } else { $null }
+    $usage = $response.usage
+    $reasoning = if ($null -ne $usage.completion_tokens_details) { $usage.completion_tokens_details.reasoning_tokens } else { $null }
+    $meta = [PSCustomObject]@{ Model=$actualModel; FinishReason=$finish; OutputLimit=12000; PromptTokens=$usage.prompt_tokens; CompletionTokens=$usage.completion_tokens; TotalTokens=$usage.total_tokens; ReasoningTokens=$reasoning }
+    Set-SingleAttemptProviderMetadata -Context $SingleAttemptContext -Result $meta
+    if ($null -ne $actualModel -and $actualModel -cne $Model) { throw 'SINGLE_ATTEMPT_MODEL_MISMATCH' }
+    if ($finish -eq 'content_filter' -or ($null -ne $response.choices -and $response.choices.Count -gt 0 -and -not [string]::IsNullOrWhiteSpace([string]$response.choices[0].message.refusal))) { throw 'SINGLE_ATTEMPT_PROVIDER_REFUSAL' }
+    if ($finish -eq 'length') { throw 'SINGLE_ATTEMPT_TRUNCATED_RESPONSE' }
+    if ($finish -cne 'stop') { throw 'SINGLE_ATTEMPT_INCOMPLETE_RESPONSE' }
+}
+
 
 if ($null -eq $response) {
     throw "DeepSeek request failed without a response after $maxAttempts attempts."
