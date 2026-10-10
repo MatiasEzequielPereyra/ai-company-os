@@ -1,3 +1,5 @@
+import pytest
+
 from company_os.application.command_service import CommandService
 from company_os.application.project_service import ProjectService
 
@@ -81,3 +83,18 @@ def test_invalid_project_is_rejected(tmp_path):
         raise AssertionError(
             "Invalid project should be rejected"
         )
+
+
+def test_missing_project_path_is_rejected(tmp_path):
+    config = FakeConfig()
+    service = ProjectService(
+        config_service=config,
+        storage_root=tmp_path / "settings",
+    )
+
+    with pytest.raises(FileNotFoundError):
+        service.open_project(
+            tmp_path / "Missing Project"
+        )
+
+    assert config.current is None
