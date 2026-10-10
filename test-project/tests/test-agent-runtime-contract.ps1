@@ -370,7 +370,7 @@ if ($openRouter -notmatch 'ConvertFrom-Json') {
 if ($openRouter -notmatch 'Test-TransientOpenRouterError') {
     throw "OpenRouter adapter must classify transient failures"
 }
-if ($openRouter -notmatch '\$maxAttempts = 3') {
+if ($openRouter -notmatch '\$maxAttempts = if \(\$SingleAttempt\) \{ 1 \} else \{ 3 \}') {
     throw "OpenRouter adapter must retry transient failures"
 }
 if ($openRouter -notmatch 'StatusCode -eq 429') {
@@ -411,7 +411,7 @@ if ($gemini -notmatch 'Get-GeminiErrorBody') {
 foreach ($runnerName in @("run-agent-task.ps1","run-gate-agent.ps1","run-writable-agent.ps1","finalize-task.ps1")) {
     $runnerText = Get-Content (Join-Path $repoRoot ("scripts\" + $runnerName)) -Raw
 
-    $hasDirectLock = $runnerText -match 'Enter-TaskExecutionLock' -and $runnerText -match 'finally\s*\{\s*Exit-TaskExecutionLock';
+    $hasDirectLock = $runnerText -match 'Enter-TaskExecutionLock' -and $runnerText -match 'finally\s*\{\s*(?:if\s*\(\$null -ne \$taskExecutionLock\)\s*\{\s*)?Exit-TaskExecutionLock';
     $hasLeaseScope = $runnerText -match 'Enter-TaskExecutionScope.*-Lease \$TaskExecutionLease' -and
         $runnerText -match 'finally\s*\{\s*Exit-TaskExecutionScope -Scope \$writerScope';
     if (-not ($hasDirectLock -or $hasLeaseScope)) {

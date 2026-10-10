@@ -71,7 +71,7 @@ try {
 
     $gemini = Get-Content (Join-Path $repoRoot "scripts\providers\invoke-gemini.ps1") -Raw -Encoding UTF8
     if ($gemini -notmatch "Test-TransientGeminiError") { throw "Gemini adapter must classify transient failures." }
-    if (-not $gemini.Contains('$maxAttempts = 3')) { throw "Gemini adapter must retry transient failures." }
+    if (-not $gemini.Contains('$maxAttempts = if ($SingleAttempt) { 1 } else { 3 }')) { throw "Gemini must retain three normal attempts and limit SingleAttempt to one." }
 
     $parallel = Get-Content (Join-Path $repoRoot "scripts\run-active-agents.ps1") -Raw -Encoding UTF8
     if ($parallel -notmatch "Shared-workspace -Parallel execution is only allowed") { throw "Parallel runtime guard is missing." }

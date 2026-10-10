@@ -196,7 +196,8 @@ $ScriptFiles = @(
     "run-writable-agent.ps1",
     "resolve-writable-required-files.ps1",
     "task-execution-lock.ps1",
-    "review-grounding.ps1"
+    "review-grounding.ps1",
+    "single-attempt-execution.ps1"
 )
 
 foreach ($ScriptFile in $ScriptFiles) {
