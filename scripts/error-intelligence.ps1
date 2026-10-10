@@ -59,7 +59,11 @@ try {
     $process.StandardInput.Close()
     $captureStage = 'execution'
     if (-not $process.WaitForExit(3500)) { throw 'CAPTURE_TIMEOUT' }
-    if ($process.ExitCode -ne 0) { throw 'CAPTURE_FAILED' }
+    if ($process.ExitCode -ne 0) {
+        $captureStage = 'exit_' + $process.ExitCode
+        if ($stderr.Wait(100) -and $stderr.Result -match 'No module named') { $captureStage = 'module_unavailable' }
+        throw 'CAPTURE_FAILED'
+    }
     if (-not $stdout.Wait(100) -or -not $stderr.Wait(100)) { throw 'CAPTURE_TIMEOUT' }
     $captureStage = 'result'
     $result = $stdout.Result | ConvertFrom-Json

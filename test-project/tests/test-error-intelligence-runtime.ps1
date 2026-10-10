@@ -27,6 +27,8 @@ print(json.dumps({'incident_id':'inc_test','occurrence_count':2,'verified_soluti
     $env:AICO_ERROR_INTELLIGENCE_MODULE_ROOT = $fixture
     if (-not $env:AICO_ERROR_INTELLIGENCE_PYTHON) { $env:AICO_ERROR_INTELLIGENCE_PYTHON = (Get-Command python -CommandType Application | Select-Object -First 1).Source }
     $env:AICO_TEST_CAPTURE = Join-Path $fixture 'captured.jsonl'
+    $pythonHealth = & $env:AICO_ERROR_INTELLIGENCE_PYTHON -c 'import sys; print(sys.version)' 2>&1
+    Assert-True ($LASTEXITCODE -eq 0) ('Python test prerequisite failed: ' + ($pythonHealth | Out-String))
     $env:AICO_ERROR_INTELLIGENCE_ENABLED = '0'
     & (Join-Path $scripts 'error-intelligence.ps1') -ProjectPath $fixture -Event @{event_type='runtime_failure'}
     Assert-True (-not (Test-Path $env:AICO_TEST_CAPTURE)) 'Disabled observer invoked Python'
