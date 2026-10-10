@@ -24,6 +24,11 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Use Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - name: Run AI Company OS smoke suite
         shell: powershell
         run: .\test-project\tests\run-all-smoke-tests.ps1
