@@ -40,6 +40,14 @@ print(json.dumps({'incident_id':'inc_test','occurrence_count':2,'verified_soluti
     $output = @(& (Join-Path $scripts 'error-intelligence.ps1') -ProjectPath $fixture -Event @{event_type='runtime_failure';component='agent-runner';task_id='AICO-001';marker=$unicodeMarker})
     Assert-True ($output.Count -eq 0) 'Observer polluted success output'
     Assert-True ($env:PYTHONPATH -eq $prior) 'Observer failed to restore PYTHONPATH'
+    if (-not (Test-Path -LiteralPath $env:AICO_TEST_CAPTURE)) {
+        try {
+            $env:PYTHONPATH = $fixture
+            $stubDiagnostic = '{}' | & $env:AICO_ERROR_INTELLIGENCE_PYTHON -m company_os.error_intelligence.runtime capture --project $fixture 2>&1
+            throw ('Deterministic stub subprocess failed: ' + ($stubDiagnostic | Out-String))
+        }
+        finally { $env:PYTHONPATH = $prior }
+    }
     $captured = Get-Content -LiteralPath $env:AICO_TEST_CAPTURE -Encoding UTF8 | ConvertFrom-Json
     Assert-True ($captured.event.marker -eq $unicodeMarker) 'UTF-8 stdin damaged event'
     Assert-True ($captured.args[-1] -eq $fixture) 'Project argument damaged'
