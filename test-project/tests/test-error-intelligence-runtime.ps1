@@ -12,7 +12,10 @@ try {
     foreach ($relative in @('company_os/__init__.py','company_os/error_intelligence/__init__.py')) { [IO.File]::WriteAllText((Join-Path $fixture $relative),'',$utf8) }
     $stub = @'
 import json, os, sys
-event = json.load(sys.stdin)
+raw = sys.stdin.buffer.read()
+with open(os.environ['AICO_TEST_CAPTURE'] + '.stdin', 'w', encoding='ascii') as stream:
+    stream.write(raw.hex())
+event = json.loads(raw.decode('utf-8'))
 with open(os.environ['AICO_TEST_CAPTURE'], 'a', encoding='utf-8') as stream:
     stream.write(json.dumps({'event':event,'args':sys.argv}, ensure_ascii=False)+'\n')
 if event.get('mode') == 'failure':
@@ -41,6 +44,7 @@ print(json.dumps({'incident_id':'inc_test','occurrence_count':2,'verified_soluti
     Assert-True ($output.Count -eq 0) 'Observer polluted success output'
     Assert-True ($env:PYTHONPATH -eq $prior) 'Observer failed to restore PYTHONPATH'
     if (-not (Test-Path -LiteralPath $env:AICO_TEST_CAPTURE)) {
+        throw ('Deterministic stub stdin bytes: ' + (Get-Content ($env:AICO_TEST_CAPTURE + '.stdin') -Raw))
         try {
             $env:PYTHONPATH = $fixture
             $ErrorActionPreference = 'Continue'
