@@ -15,6 +15,7 @@ $supported = ($Event.event_type -eq 'runtime_failure') -or
 if (-not $supported) { return }
 $process = $null
 $captureStage = 'configuration'
+$previousInputEncoding = $null
 $previousPythonPath = $env:PYTHONPATH
 try {
     $engineRoot = Split-Path $PSScriptRoot -Parent
@@ -46,10 +47,23 @@ try {
     $start.EnvironmentVariables['PYTHONUTF8'] = '1'
     $start.StandardOutputEncoding = New-Object System.Text.UTF8Encoding($false)
     $start.StandardErrorEncoding = New-Object System.Text.UTF8Encoding($false)
+    if ($start.PSObject.Properties['StandardInputEncoding']) {
+        $start.StandardInputEncoding = New-Object System.Text.UTF8Encoding($false)
+    }
+    else {
+        # .NET Framework creates its stdin writer from Console.InputEncoding
+        # and enables AutoFlush during Start, which can prepend a UTF-8 BOM.
+        $previousInputEncoding = [Console]::InputEncoding
+        [Console]::InputEncoding = New-Object System.Text.UTF8Encoding($false)
+    }
     $process = New-Object System.Diagnostics.Process
     $process.StartInfo = $start
     $captureStage = 'start'
     if (-not $process.Start()) { throw 'START_FAILED' }
+    if ($null -ne $previousInputEncoding) {
+        [Console]::InputEncoding = $previousInputEncoding
+        $previousInputEncoding = $null
+    }
     $stdout = $process.StandardOutput.ReadToEndAsync()
     $stderr = $process.StandardError.ReadToEndAsync()
     $bytes = [Text.Encoding]::UTF8.GetBytes(($Event | ConvertTo-Json -Depth 10 -Compress))
@@ -83,6 +97,7 @@ catch {
     Write-Host ('ERROR_INTELLIGENCE_CAPTURE_UNAVAILABLE; stage=' + $captureStage + '; exception=' + $_.Exception.GetType().Name) -ForegroundColor DarkYellow
 }
 finally {
+    if ($null -ne $previousInputEncoding) { [Console]::InputEncoding = $previousInputEncoding }
     $env:PYTHONPATH = $previousPythonPath
     if ($null -ne $process) {
         try { if (-not $process.HasExited) { $process.Kill() } } catch { }

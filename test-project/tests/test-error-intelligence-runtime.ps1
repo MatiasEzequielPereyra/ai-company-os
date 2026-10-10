@@ -40,7 +40,13 @@ print(json.dumps({'incident_id':'inc_test','occurrence_count':2,'verified_soluti
     Assert-True (-not (Test-Path $env:AICO_TEST_CAPTURE)) 'Successful provider event invoked Python'
     $prior = $env:PYTHONPATH
     $unicodeMarker = 'espa' + [char]0x00f1 + 'ol ' + [char]0x65e5 + [char]0x672c + [char]0x8a9e
-    $output = @(& (Join-Path $scripts 'error-intelligence.ps1') -ProjectPath $fixture -Event @{event_type='runtime_failure';component='agent-runner';task_id='AICO-001';marker=$unicodeMarker})
+    $originalInputEncoding = [Console]::InputEncoding
+    try {
+        [Console]::InputEncoding = New-Object Text.UTF8Encoding($true)
+        $output = @(& (Join-Path $scripts 'error-intelligence.ps1') -ProjectPath $fixture -Event @{event_type='runtime_failure';component='agent-runner';task_id='AICO-001';marker=$unicodeMarker})
+        Assert-True ([Console]::InputEncoding.GetPreamble().Length -eq 3) 'Observer did not restore caller input encoding'
+    }
+    finally { [Console]::InputEncoding = $originalInputEncoding }
     Assert-True ($output.Count -eq 0) 'Observer polluted success output'
     Assert-True ($env:PYTHONPATH -eq $prior) 'Observer failed to restore PYTHONPATH'
     Assert-True (Test-Path -LiteralPath $env:AICO_TEST_CAPTURE) 'Simulated capture subprocess failed'
