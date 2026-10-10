@@ -43,10 +43,12 @@ print(json.dumps({'incident_id':'inc_test','occurrence_count':2,'verified_soluti
     if (-not (Test-Path -LiteralPath $env:AICO_TEST_CAPTURE)) {
         try {
             $env:PYTHONPATH = $fixture
+            $ErrorActionPreference = 'Continue'
             $stubDiagnostic = '{}' | & $env:AICO_ERROR_INTELLIGENCE_PYTHON -m company_os.error_intelligence.runtime capture --project $fixture 2>&1
+            $ErrorActionPreference = 'Stop'
             throw ('Deterministic stub subprocess failed: ' + ($stubDiagnostic | Out-String))
         }
-        finally { $env:PYTHONPATH = $prior }
+        finally { $env:PYTHONPATH = $prior; $ErrorActionPreference = 'Stop' }
     }
     $captured = Get-Content -LiteralPath $env:AICO_TEST_CAPTURE -Encoding UTF8 | ConvertFrom-Json
     Assert-True ($captured.event.marker -eq $unicodeMarker) 'UTF-8 stdin damaged event'
