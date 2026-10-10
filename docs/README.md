@@ -25,6 +25,8 @@ La regla principal es simple: **la documentación describe el comportamiento que
 
 - [Project Brief](./PROJECT-BRIEF.md)
 - [System Architecture](./architecture/system-architecture.md)
+- [Error Intelligence v1 MVP and integration map](./engineering/error-intelligence-v1.md)
+- [ADR-001: Error Intelligence local storage](./decisions/ADR-001-error-intelligence-storage.md)
 - product/ — requisitos y contexto de producto.
 - architecture/ — decisiones y contexto técnico.
 - engineering/ — work requests, planes, dispatch, resultados y evidencia.
