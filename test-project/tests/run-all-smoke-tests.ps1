@@ -53,6 +53,7 @@ $tests = @(
     "test-canonical-contracts.ps1",
     "test-provider-router-contract.ps1",
     "test-single-attempt-provider-execution.ps1",
+    "test-error-intelligence-runtime.ps1",
     "test-provider-timeout.ps1",
     "test-update-runtime-contract.ps1",
     "test-npm-package-contract.ps1",

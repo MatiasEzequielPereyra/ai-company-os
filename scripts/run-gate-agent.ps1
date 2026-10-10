@@ -515,7 +515,7 @@ $outputPath = Join-Path $runtimeDir ($Id + "-" + $Gate.ToLowerInvariant() + "-ga
 
 Write-Host ("Gate context budget: generic=" + $maxChars + " chars; authoritative artifacts preserved in full for candidate budget validation") -ForegroundColor DarkGray
 Write-Host "Running $Gate gate: $reviewerRole -> $Id" -ForegroundColor Cyan
-$routerArgs = @{Provider=$Provider;ProjectPath=$root;Prompt=$prompt;Context=$evidence.ToString();SchemaPath=$schemaPath;OutputPath=$outputPath;Model=$Model;Role=$reviewerRole;Workload='gate';SemanticValidatorPath=$gateSemanticValidatorPath}
+$routerArgs = @{Provider=$Provider;ProjectPath=$root;Prompt=$prompt;Context=$evidence.ToString();SchemaPath=$schemaPath;OutputPath=$outputPath;Model=$Model;Role=$reviewerRole;Workload='gate';TaskId=$Id;SemanticValidatorPath=$gateSemanticValidatorPath}
 if ($SingleAttempt) {
     $routerArgs.SingleAttempt = $true
     $routerArgs.ProviderEndpoint = $ProviderEndpoint
@@ -762,6 +762,11 @@ Write-Host ("Provider: " + $execution.Provider)
 Write-Host ("Model: " + $execution.Model)
 }
 catch {
+    try {
+        $observer = 'error-intelligence.ps1'
+        if ($null -ne $taskExecutionLock) { $observer = 'write-operational-event.ps1' }
+        & (Join-Path $PSScriptRoot $observer) -ProjectPath $root -Event @{ event_type = "runtime_failure"; component = "gate-runner"; task_id = $Id; error_category = "runtime" } | Out-Null
+    } catch { Write-Host "ERROR_INTELLIGENCE_CAPTURE_UNAVAILABLE" -ForegroundColor DarkYellow }
     if ($SingleAttempt) {
         if ($null -ne $taskExecutionLock -and -not [string]::IsNullOrWhiteSpace($outputPath) -and (Test-Path -LiteralPath $outputPath -PathType Leaf)) {
             Remove-Item -LiteralPath $outputPath -Force

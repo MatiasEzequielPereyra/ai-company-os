@@ -49,6 +49,7 @@ aico use .
 aico doctor --system
 aico doctor
 aico status
+aico errors --json
 aico
 ~~~
 

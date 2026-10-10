@@ -1,6 +1,7 @@
 const { spawnSync } = require("node:child_process");
 const path = require("node:path");
 const fs = require("node:fs");
+const crypto = require("node:crypto");
 
 const root = path.resolve(__dirname, "..");
 const packageJson = require(path.join(root, "package.json"));
@@ -8,6 +9,26 @@ const packageVersion = packageJson.version;
 
 const venvDir = path.join(root, ".aico-python");
 const markerPath = path.join(venvDir, ".aico-installed-version");
+const runtimeMarkerPath = path.join(venvDir, ".aico-installed-runtime-sha256");
+
+function runtimeFingerprint(sourceRoot = root) {
+  const files = ["pyproject.toml"];
+  function collect(directory) {
+    for (const entry of fs.readdirSync(path.join(sourceRoot, directory), { withFileTypes: true })) {
+      const relative = path.posix.join(directory, entry.name);
+      if (entry.isDirectory() && entry.name !== "__pycache__") collect(relative);
+      else if (entry.isFile() && entry.name.endsWith(".py")) files.push(relative);
+    }
+  }
+  collect("src/company_os");
+  const digest = crypto.createHash("sha256");
+  for (const relative of files.sort()) {
+    digest.update(relative + "\0");
+    digest.update(fs.readFileSync(path.join(sourceRoot, relative)));
+    digest.update("\0");
+  }
+  return digest.digest("hex");
+}
 
 const venvPython =
   process.platform === "win32"
@@ -91,7 +112,8 @@ function runtimeIsCurrent() {
     const installedVersion =
       fs.readFileSync(markerPath, "utf8").trim();
 
-    return installedVersion === packageVersion;
+    const installedFingerprint = fs.readFileSync(runtimeMarkerPath, "utf8").trim();
+    return installedVersion === packageVersion && installedFingerprint === runtimeFingerprint();
   } catch {
     return false;
   }
@@ -101,6 +123,7 @@ function ensureVenv() {
   if (runtimeIsCurrent()) {
     return venvPython;
   }
+  const sourceFingerprint = runtimeFingerprint();
 
   const python = findPython();
 
@@ -147,6 +170,11 @@ function ensureVenv() {
     packageVersion + "\n",
     "utf8"
   );
+
+  if (runtimeFingerprint() !== sourceFingerprint) {
+    throw new Error("AI Company OS Python source changed during installation; runtime marker was not updated.");
+  }
+  fs.writeFileSync(runtimeMarkerPath, sourceFingerprint + "\n", "utf8");
 
   return venvPython;
 }
@@ -215,6 +243,7 @@ function runPowerShell(relativeScript, args = []) {
 
 module.exports = {
   root,
+  runtimeFingerprint,
   venvPython,
   ensureVenv,
   run,

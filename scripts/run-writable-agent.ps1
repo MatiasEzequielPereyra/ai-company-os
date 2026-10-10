@@ -502,7 +502,13 @@ function Restore-PlannedFiles {
 
 $root = (Resolve-Path $ProjectPath).Path
 . (Join-Path $PSScriptRoot "task-execution-lock.ps1")
-$writerScope = Enter-TaskExecutionScope -ProjectPath $root -Id $Id -Operation "WRITABLE" -Lease $TaskExecutionLease
+try {
+    $writerScope = Enter-TaskExecutionScope -ProjectPath $root -Id $Id -Operation "WRITABLE" -Lease $TaskExecutionLease
+}
+catch {
+    try { & (Join-Path $PSScriptRoot "error-intelligence.ps1") -ProjectPath $ProjectPath -Event @{ event_type = "runtime_failure"; component = "writable-runner"; task_id = $Id; error_category = "runtime" } | Out-Null } catch { Write-Host "ERROR_INTELLIGENCE_CAPTURE_UNAVAILABLE" -ForegroundColor DarkYellow }
+    throw
+}
 $taskExecutionLock = $writerScope.Lease
 try {
 $tasksPath = Join-Path $root "tasks"
@@ -790,7 +796,7 @@ try {
                 }
             }
             try {
-                $execution = & $routerPath -Provider $candidate -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $outputPath -Model $candidateModel -Role $owner -Workload "writable" -CorrectiveContext $correctiveContext
+                $execution = & $routerPath -Provider $candidate -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $outputPath -Model $candidateModel -Role $owner -Workload "writable" -TaskId $Id -CorrectiveContext $correctiveContext
                 break
             }
             catch {
@@ -811,7 +817,7 @@ try {
             $selectedModel = Get-ConfiguredModel -Config $config -ProviderName $Provider -CollectionName "models"
         }
 
-        $execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $outputPath -Model $selectedModel -Role $owner -Workload "writable" -CorrectiveContext $correctiveContext
+        $execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $outputPath -Model $selectedModel -Role $owner -Workload "writable" -TaskId $Id -CorrectiveContext $correctiveContext
     }
 
     if (-not (Test-Path $outputPath)) {
@@ -1156,6 +1162,10 @@ catch {
     Restore-PlannedFiles -Backups $backups
     throw
 }
+}
+catch {
+    try { & (Join-Path $PSScriptRoot "write-operational-event.ps1") -ProjectPath $root -Event @{ event_type = "runtime_failure"; component = "writable-runner"; task_id = $Id; error_category = "runtime" } | Out-Null } catch { Write-Host "ERROR_INTELLIGENCE_CAPTURE_UNAVAILABLE" -ForegroundColor DarkYellow }
+    throw
 }
 finally {
     Exit-TaskExecutionScope -Scope $writerScope

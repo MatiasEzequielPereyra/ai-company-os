@@ -1,5 +1,7 @@
 # Error Intelligence v1
 
+The isolated store described below is now connected through [automatic runtime observations](error-intelligence-runtime-auto-v1.md). That extension adds capture, bounded historical lookup, `aico errors`, and doctor summaries; it does not authorize automatic corrections or replace evidence validation. The original audit and v1 implementation boundaries below describe the initial store delivery.
+
 ## Repository audit and integration map
 
 Audit base is local `origin/main` SHA `a5c030cfb83bc98bc7d3d009df616cc7e3590cf0`. A fetch was attempted on 2026-10-10 but DNS/network access to GitHub was unavailable, so this is the locally available remote-tracking ref, not a claim that GitHub was freshly checked. The requested app-managed worktree helper did not recognize this nested repository; an isolated Git worktree was created directly at `Z:\repos\ai-company-os\worktrees\error-intelligence-v1`.
