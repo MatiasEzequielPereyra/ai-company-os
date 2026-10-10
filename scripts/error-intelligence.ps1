@@ -44,6 +44,7 @@ try {
     $start.RedirectStandardOutput = $true
     $start.RedirectStandardError = $true
     $start.EnvironmentVariables['PYTHONUTF8'] = '1'
+    $start.StandardInputEncoding = New-Object System.Text.UTF8Encoding($false)
     $start.StandardOutputEncoding = New-Object System.Text.UTF8Encoding($false)
     $start.StandardErrorEncoding = New-Object System.Text.UTF8Encoding($false)
     $process = New-Object System.Diagnostics.Process
