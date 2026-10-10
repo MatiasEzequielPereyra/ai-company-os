@@ -25,7 +25,7 @@ print(json.dumps({'incident_id':'inc_test','occurrence_count':2,'verified_soluti
 '@
     [IO.File]::WriteAllText((Join-Path $fixture 'company_os/error_intelligence/runtime.py'),$stub,$utf8)
     $env:AICO_ERROR_INTELLIGENCE_MODULE_ROOT = $fixture
-    if (-not $env:AICO_ERROR_INTELLIGENCE_PYTHON) { $env:AICO_ERROR_INTELLIGENCE_PYTHON = (Get-Command python -CommandType Application).Source }
+    if (-not $env:AICO_ERROR_INTELLIGENCE_PYTHON) { $env:AICO_ERROR_INTELLIGENCE_PYTHON = (Get-Command python -CommandType Application | Select-Object -First 1).Source }
     $env:AICO_TEST_CAPTURE = Join-Path $fixture 'captured.jsonl'
     $env:AICO_ERROR_INTELLIGENCE_ENABLED = '0'
     & (Join-Path $scripts 'error-intelligence.ps1') -ProjectPath $fixture -Event @{event_type='runtime_failure'}
@@ -43,6 +43,20 @@ print(json.dumps({'incident_id':'inc_test','occurrence_count':2,'verified_soluti
     Assert-True ($captured.args[-1] -eq $fixture) 'Project argument damaged'
     & (Join-Path $scripts 'error-intelligence.ps1') -ProjectPath $fixture -Event @{event_type='task_transition';from_status='REVIEW';to_status='READY'}
     Assert-True (@(Get-Content $env:AICO_TEST_CAPTURE).Count -eq 2) 'Rejected gate transition was not captured'
+    $resolvedPython = $env:AICO_ERROR_INTELLIGENCE_PYTHON
+    try {
+        function Get-Command {
+            param($Name, $CommandType, $ErrorAction)
+            @([pscustomobject]@{Source=$resolvedPython}, [pscustomobject]@{Source=(Join-Path $fixture 'other-python.exe')})
+        }
+        $env:AICO_ERROR_INTELLIGENCE_PYTHON = ''
+        & (Join-Path $scripts 'error-intelligence.ps1') -ProjectPath $fixture -Event @{event_type='runtime_failure'}
+        Assert-True (@(Get-Content $env:AICO_TEST_CAPTURE).Count -eq 3) 'Multiple Python commands were combined into an invalid executable path'
+    }
+    finally {
+        Remove-Item Function:Get-Command
+        $env:AICO_ERROR_INTELLIGENCE_PYTHON = $resolvedPython
+    }
     $path = & (Join-Path $scripts 'write-operational-event.ps1') -ProjectPath $fixture -Event @{event_type='runtime_failure';mode='failure'}
     Assert-True (Test-Path -LiteralPath $path) 'Capture failure broke metrics write'
     Assert-True ((Get-Content -LiteralPath $path -Raw) -match 'runtime_failure') 'Capture failure lost metrics event'

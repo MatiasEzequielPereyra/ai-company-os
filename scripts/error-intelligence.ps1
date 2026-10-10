@@ -23,7 +23,7 @@ try {
             if (Test-Path -LiteralPath $candidate -PathType Leaf) { $python = $candidate; break }
         }
     }
-    if ([string]::IsNullOrWhiteSpace($python)) { $python = (Get-Command python -CommandType Application -ErrorAction Stop).Source }
+    if ([string]::IsNullOrWhiteSpace($python)) { $python = (Get-Command python -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source }
     $moduleRoot = $env:AICO_ERROR_INTELLIGENCE_MODULE_ROOT
     if ([string]::IsNullOrWhiteSpace($moduleRoot) -and (Test-Path -LiteralPath (Join-Path $engineRoot 'src/company_os'))) { $moduleRoot = Join-Path $engineRoot 'src' }
     if (-not [string]::IsNullOrWhiteSpace($moduleRoot)) {
