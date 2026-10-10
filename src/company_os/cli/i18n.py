@@ -632,7 +632,7 @@ UI_TEXT = {
             "Derecha/Enter = Abrir   "
             "R = Actualizar   Izquierda/Esc = Atras"
         ),
-        "projects_enter_path": "O ingresa una ruta local del repositorio:",
+        "projects_enter_path": "O ingresa una ruta local (Ctrl+L; Tab/Mayus+Tab para navegar):",
         "projects_no_recent": "No hay proyectos recientes.",
         "projects_active": "ACTIVE",
         "projects_active_notify": "Proyecto activo",
@@ -750,7 +750,7 @@ UI_TEXT = {
             "Right/Enter = Open   "
             "R = Refresh   Left/Esc = Back"
         ),
-        "projects_enter_path": "Or enter a local repository path:",
+        "projects_enter_path": "Or enter a local path (Ctrl+L; Tab/Shift+Tab to navigate):",
         "projects_no_recent": "No recent projects.",
         "projects_active": "ACTIVE",
         "projects_active_notify": "Active project",
