@@ -11,7 +11,9 @@ param(
     [ValidateSet("Auto","Codex","OpenRouter","Gemini","Ollama","DeepSeek","Grok")]
     [string]$Provider = "Auto",
 
-    [string]$Model = ""
+    [string]$Model = "",
+    [switch]$SingleAttempt,
+    [string]$ProviderEndpoint = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -229,12 +231,21 @@ function Assert-StructuredFields {
 }
 
 $root = (Resolve-Path $ProjectPath).Path
+$singleAttemptContext = $null
+$taskExecutionLock = $null
+$outputPath = Join-Path $root ('.codex/runtime/' + $Id + '-' + $Gate.ToLowerInvariant() + '-gate.json')
+try {
 $taskPath = Join-Path $root ("tasks\" + $Id + ".md")
 if (-not (Test-Path $taskPath)) { throw "Task not found: $taskPath" }
 
 . (Join-Path $PSScriptRoot 'task-execution-lock.ps1')
 $taskExecutionLock = Enter-TaskExecutionLock -ProjectPath $root -Id $Id -Operation 'GATE'
-try {
+if ($SingleAttempt) {
+    . (Join-Path $PSScriptRoot 'single-attempt-execution.ps1')
+    $singleAttemptContext = New-SingleAttemptExecution -ProjectPath $root -Provider $Provider -Model $Model
+    Assert-SingleAttemptConfiguration -Context $singleAttemptContext -Provider $Provider -Model $Model -ProviderEndpoint $ProviderEndpoint
+    if (Test-Path -LiteralPath $outputPath -PathType Leaf) { Remove-Item -LiteralPath $outputPath -Force }
+}
 $taskContent = Get-Content $taskPath -Raw -Encoding UTF8
 $status = Read-Field $taskContent "Status"
 $owner = Read-Field $taskContent "Owner"
@@ -505,6 +516,11 @@ $outputPath = Join-Path $runtimeDir ($Id + "-" + $Gate.ToLowerInvariant() + "-ga
 Write-Host ("Gate context budget: generic=" + $maxChars + " chars; authoritative artifacts preserved in full for candidate budget validation") -ForegroundColor DarkGray
 Write-Host "Running $Gate gate: $reviewerRole -> $Id" -ForegroundColor Cyan
 $routerArgs = @{Provider=$Provider;ProjectPath=$root;Prompt=$prompt;Context=$evidence.ToString();SchemaPath=$schemaPath;OutputPath=$outputPath;Model=$Model;Role=$reviewerRole;Workload='gate';SemanticValidatorPath=$gateSemanticValidatorPath}
+if ($SingleAttempt) {
+    $routerArgs.SingleAttempt = $true
+    $routerArgs.ProviderEndpoint = $ProviderEndpoint
+    $routerArgs.SingleAttemptContext = $singleAttemptContext
+}
 if ($null -ne $groundingContext) { $routerArgs.SemanticValidationContext=$groundingContext }
 $execution = & $routerPath @routerArgs
 
@@ -745,6 +761,19 @@ Write-Host "$Gate gate completed for $Id" -ForegroundColor Green
 Write-Host ("Provider: " + $execution.Provider)
 Write-Host ("Model: " + $execution.Model)
 }
+catch {
+    if ($SingleAttempt) {
+        if ($null -ne $taskExecutionLock -and -not [string]::IsNullOrWhiteSpace($outputPath) -and (Test-Path -LiteralPath $outputPath -PathType Leaf)) {
+            Remove-Item -LiteralPath $outputPath -Force
+        }
+        if ($null -eq $singleAttemptContext) {
+            throw 'SINGLE_ATTEMPT_GATE_PREFLIGHT_REJECTED: attempts_started=0; record_status=NOT_CREATED.'
+        }
+        Complete-SingleAttemptExecution -Context $singleAttemptContext -ValidationStatus INVALID
+        throw 'SINGLE_ATTEMPT_GATE_REJECTED: see the execution evidence record.'
+    }
+    throw
+}
 finally {
-    Exit-TaskExecutionLock -Lock $taskExecutionLock
+    if ($null -ne $taskExecutionLock) { Exit-TaskExecutionLock -Lock $taskExecutionLock }
 }

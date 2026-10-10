@@ -1,3 +1,14 @@
+# Single-Attempt Provider Execution v1 checkpoint
+
+Project: AI Company OS
+Revision: 1
+Updated: 2026-10-10T15:30:49.8982047Z
+Updated by: CODEX-ORCHESTRATOR
+
+Current handoff: [single-attempt implementation](../../docs/engineering/handoffs/ai-company-os/single-attempt-provider-execution-v1-implementation-2026-10-10.md).
+Receipt PENDING; External Orchestrator review of draft PR and known PS7 baseline failures required.
+Run A HOLD, AICO-002 REVIEW. No real providers or merge. This index grants no execution permission.
+
 # Citation spans v1 checkpoint
 
 Project: AI Company OS

@@ -11,10 +11,23 @@ param(
     [string]$Workload = "general",
     [string]$SemanticValidatorPath = "",
     [string]$CorrectiveContext = "",
-    [object]$SemanticValidationContext
+    [object]$SemanticValidationContext,
+    [switch]$SingleAttempt,
+    [string]$ProviderEndpoint = "",
+    [object]$SingleAttemptContext
 )
 
 $ErrorActionPreference = "Stop"
+$singleContext = $SingleAttemptContext
+if ($SingleAttempt) {
+    . (Join-Path $PSScriptRoot 'single-attempt-execution.ps1')
+    if ($null -eq $singleContext) { $singleContext = New-SingleAttemptExecution -ProjectPath $ProjectPath -Provider $Provider -Model $Model }
+}
+try {
+if ($SingleAttempt) {
+    if (Test-Path -LiteralPath $OutputPath -PathType Leaf) { Remove-Item -LiteralPath $OutputPath -Force }
+    Assert-SingleAttemptConfiguration -Context $singleContext -Provider $Provider -Model $Model -ProviderEndpoint $ProviderEndpoint
+}
 if ($null -ne $SemanticValidationContext) {
     if ([string]::IsNullOrWhiteSpace($SemanticValidatorPath)) { throw 'REVIEW_GROUNDING_VALIDATOR_REQUIRED' }
     . (Join-Path $PSScriptRoot 'review-grounding.ps1')
@@ -684,6 +697,12 @@ foreach ($candidate in $attempts) {
     } -WarningPrefix "Provider start metrics could not be recorded"
 
     try {
+        $singleAdapterArgs = @{}
+        if ($SingleAttempt) {
+            $singleAdapterArgs.SingleAttempt = $true
+            $singleAdapterArgs.SingleAttemptContext = $singleContext
+            if ($candidateName -eq 'OpenRouter') { $singleAdapterArgs.ProviderEndpoint = $ProviderEndpoint }
+        }
         $invokeCandidate = {
             param([string]$EffectivePrompt)
 
@@ -692,17 +711,17 @@ foreach ($candidate in $attempts) {
                     $EffectivePrompt += [Environment]::NewLine + $candidateContext
                 }
                 if (-not [string]::IsNullOrWhiteSpace($CorrectiveContext)) { $EffectivePrompt += [Environment]::NewLine + $CorrectiveContext }
-                return (& $providerScript -ProjectPath $root -Prompt $EffectivePrompt -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel -TimeoutSeconds $providerTimeoutSeconds)
+                return (& $providerScript -ProjectPath $root -Prompt $EffectivePrompt -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel -TimeoutSeconds $providerTimeoutSeconds @singleAdapterArgs)
             }
             elseif ($candidateName -eq "Ollama") {
-                $candidateResult = & $providerScript -Prompt $EffectivePrompt -Context $candidateContext -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel -NumCtx ([int]$localRuntime.NumCtx) -NumPredict ([int]$localRuntime.NumPredict) -TimeoutSeconds $providerTimeoutSeconds
+                $candidateResult = & $providerScript -Prompt $EffectivePrompt -Context $candidateContext -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel -NumCtx ([int]$localRuntime.NumCtx) -NumPredict ([int]$localRuntime.NumPredict) -TimeoutSeconds $providerTimeoutSeconds @singleAdapterArgs
                 $candidateResult | Add-Member -NotePropertyName HardwareProfile -NotePropertyValue ([string]$localRuntime.Profile) -Force
                 $candidateResult | Add-Member -NotePropertyName NumCtx -NotePropertyValue ([int]$localRuntime.NumCtx) -Force
                 $candidateResult | Add-Member -NotePropertyName NumPredict -NotePropertyValue ([int]$localRuntime.NumPredict) -Force
                 return $candidateResult
             }
             else {
-                return (& $providerScript -Prompt $EffectivePrompt -Context $candidateContext -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel -TimeoutSeconds $providerTimeoutSeconds)
+                return (& $providerScript -Prompt $EffectivePrompt -Context $candidateContext -SchemaPath $SchemaPath -OutputPath $OutputPath -Model $providerModel -TimeoutSeconds $providerTimeoutSeconds @singleAdapterArgs)
             }
         }
 
@@ -728,6 +747,7 @@ foreach ($candidate in $attempts) {
             catch {
                 $semanticError = Sanitize-ProviderError -Message $_.Exception.Message
                 Save-RejectedReviewAttempt -Phase 'initial' -Reason $semanticError
+                if ($SingleAttempt) { throw $semanticError }
                 $previousOutput = ""
 
                 if (Test-Path $OutputPath -PathType Leaf) {
@@ -804,6 +824,9 @@ foreach ($candidate in $attempts) {
             error_category = ""
         } -WarningPrefix "Provider finish metrics could not be recorded"
 
+        if ($SingleAttempt) {
+            Complete-SingleAttemptExecution -Context $singleContext -ValidationStatus VALID
+        }
         Write-Host "Provider succeeded: $candidateName" -ForegroundColor Green
         return $result
     }
@@ -854,7 +877,7 @@ foreach ($candidate in $attempts) {
         } -WarningPrefix "Provider finish metrics could not be recorded"
 
         Write-Host "Provider failed: $candidateName" -ForegroundColor Yellow
-        Write-Host $safe -ForegroundColor DarkYellow
+        if (-not $SingleAttempt) { Write-Host $safe -ForegroundColor DarkYellow }
 
         if ($Provider -ne "Auto") {
             throw $safe
@@ -867,3 +890,28 @@ if ($attempted -eq 0) {
 }
 
 throw ("All configured providers failed. " + ($errors -join " | "))
+
+}
+catch {
+    if ($SingleAttempt -and $null -ne $singleContext) {
+        if (Test-Path -LiteralPath $OutputPath -PathType Leaf) { Remove-Item -LiteralPath $OutputPath -Force }
+        $category='preflight'
+        if (Get-Command Get-ProviderErrorCategory -ErrorAction SilentlyContinue) { $category=Get-ProviderErrorCategory -Message $_.Exception.Message }
+        if ((Get-SingleAttemptStartedCount -Context $singleContext) -eq 0) { $category='preflight' }
+        elseif ($_.Exception.Message -match 'TRUNCATED_RESPONSE') { $category='truncated' }
+        elseif ($_.Exception.Message -match 'INCOMPLETE_RESPONSE') { $category='incomplete_response' }
+        elseif ($_.Exception.Message -match 'PROVIDER_REFUSAL') { $category='provider_rejected' }
+        elseif ($_.Exception.Message -match 'MODEL_MISMATCH') { $category='identity' }
+        elseif ($category -eq 'unknown') { $category='local_validation' }
+        Complete-SingleAttemptExecution -Context $singleContext -ValidationStatus INVALID -ErrorCategory $category
+        # Preserve the typed failure but never expose credential values.
+        $message=$_.Exception.Message
+        foreach ($secret in @($env:CODEX_API_KEY,$env:OPENROUTER_API_KEY,$env:GEMINI_API_KEY,$env:DEEPSEEK_API_KEY,$env:XAI_API_KEY)) {
+            if (-not [string]::IsNullOrWhiteSpace($secret)) { $message=$message.Replace($secret,'[REDACTED]') }
+        }
+        $code='SINGLE_ATTEMPT_EXECUTION_FAILED'
+        if ($message -match '^([A-Z][A-Z0-9_]{2,64})(?:[: ]|$)') { $code=$Matches[1] }
+        throw ($code + ': ' + $category)
+    }
+    throw
+}
