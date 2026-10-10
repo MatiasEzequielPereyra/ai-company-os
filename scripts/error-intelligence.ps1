@@ -44,7 +44,6 @@ try {
     $start.RedirectStandardOutput = $true
     $start.RedirectStandardError = $true
     $start.EnvironmentVariables['PYTHONUTF8'] = '1'
-    $start.StandardInputEncoding = New-Object System.Text.UTF8Encoding($false)
     $start.StandardOutputEncoding = New-Object System.Text.UTF8Encoding($false)
     $start.StandardErrorEncoding = New-Object System.Text.UTF8Encoding($false)
     $process = New-Object System.Diagnostics.Process
@@ -57,7 +56,9 @@ try {
     $captureStage = 'stdin'
     $write = $process.StandardInput.BaseStream.WriteAsync($bytes, 0, $bytes.Length)
     if (-not $write.Wait(1000)) { throw 'STDIN_TIMEOUT' }
-    $process.StandardInput.Close()
+    # Close the byte stream directly. Closing the StreamWriter can emit its
+    # console-dependent preamble; WinPS 5.1 cannot set StandardInputEncoding.
+    $process.StandardInput.BaseStream.Close()
     $captureStage = 'execution'
     if (-not $process.WaitForExit(3500)) { throw 'CAPTURE_TIMEOUT' }
     if ($process.ExitCode -ne 0) {
