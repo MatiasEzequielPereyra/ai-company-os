@@ -66,6 +66,7 @@
           "rationale": {
             "minLength": 1,
             "type": "string",
+            "description": "Explain how the cited primary facts demonstrate this exact obligation or its conditional applicability. A genuine but irrelevant quote is insufficient for SATISFIED; missing support requires UNSATISFIED.",
             "maxLength": 2000
           },
           "evidence": {
@@ -84,6 +85,16 @@
                 "end_line": {
                   "minimum": 1,
                   "type": "integer"
+                },
+                "byte_start": {
+                  "minimum": 0,
+                  "type": "integer",
+                  "description": "Optional citation spans v1 offset: zero-based inclusive UTF-8 byte start within normalized start_line..end_line joined by LF without labels. Must accompany byte_end; absent offsets retain exact whole-line citations."
+                },
+                "byte_end": {
+                  "minimum": 1,
+                  "type": "integer",
+                  "description": "Optional citation spans v1 offset: zero-based exclusive UTF-8 byte end within the selected normalized line range. Must accompany byte_start and exceed it; both boundaries must be complete UTF-8 characters. Runtime enforces pairing, exact bytes and the unchanged 2048-byte excerpt cap."
                 },
                 "excerpt": {
                   "maxLength": 2048,

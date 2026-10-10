@@ -1,3 +1,14 @@
+# Citation spans v1 checkpoint
+
+Project: AI Company OS
+Revision: 1
+Updated: 2026-10-10T14:31:11.1677754Z
+Updated by: CODEX-ORCHESTRATOR
+
+Current handoff: [citation spans implementation](../../docs/engineering/handoffs/ai-company-os/grounded-citation-spans-v1-implementation-2026-10-10.md).
+Receipt PENDING. External Orchestrator review required. Run A remains HOLD; no providers or merge.
+This derived pointer grants no execution authority.
+
 # Company State
 
 ## Review Grounded Evidence v1 implementation checkpoint

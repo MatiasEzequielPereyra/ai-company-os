@@ -40,6 +40,7 @@ $requiredProjectRuntimeArtifacts = @(
     ".codex\workflow-profiles.json",
     ".codex\writable-policy.json",
     "scripts\provider-router.ps1",
+    "scripts\single-attempt-execution.ps1",
         "scripts\review-grounding.ps1",
         "scripts\task-execution-lock.ps1",
         "schemas\review-result.schema.json",
@@ -70,7 +71,7 @@ function Assert-ManagedProjectRuntime {
         }
     }
 
-    foreach ($relative in @('scripts/providers/invoke-codex.ps1', 'schemas/agent-result.schema.json', 'schemas/engineering-plan-result.schema.json','scripts/review-grounding.ps1','scripts/task-execution-lock.ps1','schemas/review-result.schema.json','scripts/validate-diagnostic-evidence.ps1','scripts/assert-bug-diagnostic-evidence.ps1')) {
+    foreach ($relative in @('scripts/providers/invoke-codex.ps1', 'schemas/agent-result.schema.json', 'schemas/engineering-plan-result.schema.json','scripts/review-grounding.ps1','scripts/single-attempt-execution.ps1','scripts/task-execution-lock.ps1','schemas/review-result.schema.json','scripts/validate-diagnostic-evidence.ps1','scripts/assert-bug-diagnostic-evidence.ps1')) {
         $expectedHash = (Get-FileHash (Join-Path $repoRoot $relative) -Algorithm SHA256).Hash
         $installedHash = (Get-FileHash (Join-Path $ProjectPath $relative) -Algorithm SHA256).Hash
         if ($installedHash -ne $expectedHash) {
@@ -79,7 +80,7 @@ function Assert-ManagedProjectRuntime {
     }
 
     $ownership=Get-Content (Join-Path $ProjectPath '.codex/managed-files.json') -Raw -Encoding UTF8|ConvertFrom-Json
-    foreach($relative in @('scripts/review-grounding.ps1','scripts/task-execution-lock.ps1','schemas/review-result.schema.json')){
+    foreach($relative in @('scripts/review-grounding.ps1','scripts/single-attempt-execution.ps1','scripts/task-execution-lock.ps1','schemas/review-result.schema.json')){
         if(@($ownership.managed_files)-cnotcontains $relative){throw "$Scenario missing grounding/barrier ownership: $relative"}
     }
     . (Join-Path $ProjectPath 'scripts/task-execution-lock.ps1')
