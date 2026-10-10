@@ -94,6 +94,24 @@ try {
     try { & (Join-Path $repoRoot 'scripts/validate-json-contract.ps1') -JsonPath $zeroValue -SchemaPath $zeroSchema | Out-Null }
     catch { $zeroRejected = $_.Exception.Message -match 'at most 0' }
     Assert-True $zeroRejected 'maxItems=0 must reject one item.'
+    $arraySchema = Join-Path $tempRoot 'root-array.schema.json'
+    $arrayValue = Join-Path $tempRoot 'root-array.json'
+    [IO.File]::WriteAllText($arraySchema,'{"type":"array","minItems":0,"maxItems":1,"items":{"type":"string"}}')
+    [IO.File]::WriteAllText($arrayValue,'[]')
+    & (Join-Path $repoRoot 'scripts/validate-json-contract.ps1') -JsonPath $arrayValue -SchemaPath $arraySchema | Out-Null
+    [IO.File]::WriteAllText($arrayValue,'["one"]')
+    & (Join-Path $repoRoot 'scripts/validate-json-contract.ps1') -JsonPath $arrayValue -SchemaPath $arraySchema | Out-Null
+    [IO.File]::WriteAllText($arrayValue,'{}')
+    $objectRejected = $false
+    try { & (Join-Path $repoRoot 'scripts/validate-json-contract.ps1') -JsonPath $arrayValue -SchemaPath $arraySchema | Out-Null }
+    catch { $objectRejected = $_.Exception.Message -match '^\$ must be an array\.' }
+    Assert-True $objectRejected 'Object must remain invalid when the root schema requires an array.'
+    [IO.File]::WriteAllText($arrayValue,'["one","two"]')
+    $overLimitRejected = $false
+    try { & (Join-Path $repoRoot 'scripts/validate-json-contract.ps1') -JsonPath $arrayValue -SchemaPath $arraySchema | Out-Null }
+    catch { $overLimitRejected = $_.Exception.Message -match 'at most 1' }
+    Assert-True $overLimitRejected 'Array maxItems must remain enforced.'
+
     Write-Host 'PASS: Gemini EM object-array schema compatibility; canonical and semantic bounds retained; COMPLETED/BLOCKED and 20/12/12 boundary' -ForegroundColor Green
 }
 finally {

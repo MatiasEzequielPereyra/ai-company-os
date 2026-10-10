@@ -8,7 +8,7 @@ if ($null -eq (Get-Command git -ErrorAction SilentlyContinue)) {
 }
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$tempParent = Join-Path $env:TEMP ("aico-writable-runtime-" + [Guid]::NewGuid().ToString("N"))
+$tempParent = Join-Path ([IO.Path]::GetTempPath()) ("aico-writable-runtime-" + [Guid]::NewGuid().ToString("N"))
 $fixtureRepo = Join-Path $tempParent "repo"
 $workspaces = Join-Path $tempParent "worktrees"
 $savedOpenRouter = $env:OPENROUTER_API_KEY
@@ -40,6 +40,7 @@ function New-FixtureTask {
         "Owner: frontend",
         "Workflow phase: PLANNING",
         "Work kind: IMPLEMENTATION",
+        "Type: FEATURE",
         "Work request: WR-TEST",
         "",
         "---",
@@ -194,6 +195,7 @@ Copy-Item $source $OutputPath -Force
     Write-NoBom (Join-Path $fixtureRepo ".codex\agents\frontend.md") "Frontend fixture role."
     Write-NoBom (Join-Path $fixtureRepo "AGENTS.md") "Writable runtime fixture."
     Write-NoBom (Join-Path $fixtureRepo "package.json") '{"name":"writable-fixture","private":true}'
+    Write-NoBom (Join-Path $fixtureRepo "docs\engineering\work-requests\WR-TEST.md") "# Work Request`nType: FEATURE`n"
 
     New-FixtureTask -Id "AICO-001" -Status "ACTIVE" -FileName "value1.txt"
     New-FixtureTask -Id "AICO-002" -Status "ACTIVE" -FileName "value2.txt"
@@ -732,7 +734,7 @@ finally {
 
     if (Test-Path $tempParent) {
         $cleanupTarget = [IO.Path]::GetFullPath($tempParent)
-        $cleanupRoot = [IO.Path]::GetFullPath($env:TEMP).TrimEnd([char[]]@('\','/')) + [IO.Path]::DirectorySeparatorChar
+        $cleanupRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd([char[]]@('\','/')) + [IO.Path]::DirectorySeparatorChar
         if (-not $cleanupTarget.StartsWith($cleanupRoot,[StringComparison]::OrdinalIgnoreCase) -or (Split-Path $cleanupTarget -Leaf) -notlike 'aico-writable-runtime-*') { throw 'Unsafe writable fixture cleanup path.' }
         Remove-Item -LiteralPath $cleanupTarget -Recurse -Force -ErrorAction SilentlyContinue
     }

@@ -109,6 +109,7 @@ function New-GateFixture {
         "validate-json-contract.ps1",
         "task-execution-lock.ps1",
         "review-task.ps1",
+        "assert-bug-diagnostic-evidence.ps1",
         "qa-task.ps1",
         "security-task.ps1",
         "update-task.ps1",

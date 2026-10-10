@@ -6,7 +6,7 @@ function Initialize-GroundedReviewFixture {
     foreach($directory in @('scripts','schemas','.codex/agents','docs/engineering/agent-reports')) {
         New-Item -ItemType Directory -Force -Path (Join-Path $Root $directory) | Out-Null
     }
-    foreach($name in @('task-execution-lock.ps1','review-grounding.ps1','validate-json-contract.ps1','review-task.ps1','update-task.ps1','advance-task.ps1')) {
+    foreach($name in @('task-execution-lock.ps1','review-grounding.ps1','validate-json-contract.ps1','review-task.ps1','assert-bug-diagnostic-evidence.ps1','validate-diagnostic-evidence.ps1','update-task.ps1','advance-task.ps1')) {
         Copy-Item (Join-Path $script:GroundedFixtureRepoRoot ('scripts/'+$name)) (Join-Path $Root ('scripts/'+$name)) -Force
     }
     Copy-Item (Join-Path $script:GroundedFixtureRepoRoot 'schemas/review-result.schema.json') (Join-Path $Root 'schemas/review-result.schema.json') -Force
