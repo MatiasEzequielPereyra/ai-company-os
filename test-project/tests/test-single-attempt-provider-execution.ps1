@@ -54,13 +54,15 @@ function Invoke-RestMethod {
         candidates=@([pscustomobject]@{finishReason=$(if($finish -eq 'length'){'MAX_TOKENS'}else{'STOP'});content=[pscustomobject]@{parts=@([pscustomobject]@{text=$content})}})
     }
 }
-function Invoke-Case($name,$overrides,$expectedCalls,$success) {
+function Invoke-Case($name,$overrides,$expectedCalls,$success,[bool]$existingOutput=$false,[bool]$preserveOutput=$false) {
     $global:AicoSingleAttemptTestSpy.calls=0
     $project=Join-Path $scratch ([guid]::NewGuid().ToString('N'))
     [IO.Directory]::CreateDirectory($project) | Out-Null
     [IO.Directory]::CreateDirectory((Join-Path $project '.codex')) | Out-Null
     [IO.File]::WriteAllText((Join-Path $project '.codex/provider-config.json'),'{"auto_order":["OpenRouter","Gemini","DeepSeek"],"allow_paid_fallback":true}')
     $output=Join-Path $project 'result.json'
+    $existingHash=$null
+    if($existingOutput){[IO.File]::WriteAllText($output,'CALLER_EXISTING_OUTPUT_SENTINEL');$existingHash=(Get-FileHash $output).Hash}
     $global:AicoSingleAttemptTestSpy.currentOutput=$output
     $args=@{Provider='OpenRouter';ProjectPath=$project;Prompt='fixture';Context='context';SchemaPath=$schema;OutputPath=$output;Model='fixture/model:free';ProviderEndpoint='fixture-endpoint';SingleAttempt=$true}
     foreach($key in $overrides.Keys){if($null -eq $overrides[$key]){$args.Remove($key)}else{$args[$key]=$overrides[$key]}}
@@ -68,7 +70,9 @@ function Invoke-Case($name,$overrides,$expectedCalls,$success) {
     try { & (Join-Path $repo 'scripts/provider-router.ps1') @args | Out-Null } catch {$accepted=$false;$message=$_.Exception.Message}
     Assert ($accepted -eq $success) "$name unexpected acceptance: $message"
     Assert ($global:AicoSingleAttemptTestSpy.calls -eq $expectedCalls) "$name transport count $($global:AicoSingleAttemptTestSpy.calls) expected $expectedCalls"
-    if(-not $accepted){Assert (-not (Test-Path $output)) "$name left consumable output"}
+    if($preserveOutput){Assert ((Test-Path $output) -and (Get-FileHash $output).Hash -eq $existingHash) "$name changed caller output before configuration validation"}
+    elseif(-not $accepted){Assert (-not (Test-Path $output)) "$name left consumable output"}
+    elseif($existingOutput){Assert ((Get-FileHash $output).Hash -ne $existingHash) "$name reused stale caller output"}
     $records=@(Get-ChildItem (Join-Path $project '.codex/runtime/single-attempt-executions') -Filter '*.json' -ErrorAction SilentlyContinue)
     if($args.SingleAttempt){Assert ($records.Count -eq 1) "$name missing unique execution record"}
     foreach($record in $records){
@@ -102,6 +106,10 @@ try {
     Invoke-Case 'missing model' @{Model=$null} 0 $false
     Invoke-Case 'dynamic free router' @{Model='openrouter/free'} 0 $false
     Invoke-Case 'missing endpoint' @{ProviderEndpoint=$null} 0 $false
+    Invoke-Case 'Auto preserves existing output' @{Provider='Auto'} 0 $false $true $true
+    Invoke-Case 'invalid model preserves existing output' @{Model='invalid model'} 0 $false $true $true
+    Invoke-Case 'missing endpoint preserves existing output' @{ProviderEndpoint=$null} 0 $false $true $true
+    Invoke-Case 'valid configuration clears stale output' @{} 1 $true $true
     Invoke-Case 'credential as model rejected' @{Model='SINGLE-ATTEMPT-SECRET'} 0 $false
     Invoke-Case 'credential as endpoint rejected' @{ProviderEndpoint='SINGLE-ATTEMPT-SECRET'} 0 $false
     Invoke-Case 'Codex unsupported' @{Provider='Codex';ProviderEndpoint=$null} 0 $false

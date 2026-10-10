@@ -19,14 +19,18 @@ param(
 
 $ErrorActionPreference = "Stop"
 $singleContext = $SingleAttemptContext
+$singleOutputCleanupAuthorized = $false
 if ($SingleAttempt) {
     . (Join-Path $PSScriptRoot 'single-attempt-execution.ps1')
     if ($null -eq $singleContext) { $singleContext = New-SingleAttemptExecution -ProjectPath $ProjectPath -Provider $Provider -Model $Model }
 }
 try {
 if ($SingleAttempt) {
-    if (Test-Path -LiteralPath $OutputPath -PathType Leaf) { Remove-Item -LiteralPath $OutputPath -Force }
     Assert-SingleAttemptConfiguration -Context $singleContext -Provider $Provider -Model $Model -ProviderEndpoint $ProviderEndpoint
+    # Invalid configuration has no authority to remove a caller's existing output.
+    # Once configuration is verified, stale output must be cleared before execution.
+    $singleOutputCleanupAuthorized = $true
+    if (Test-Path -LiteralPath $OutputPath -PathType Leaf) { Remove-Item -LiteralPath $OutputPath -Force }
 }
 if ($null -ne $SemanticValidationContext) {
     if ([string]::IsNullOrWhiteSpace($SemanticValidatorPath)) { throw 'REVIEW_GROUNDING_VALIDATOR_REQUIRED' }
@@ -894,7 +898,7 @@ throw ("All configured providers failed. " + ($errors -join " | "))
 }
 catch {
     if ($SingleAttempt -and $null -ne $singleContext) {
-        if (Test-Path -LiteralPath $OutputPath -PathType Leaf) { Remove-Item -LiteralPath $OutputPath -Force }
+        if ($singleOutputCleanupAuthorized -and (Test-Path -LiteralPath $OutputPath -PathType Leaf)) { Remove-Item -LiteralPath $OutputPath -Force }
         $category='preflight'
         if (Get-Command Get-ProviderErrorCategory -ErrorAction SilentlyContinue) { $category=Get-ProviderErrorCategory -Message $_.Exception.Message }
         if ((Get-SingleAttemptStartedCount -Context $singleContext) -eq 0) { $category='preflight' }
