@@ -10,45 +10,77 @@ Capture:
 - Environment
 - Reproduction steps
 
-## 2. Reproduce
+## 2. Freeze Reproduction Signal
 
-Confirm the bug.
+Define one concrete signal that demonstrates the reported defect.
 
-## 3. Diagnose
+For automated repairs the signal must be executable under the writable verification policy. Its identity is frozen before the first source mutation.
 
-Identify root cause.
+## 3. Reproduce
 
-Do not immediately patch symptoms without understanding the cause.
+Run the frozen signal before changing source and record the observed broken behavior.
 
-## 4. Plan
+If the defect cannot be reproduced, do not mutate source and do not claim a repair.
+
+## 4. Diagnose
+
+Create explicit falsifiable hypotheses.
+
+Each hypothesis must contain:
+
+- statement;
+- prediction;
+- falsifier;
+- experiment.
+
+Run the experiments and preserve receipts.
+
+Root cause may be marked CONFIRMED only when supported by concrete evidence.
+
+## 5. Plan
 
 Determine:
 
-- Fix
-- Affected components
-- Regression risks
-- Tests
+- REPAIR or WORKAROUND;
+- fix;
+- affected components;
+- regression risks;
+- tests.
 
-## 5. Implement
+A WORKAROUND must state residual risk and must not be silently represented as REPAIR.
 
-Apply the smallest appropriate fix.
+## 6. Implement
 
-## 6. Test
+Apply the smallest appropriate fix within the existing implementation authorization and isolated writable-worktree boundary.
 
-Add or update regression tests.
+## 7. Test
 
-## 7. Review
+Add or update regression protection and run the approved verification commands.
 
-Review implementation.
+## 8. Replay Original Signal
 
-## 8. QA
+Replay the exact frozen reproduction signal.
 
-Verify reproduction no longer occurs.
+For an automated REPAIR, the pre-fix and post-fix signal fingerprints must be identical and the post-fix observation must demonstrate that the original defect no longer occurs.
 
-## 9. Release
+## 9. Review
+
+Review implementation and diagnostic evidence independently.
+
+Reject unsupported confirmed causes, signal substitution, workaround-as-repair classification, or missing same-signal replay.
+
+## 10. QA
+
+Verify the original broken behavior as an acceptance criterion using the diagnostic evidence and independent QA evidence.
+
+## 11. Security
+
+Use the existing conditional Security gate when the change is security-relevant.
+
+## 12. Release
 
 Deploy through the standard release process.
 
-## 10. Close
+## 13. Close
 
-Document root cause and resolution.
+Document root cause, resolution classification, diagnostic artifact, regression evidence, and final verification.

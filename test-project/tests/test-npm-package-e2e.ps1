@@ -19,9 +19,6 @@ if ($null -eq $npmCommand) {
 $tempBase = if (-not [string]::IsNullOrWhiteSpace($env:RUNNER_TEMP)) {
     $env:RUNNER_TEMP
 }
-elseif (-not [string]::IsNullOrWhiteSpace($env:TEMP)) {
-    $env:TEMP
-}
 else {
     [System.IO.Path]::GetTempPath()
 }
@@ -52,6 +49,8 @@ $requiredProjectRuntimeArtifacts = @(
     "scripts\build-corrective-analysis-context.ps1",
     "scripts\validate-engineering-backlog-semantics.ps1",
     "scripts\validate-gate-result-semantics.ps1",
+    "scripts\validate-diagnostic-evidence.ps1",
+    "scripts\assert-bug-diagnostic-evidence.ps1",
     "scripts\providers\invoke-codex.ps1",
     "scripts\providers\invoke-ollama.ps1",
     "schemas\agent-result.schema.json",
@@ -72,7 +71,7 @@ function Assert-ManagedProjectRuntime {
         }
     }
 
-    foreach ($relative in @('scripts/providers/invoke-codex.ps1', 'schemas/agent-result.schema.json', 'schemas/engineering-plan-result.schema.json','scripts/review-grounding.ps1','scripts/single-attempt-execution.ps1','scripts/task-execution-lock.ps1','schemas/review-result.schema.json')) {
+    foreach ($relative in @('scripts/providers/invoke-codex.ps1', 'schemas/agent-result.schema.json', 'schemas/engineering-plan-result.schema.json','scripts/review-grounding.ps1','scripts/single-attempt-execution.ps1','scripts/task-execution-lock.ps1','schemas/review-result.schema.json','scripts/validate-diagnostic-evidence.ps1','scripts/assert-bug-diagnostic-evidence.ps1')) {
         $expectedHash = (Get-FileHash (Join-Path $repoRoot $relative) -Algorithm SHA256).Hash
         $installedHash = (Get-FileHash (Join-Path $ProjectPath $relative) -Algorithm SHA256).Hash
         if ($installedHash -ne $expectedHash) {
@@ -85,6 +84,14 @@ function Assert-ManagedProjectRuntime {
         if(@($ownership.managed_files)-cnotcontains $relative){throw "$Scenario missing grounding/barrier ownership: $relative"}
     }
     . (Join-Path $ProjectPath 'scripts/task-execution-lock.ps1')
+    foreach ($relative in @(
+        "scripts/validate-diagnostic-evidence.ps1",
+        "scripts/assert-bug-diagnostic-evidence.ps1"
+    )) {
+        if (@($ownership.managed_files) -notcontains $relative) {
+            throw "$Scenario missing diagnostic managed-file ownership: $relative"
+        }
+    }
     $shared=Enter-ProjectExecutionLease -ProjectPath $ProjectPath -Mode Shared
     try{
         $reason='';try{$unexpected=Enter-ProjectExecutionLease -ProjectPath $ProjectPath -Mode Maintenance;Exit-ProjectExecutionLease $unexpected}catch{$reason=$_.Exception.Message}
