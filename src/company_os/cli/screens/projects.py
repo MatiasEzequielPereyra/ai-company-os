@@ -47,6 +47,7 @@ class ProjectManagerScreen(Screen):
     BINDINGS = [
         Binding("escape", "back", "Back"),
         Binding("r", "refresh_projects", "Refresh"),
+        Binding("ctrl+l", "focus_project_path", "Project path"),
     ]
 
     def __init__(self) -> None:
@@ -106,6 +107,12 @@ class ProjectManagerScreen(Screen):
 
     def action_refresh_projects(self) -> None:
         self._refresh_projects()
+
+    def action_focus_project_path(self) -> None:
+        self.query_one(
+            "#project-path",
+            Input,
+        ).focus()
 
     def _refresh_projects(self) -> None:
         self.projects = (
