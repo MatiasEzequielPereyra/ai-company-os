@@ -5,6 +5,7 @@ import json
 import os
 import re
 import sqlite3
+import stat
 import uuid
 from collections.abc import Iterable as IterableABC, Mapping
 from contextlib import contextmanager
@@ -28,7 +29,7 @@ STATUSES = {
 _SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/ -]{0,159}$")
 _SECRET_PATTERNS = (
     (re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{8,}"), "Bearer [REDACTED]"),
-    (re.compile(r"(?i)\b(?:api[_-]?key|access[_-]?token|refresh[_-]?token|password|passwd|secret|credential)\b\s*[:=]\s*([^\s,;]+)"), "[REDACTED]=[REDACTED]"),
+    (re.compile(r'''(?ix)\b(?:[a-z][a-z0-9]*[_-])*(?:api[_-]?key|access[_-]?token|refresh[_-]?token|token|password|passwd|secret|credential)\b["']?\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;}]+)'''), "[REDACTED]=[REDACTED]"),
     (re.compile(r"\b(?:sk-[A-Za-z0-9_-]{12,}|gh[pousr]_[A-Za-z0-9_]{12,}|AKIA[A-Z0-9]{16})\b"), "[REDACTED]"),
     (re.compile(r"(?is)-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----.*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"), "[REDACTED PRIVATE KEY]"),
     (re.compile(r"(?i)(://[^:/\s]+:)[^@/\s]+(@)"), r"\1[REDACTED]\2"),
@@ -45,6 +46,10 @@ class InvalidIncidentError(ErrorIntelligenceError):
 
 class StoreCorruptError(ErrorIntelligenceError):
     """The database is invalid; it is preserved and never reset automatically."""
+
+
+class StoreBusyError(ErrorIntelligenceError):
+    """A competing SQLite transaction exceeded the local lock timeout."""
 
 
 @dataclass(frozen=True)
@@ -170,6 +175,16 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
+def _stored_text_list(payload: str, field: str, *, required: bool = False) -> tuple[str, ...]:
+    try:
+        items = json.loads(payload)
+        if not isinstance(items, list) or len(items) > MAX_EVIDENCE_ITEMS or (required and not items):
+            raise ValueError
+        return tuple(_clean_text(item, field, limit=MAX_EVIDENCE_LENGTH) for item in items)
+    except (ValueError, TypeError) as exc:
+        raise StoreCorruptError(f"Stored {field} is invalid; no record was accepted.") from exc
+
+
 def _normalized(value: str) -> str:
     value = value.casefold()
     value = re.sub(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", "<email>", value)
@@ -202,17 +217,25 @@ class ErrorIntelligenceStore:
 
     @staticmethod
     def _reject_reparse_path(path: Path) -> None:
+        def is_reparse(candidate: Path) -> bool:
+            try:
+                metadata = candidate.lstat()
+            except FileNotFoundError:
+                return False
+            return candidate.is_symlink() or bool(
+                getattr(metadata, "st_file_attributes", 0) & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+            )
+
         current = Path(path.anchor)
         for part in path.parts[1:-1]:
             current = current / part
-            is_junction = getattr(current, "is_junction", lambda: False)
-            if current.is_symlink() or is_junction():
+            if is_reparse(current):
                 raise InvalidIncidentError("Storage path traverses a symbolic link.")
-        is_junction = getattr(path, "is_junction", lambda: False)
-        if path.is_symlink() or is_junction() or (path.exists() and not path.is_file()):
+        if is_reparse(path) or (path.exists() and not path.is_file()):
             raise InvalidIncidentError("Storage path must be a regular file, not a link or directory.")
 
     def _connect(self) -> sqlite3.Connection:
+        self._reject_reparse_path(self.path)
         connection = sqlite3.connect(self.path, timeout=10, isolation_level=None)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA busy_timeout = 10000")
@@ -221,21 +244,28 @@ class ErrorIntelligenceStore:
 
     @contextmanager
     def _connection(self):
-        connection = self._connect()
+        connection = None
         try:
+            connection = self._connect()
             yield connection
+        except sqlite3.DatabaseError as exc:
+            code = getattr(exc, "sqlite_errorcode", 0) & 0xff
+            if code in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED}:
+                raise StoreBusyError("Incident store is busy; the operation was not accepted.") from exc
+            raise StoreCorruptError("Incident store is invalid; its contents were preserved.") from exc
         finally:
-            connection.close()
+            if connection is not None:
+                connection.close()
 
     def _initialize(self) -> None:
         with self._connection() as connection:
+            connection.execute("BEGIN IMMEDIATE")
             version = connection.execute("PRAGMA user_version").fetchone()[0]
             if version not in (0, SCHEMA_VERSION):
                 raise StoreCorruptError(f"Unsupported incident store schema version {version}.")
             if version == 0:
-                connection.executescript(
+                schema = (
                     """
-                    BEGIN IMMEDIATE;
                     CREATE TABLE store_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
                     CREATE TABLE incidents (
                         id TEXT PRIMARY KEY,
@@ -292,9 +322,13 @@ class ErrorIntelligenceStore:
                     CREATE INDEX recovery_action_idx ON recovery_attempts(incident_id, action_key, attempted_at);
                     INSERT INTO store_meta(key, value) VALUES ('installation_id', lower(hex(randomblob(16))));
                     PRAGMA user_version = 1;
-                    COMMIT;
                     """
                 )
+                for statement in schema.split(";"):
+                    if statement.strip():
+                        connection.execute(statement)
+            self._installation_id(connection)
+            connection.commit()
             check = connection.execute("PRAGMA quick_check").fetchone()
             if check is None or check[0] != "ok":
                 raise StoreCorruptError("Incident store integrity check failed; its contents were preserved.")
@@ -317,7 +351,15 @@ class ErrorIntelligenceStore:
             "SELECT evidence_json FROM occurrences WHERE incident_id=? ORDER BY observed_at ASC, rowid ASC",
             (incident_id,),
         ).fetchall()
-        original_evidence = tuple(json.loads(occurrences[0][0])) if occurrences else ()
+        if not occurrences or row["status"] not in STATUSES or row["root_cause_verified"] not in (0, 1):
+            raise StoreCorruptError("Stored incident metadata is invalid.")
+        original_evidence = _stored_text_list(occurrences[0][0], "evidence", required=True)
+        cause_evidence = _stored_text_list(row["root_cause_evidence_json"], "root cause evidence")
+        fix_evidence = _stored_text_list(row["fix_evidence_json"], "fix evidence")
+        if row["root_cause_verified"] and not (row["root_cause"] and row["root_cause_verified_by"] and cause_evidence):
+            raise StoreCorruptError("Stored root cause verification has insufficient evidence.")
+        if row["status"] == "FIX_VERIFIED" and not (row["verified_fix"] and row["fix_verified_by"] and fix_evidence):
+            raise StoreCorruptError("Stored correction verification has insufficient evidence.")
         return Incident(
             id=row["id"], installation_id=row["installation_id"], project_id=row["project_id"],
             task_id=row["task_id"], run_id=row["run_id"], component=row["component"],
@@ -325,11 +367,11 @@ class ErrorIntelligenceStore:
             summary=row["summary"], status=row["status"], created_at=row["created_at"],
             occurrence_count=len(occurrences), root_cause=row["root_cause"],
             root_cause_verified=bool(row["root_cause_verified"]),
-            root_cause_evidence=tuple(json.loads(row["root_cause_evidence_json"])),
+            root_cause_evidence=cause_evidence,
             proposed_fix=row["proposed_fix"],
-            contraindications=tuple(json.loads(row["contraindications_json"])),
+            contraindications=_stored_text_list(row["contraindications_json"], "contraindications"),
             verified_fix=row["verified_fix"],
-            fix_verified_by=row["fix_verified_by"], fix_evidence=tuple(json.loads(row["fix_evidence_json"])),
+            fix_verified_by=row["fix_verified_by"], fix_evidence=fix_evidence,
             evidence=original_evidence,
         )
 
@@ -399,9 +441,9 @@ class ErrorIntelligenceStore:
                     )
                     self._event(connection, incident_id, "OBSERVED", {"occurrence_id": occurrence_id, "summary": summary})
                 connection.commit()
-            except sqlite3.DatabaseError as exc:
+            except sqlite3.DatabaseError:
                 connection.rollback()
-                raise StoreCorruptError("Incident could not be recorded; no partial record was accepted.") from exc
+                raise
             return self._incident(connection, incident_id)
 
     def diagnose(self, incident_id: str, *, root_cause: str, evidence: Iterable[str]) -> Incident:
@@ -449,13 +491,13 @@ class ErrorIntelligenceStore:
         who = _clean_id(verified_by, "verified_by", required=True) or ""
         evidence = _clean_evidence(evidence)
         now = _utc_now()
-        action_key = hashlib.sha256(_normalized(action).encode()).hexdigest()
+        action_key = hashlib.sha256(action.encode()).hexdigest()
         with self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
             row = connection.execute("SELECT proposed_fix FROM incidents WHERE id=?", (incident_id,)).fetchone()
             if row is None:
                 raise InvalidIncidentError("Incident does not exist in this store.")
-            if not row[0] or _normalized(row[0]) != _normalized(action):
+            if not row[0] or row[0] != action:
                 raise InvalidIncidentError("The verified action must match a recorded fix proposal.")
             connection.execute(
                 "UPDATE incidents SET status='FIX_VERIFIED', verified_fix=?, fix_verified_by=?, fix_evidence_json=? WHERE id=?",
@@ -479,7 +521,7 @@ class ErrorIntelligenceStore:
         if not isinstance(outcome, str) or outcome not in {"FAILED", "INCONCLUSIVE"}:
             raise InvalidIncidentError("Recovery outcome must be FAILED or INCONCLUSIVE.")
         incident_id = _clean_text(incident_id, "incident_id", limit=64)
-        key = hashlib.sha256(_normalized(action).encode()).hexdigest()
+        key = hashlib.sha256(action.encode()).hexdigest()
         now = _utc_now()
         with self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -531,7 +573,7 @@ class ErrorIntelligenceStore:
                 (incident_id,),
             ).fetchall()
             return [
-                IncidentObservation(row["id"], row["observed_at"], row["task_id"], row["run_id"], tuple(json.loads(row["evidence_json"])))
+                IncidentObservation(row["id"], row["observed_at"], row["task_id"], row["run_id"], _stored_text_list(row["evidence_json"], "evidence", required=True))
                 for row in rows
             ]
 
@@ -599,8 +641,8 @@ class ErrorIntelligenceStore:
                 incident = self._incident(connection, row["id"])
                 if verified_solutions_only and incident.verified_fix:
                     failures = connection.execute(
-                        "SELECT outcome FROM recovery_attempts WHERE incident_id=? AND action_key=? ORDER BY attempted_at DESC, rowid DESC LIMIT 1",
-                        (incident.id, hashlib.sha256(_normalized(incident.verified_fix).encode()).hexdigest()),
+                        "SELECT outcome FROM recovery_attempts WHERE incident_id=? AND action=? ORDER BY attempted_at DESC, rowid DESC LIMIT 1",
+                        (incident.id, incident.verified_fix),
                     ).fetchone()
                     if failures and failures[0] != "SUCCESS":
                         continue

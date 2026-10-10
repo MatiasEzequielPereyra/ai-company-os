@@ -13,6 +13,7 @@ from .store import (
     IncidentObservation,
     InvalidIncidentError,
     StoreCorruptError,
+    StoreBusyError,
     default_store_path,
 )
 
@@ -24,5 +25,6 @@ __all__ = [
     "IncidentObservation",
     "InvalidIncidentError",
     "StoreCorruptError",
+    "StoreBusyError",
     "default_store_path",
 ]
