@@ -14,6 +14,7 @@ $supported = ($Event.event_type -eq 'runtime_failure') -or
         ($Event.to_status -eq 'READY' -and $Event.from_status -in @('REVIEW','QA','SECURITY'))))
 if (-not $supported) { return }
 $process = $null
+$captureStage = 'configuration'
 $previousPythonPath = $env:PYTHONPATH
 try {
     $engineRoot = Split-Path $PSScriptRoot -Parent
@@ -47,16 +48,20 @@ try {
     $start.StandardErrorEncoding = New-Object System.Text.UTF8Encoding($false)
     $process = New-Object System.Diagnostics.Process
     $process.StartInfo = $start
+    $captureStage = 'start'
     if (-not $process.Start()) { throw 'START_FAILED' }
     $stdout = $process.StandardOutput.ReadToEndAsync()
     $stderr = $process.StandardError.ReadToEndAsync()
     $bytes = [Text.Encoding]::UTF8.GetBytes(($Event | ConvertTo-Json -Depth 10 -Compress))
+    $captureStage = 'stdin'
     $write = $process.StandardInput.BaseStream.WriteAsync($bytes, 0, $bytes.Length)
     if (-not $write.Wait(1000)) { throw 'STDIN_TIMEOUT' }
     $process.StandardInput.Close()
+    $captureStage = 'execution'
     if (-not $process.WaitForExit(3500)) { throw 'CAPTURE_TIMEOUT' }
     if ($process.ExitCode -ne 0) { throw 'CAPTURE_FAILED' }
     if (-not $stdout.Wait(100) -or -not $stderr.Wait(100)) { throw 'CAPTURE_TIMEOUT' }
+    $captureStage = 'result'
     $result = $stdout.Result | ConvertFrom-Json
     if ($null -eq $result -or $result.status -eq 'unavailable') { throw 'CAPTURE_UNAVAILABLE' }
     if ($null -ne $result -and [string]$result.incident_id -match '^[a-zA-Z0-9_-]{1,80}$') {
@@ -69,7 +74,7 @@ try {
     }
 }
 catch {
-    Write-Host 'ERROR_INTELLIGENCE_CAPTURE_UNAVAILABLE' -ForegroundColor DarkYellow
+    Write-Host ('ERROR_INTELLIGENCE_CAPTURE_UNAVAILABLE; stage=' + $captureStage + '; exception=' + $_.Exception.GetType().Name) -ForegroundColor DarkYellow
 }
 finally {
     $env:PYTHONPATH = $previousPythonPath
