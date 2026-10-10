@@ -32,6 +32,7 @@ $tests = @(
     "test-review-grounding-intake-preservation.ps1",
     "test-review-grounding-primitives.ps1",
     "test-review-grounding-evidence.ps1",
+    "test-review-grounding-citation-spans.ps1",
     "test-review-grounding-real-incident.ps1",
     "test-review-grounding-materialization.ps1",
     "test-analysis-context-budget.ps1",

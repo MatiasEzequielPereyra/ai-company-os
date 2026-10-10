@@ -284,6 +284,7 @@ if (-not (Get-Module -Name AicoReviewGroundingV1)) {
             [void]$builder.AppendLine("Manifest digest: $($entry.ManifestDigest)")
             [void]$builder.AppendLine($entry.ManifestJson)
             [void]$builder.AppendLine('Assess every exact required_output_id once. SATISFIED requires exact primary line citations. NOT_APPLICABLE is allowed only for conditional=true and requires rationale, primary facts citing applicability, and conditional_authority equal to the exact required_output_id from the source declaration. UNSATISFIED missing-output judgments may have empty evidence. Genuine quotes establish provenance, not semantic sufficiency. Never trust result claims as delivered proof.')
+            [void]$builder.AppendLine('Citation spans v1: omit byte_start and byte_end for an exact whole-line range. For a bounded fragment, supply BOTH byte_start and byte_end as zero-based, half-open UTF-8 byte offsets into the normalized source lines start_line..end_line joined by LF, without line labels. Offsets must lie on character boundaries; excerpt must equal those exact bytes. Maximum 16 lines, 2048 UTF-8 bytes per excerpt and 32768 total remain enforced. artifact_id is bound to this immutable snapshot, task, path and source hashes; never infer offsets by searching for the quote. Cite only fragments that actually demonstrate the assessed obligation and explain that connection in rationale; an unrelated genuine fragment does not satisfy an obligation.')
             return $builder.ToString()
         }
         function Assert-ReviewDrift([object]$Entry) {
@@ -321,6 +322,8 @@ if (-not (Get-Module -Name AicoReviewGroundingV1)) {
                 $citations=@($row.evidence)
                 if($citations.Count-gt 3 -or ($row.status-cne 'UNSATISFIED'-and $citations.Count-eq 0)){throw 'REVIEW_GROUNDING_CITATION_REQUIRED: positive or conditional judgment needs primary evidence.'}
                 foreach($citation in $citations){
+                    foreach($property in $citation.PSObject.Properties.Name){if($property-cnotin @('artifact_id','start_line','end_line','excerpt','byte_start','byte_end')){throw 'REVIEW_GROUNDING_LOCATOR: unsupported citation property.'}}
+                    if($citation.excerpt-isnot [string]){throw 'REVIEW_GROUNDING_LOCATOR: excerpt must be a string.'}
                     $matches=@($sources|Where-Object{$_.kind-eq 'primary'-and $_.artifact_id-ceq $citation.artifact_id})
                     if($matches.Count-ne 1){throw 'REVIEW_GROUNDING_PRIMARY_AUTHORITY: citation does not name supplied primary evidence.'}
                     $source=$matches[0]
@@ -334,7 +337,18 @@ if (-not (Get-Module -Name AicoReviewGroundingV1)) {
                     $bytes=[Text.Encoding]::UTF8.GetByteCount([string]$citation.excerpt);$totalBytes+=$bytes
                     if($start-lt 1 -or $end-lt $start -or $end-gt $source.line_count -or $end-$start+1-gt 16 -or $bytes-gt 2048 -or $totalBytes-gt 32768){throw 'REVIEW_GROUNDING_LOCATOR_LIMIT: citation bounds or excerpt limits exceeded.'}
                     $lines=$source.text.Split([char]10);$exact=$lines[($start-1)..($end-1)]-join "`n"
-                    if(-not [string]::Equals($exact,[string]$citation.excerpt,[StringComparison]::Ordinal)){throw 'REVIEW_GROUNDING_EXCERPT_MISMATCH: quote differs at exact normalized line range.'}
+                    $hasByteStart=$null-ne $citation.PSObject.Properties['byte_start'];$hasByteEnd=$null-ne $citation.PSObject.Properties['byte_end']
+                    if($hasByteStart-ne $hasByteEnd){throw 'REVIEW_GROUNDING_LOCATOR: byte_start and byte_end must be supplied together.'}
+                    if($hasByteStart){
+                        if(($citation.byte_start-isnot [int] -and $citation.byte_start-isnot [long]) -or ($citation.byte_end-isnot [int] -and $citation.byte_end-isnot [long])){throw 'REVIEW_GROUNDING_LOCATOR: byte offsets must be integers.'}
+                        $byteStart=[long]$citation.byte_start;$byteEnd=[long]$citation.byte_end
+                        $rangeBytes=[Text.Encoding]::UTF8.GetBytes($exact)
+                        if($byteStart-lt 0 -or $byteEnd-le $byteStart -or $byteEnd-gt $rangeBytes.LongLength -or $byteEnd-$byteStart-gt 2048){throw 'REVIEW_GROUNDING_LOCATOR_LIMIT: byte span bounds or excerpt limits exceeded.'}
+                        # A strict decoder rejects both a leading continuation byte and an incomplete final character.
+                        $strictUtf8=New-Object Text.UTF8Encoding($false,$true)
+                        try{$exact=$strictUtf8.GetString($rangeBytes,[int]$byteStart,[int]($byteEnd-$byteStart))}catch{throw 'REVIEW_GROUNDING_UTF8_BOUNDARY: byte span splits a UTF-8 character.'}
+                    }
+                    if(-not [string]::Equals($exact,[string]$citation.excerpt,[StringComparison]::Ordinal)){throw 'REVIEW_GROUNDING_EXCERPT_MISMATCH: quote differs at exact normalized source locator.'}
                 }
             }
             if($Result.recommendation-ceq 'APPROVE'){
