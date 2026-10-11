@@ -14,11 +14,13 @@ param(
     [object]$SemanticValidationContext,
     [switch]$SingleAttempt,
     [string]$ProviderEndpoint = "",
+    [string]$TaskId = "",
     [object]$SingleAttemptContext
 )
 
 $ErrorActionPreference = "Stop"
 $singleContext = $SingleAttemptContext
+$operationalRunId = [Guid]::NewGuid().ToString('N')
 $singleOutputCleanupAuthorized = $false
 if ($SingleAttempt) {
     . (Join-Path $PSScriptRoot 'single-attempt-execution.ps1')
@@ -399,6 +401,10 @@ function Write-ProviderEvent {
     if (-not (Test-Path $metricsWriterPath)) { return }
 
     try {
+        $Event.role = $Role
+        $Event.workload = $Workload
+        $Event.task_id = $TaskId
+        $Event.run_id = $operationalRunId
         & $metricsWriterPath -ProjectPath $root -Event $Event | Out-Null
     }
     catch {

@@ -61,7 +61,13 @@ if ($PSBoundParameters.ContainsKey("AuthMode") -and -not $PSBoundParameters.Cont
 
 $root = (Resolve-Path $ProjectPath).Path
 . (Join-Path $PSScriptRoot "task-execution-lock.ps1")
-$writerScope = Enter-TaskExecutionScope -ProjectPath $root -Id $Id -Operation "ANALYSIS" -Lease $TaskExecutionLease
+try {
+    $writerScope = Enter-TaskExecutionScope -ProjectPath $root -Id $Id -Operation "ANALYSIS" -Lease $TaskExecutionLease
+}
+catch {
+    try { & (Join-Path $PSScriptRoot "error-intelligence.ps1") -ProjectPath $ProjectPath -Event @{ event_type = "runtime_failure"; component = "agent-runner"; task_id = $Id; error_category = "runtime" } | Out-Null } catch { Write-Host "ERROR_INTELLIGENCE_CAPTURE_UNAVAILABLE" -ForegroundColor DarkYellow }
+    throw
+}
 $taskExecutionLock = $writerScope.Lease
 try {
 $tasksPath = Join-Path $root "tasks"
@@ -313,6 +319,7 @@ $routerArgs = @{
     Role = $owner
     Workload = "analysis"
     SemanticValidatorPath = $analysisValidatorPath
+    TaskId = $Id
 }
 
 $execution = & $routerPath @routerArgs
@@ -467,6 +474,10 @@ Write-Host "$Id - $owner - $($result.outcome)"
 Write-Host "Provider: $providerUsed"
 Write-Host "Model: $modelUsed"
 Write-Host "Report: $changed"
+}
+catch {
+    try { & (Join-Path $PSScriptRoot "write-operational-event.ps1") -ProjectPath $root -Event @{ event_type = "runtime_failure"; component = "agent-runner"; task_id = $Id; error_category = "runtime" } | Out-Null } catch { Write-Host "ERROR_INTELLIGENCE_CAPTURE_UNAVAILABLE" -ForegroundColor DarkYellow }
+    throw
 }
 finally {
     Exit-TaskExecutionScope -Scope $writerScope

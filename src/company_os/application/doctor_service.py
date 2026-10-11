@@ -101,6 +101,25 @@ class DoctorService:
             project
         )
 
-        return analyze_snapshot(
-            snapshot
-        )
+        findings = analyze_snapshot(snapshot)
+        from company_os.error_intelligence.runtime import lookup
+
+        memory = lookup(project, limit=5)
+        status = memory["status"]
+        if status == "available" and memory.get("matches"):
+            findings.append(Diagnostic(
+                severity=DiagnosticSeverity.INFO,
+                code="ERROR_INTELLIGENCE_HISTORY",
+                message=(f"Historical incidents available: {len(memory['matches'])} (up to 5). "
+                         f"Verified historical recommendations: {len(memory.get('verified_solutions', []))}. "
+                         "Use aico errors to inspect; history does not authorize recovery."),
+                source="Error Intelligence",
+            ))
+        elif status == "unavailable":
+            findings.append(Diagnostic(
+                severity=DiagnosticSeverity.WARNING,
+                code="ERROR_INTELLIGENCE_UNAVAILABLE",
+                message="Local incident memory is unavailable; runtime and task validation remain independent.",
+                source="Error Intelligence",
+            ))
+        return findings

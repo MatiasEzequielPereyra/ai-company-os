@@ -41,6 +41,7 @@ $requiredProjectRuntimeArtifacts = @(
     ".codex\writable-policy.json",
     "scripts\provider-router.ps1",
     "scripts\single-attempt-execution.ps1",
+    "scripts\error-intelligence.ps1",
         "scripts\review-grounding.ps1",
         "scripts\task-execution-lock.ps1",
         "schemas\review-result.schema.json",
@@ -71,7 +72,7 @@ function Assert-ManagedProjectRuntime {
         }
     }
 
-    foreach ($relative in @('scripts/providers/invoke-codex.ps1', 'schemas/agent-result.schema.json', 'schemas/engineering-plan-result.schema.json','scripts/review-grounding.ps1','scripts/single-attempt-execution.ps1','scripts/task-execution-lock.ps1','schemas/review-result.schema.json','scripts/validate-diagnostic-evidence.ps1','scripts/assert-bug-diagnostic-evidence.ps1')) {
+    foreach ($relative in @('scripts/error-intelligence.ps1','scripts/providers/invoke-codex.ps1', 'schemas/agent-result.schema.json', 'schemas/engineering-plan-result.schema.json','scripts/review-grounding.ps1','scripts/single-attempt-execution.ps1','scripts/task-execution-lock.ps1','schemas/review-result.schema.json','scripts/validate-diagnostic-evidence.ps1','scripts/assert-bug-diagnostic-evidence.ps1')) {
         $expectedHash = (Get-FileHash (Join-Path $repoRoot $relative) -Algorithm SHA256).Hash
         $installedHash = (Get-FileHash (Join-Path $ProjectPath $relative) -Algorithm SHA256).Hash
         if ($installedHash -ne $expectedHash) {
@@ -80,7 +81,7 @@ function Assert-ManagedProjectRuntime {
     }
 
     $ownership=Get-Content (Join-Path $ProjectPath '.codex/managed-files.json') -Raw -Encoding UTF8|ConvertFrom-Json
-    foreach($relative in @('scripts/review-grounding.ps1','scripts/single-attempt-execution.ps1','scripts/task-execution-lock.ps1','schemas/review-result.schema.json')){
+    foreach($relative in @('scripts/error-intelligence.ps1','scripts/review-grounding.ps1','scripts/single-attempt-execution.ps1','scripts/task-execution-lock.ps1','schemas/review-result.schema.json')){
         if(@($ownership.managed_files)-cnotcontains $relative){throw "$Scenario missing grounding/barrier ownership: $relative"}
     }
     . (Join-Path $ProjectPath 'scripts/task-execution-lock.ps1')
@@ -113,6 +114,7 @@ $oldHome = $env:HOME
 $oldUserProfile = $env:USERPROFILE
 $oldPythonPath = $env:PYTHONPATH
 $oldNodePath = $env:NODE_PATH
+$oldMemoryPath = $env:AICO_ERROR_INTELLIGENCE_PATH
 
 New-Item -ItemType Directory -Force -Path $installRoot | Out-Null
 New-Item -ItemType Directory -Force -Path $homeRoot | Out-Null
@@ -375,12 +377,59 @@ try {
         throw "Managed-files manifest lost the provider-router runtime ownership entry."
     }
 
+    # Exercise the installed Python -> project PS writer -> SQLite -> installed CLI path.
+    # No provider is invoked; this is a synthetic operational failure observation.
+    $env:AICO_ERROR_INTELLIGENCE_PATH = Join-Path $e2eRoot 'incident-memory.sqlite3'
+    $memoryProducer = Join-Path $e2eRoot 'memory-producer.ps1'
+    [IO.File]::WriteAllText($memoryProducer, @'
+param([string]$ProjectPath)
+& (Join-Path $ProjectPath 'scripts/write-operational-event.ps1') -ProjectPath $ProjectPath -Event @{event_type='runtime_failure';component='agent-runner';task_id='AICO-001';error_category='runtime'} | Out-Null
+'@)
+    $memoryHarness = Join-Path $e2eRoot 'memory-harness.py'
+    [IO.File]::WriteAllText($memoryHarness, @'
+import subprocess, sys
+from company_os.application.provider_service import ProviderService
+from company_os.error_intelligence.runtime import lookup
+root, producer, host = sys.argv[1:]
+environment = ProviderService().build_execution_environment(root, 'Ollama')
+for _ in range(2):
+    subprocess.run([host, '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', producer, '-ProjectPath', root], env=environment, check=True)
+history = lookup(root)
+assert len(history['matches']) == 1, history
+assert history['matches'][0]['occurrence_count'] == 2, history
+assert history['matches'][0]['task_id'] == 'AICO-001', history
+assert history['action_authorized'] is False
+'@)
+    $installedPython = Join-Path $installedPackageRoot '.aico-python/Scripts/python.exe'
+    if (-not (Test-Path $installedPython)) { $installedPython = Join-Path $installedPackageRoot '.aico-python/bin/python' }
+    $memoryHost = (Get-Command powershell.exe -ErrorAction SilentlyContinue).Source
+    if (-not $memoryHost) { $memoryHost = (Get-Command pwsh -ErrorAction Stop).Source }
+    & $installedPython $memoryHarness $projectPath $memoryProducer $memoryHost
+    if ($LASTEXITCODE -ne 0) { throw 'Installed automatic Error Intelligence capture failed.' }
+    $memoryJson = & $aicoCommand errors --project $projectPath --json
+    if ($LASTEXITCODE -ne 0) { throw 'Installed aico errors command failed.' }
+    $memory = $memoryJson | ConvertFrom-Json
+    if (@($memory.matches).Count -ne 1 -or $memory.matches[0].occurrence_count -ne 2) { throw 'Installed CLI did not read the automatic incident history.' }
+
+    $pythonMarker = Join-Path $installedPackageRoot '.aico-python/.aico-installed-runtime-sha256'
+    $beforeRuntimeFingerprint = (Get-Content $pythonMarker -Raw).Trim()
+    # Existing version markers must not keep old Python when source changes at 0.1.1.
+    Add-Content -LiteralPath (Join-Path $installedPackageRoot 'src/company_os/error_intelligence/runtime.py') -Value '# deterministic same-version upgrade probe'
+    & $aicoCommand errors --project $projectPath --json | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Same-version Python runtime refresh failed.' }
+    $afterRuntimeFingerprint = (Get-Content $pythonMarker -Raw).Trim()
+    if ($afterRuntimeFingerprint -eq $beforeRuntimeFingerprint) { throw 'Package retained stale Python runtime fingerprint.' }
+    # Verify the installed module bytes rather than trusting the marker alone.
+    & $installedPython -c "from company_os.error_intelligence import runtime; from pathlib import Path; assert 'deterministic same-version upgrade probe' in Path(runtime.__file__).read_text(encoding='utf-8')"
+    if ($LASTEXITCODE -ne 0) { throw 'Updated fingerprint concealed a stale installed Python module.' }
+
     Write-Host (
         "PASS: installed tarball validated aico new and aico install ., " +
         "bootstrapped Python/TUI, preserved user files, and safely updated managed runtime."
     ) -ForegroundColor Green
 }
 finally {
+    $env:AICO_ERROR_INTELLIGENCE_PATH = $oldMemoryPath
     $env:HOME = $oldHome
     $env:USERPROFILE = $oldUserProfile
     $env:PYTHONPATH = $oldPythonPath

@@ -1,8 +1,7 @@
-"""Isolated, local error history for explicit operator use.
+"""Local incident history with an automatic, bounded runtime observation bridge.
 
-This package is deliberately not imported by the runtime, agents, or workflow
-services. Stored incident content is untrusted data and must not be treated as
-policy or instructions.
+Stored content is untrusted data. Runtime observations do not authorize actions,
+verify corrections, or replace current task and evidence validation.
 """
 
 from .store import (

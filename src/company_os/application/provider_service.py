@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import shutil
 import json
 from pathlib import Path
@@ -245,6 +246,10 @@ class ProviderService:
         providers, models, local profiles and writable policy.
         """
         environment = self._clean_environment()
+        # Bind the project PowerShell bridge to this installed Python runtime.
+        # These values contain no credentials and do not change provider routing.
+        environment["AICO_ERROR_INTELLIGENCE_PYTHON"] = sys.executable
+        environment["AICO_ERROR_INTELLIGENCE_MODULE_ROOT"] = str(Path(__file__).resolve().parents[2])
         if workload not in {"general", "analysis", "gate", "writable"}:
             return environment
         requested = provider.strip().casefold()

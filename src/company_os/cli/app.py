@@ -463,6 +463,29 @@ def doctor_command(
             findings
         )
 
+@app.command("errors")
+def errors_command(
+    project: Path | None = typer.Option(None, "--project", "-p"),
+    component: str | None = typer.Option(None, "--component"),
+    as_json: bool = typer.Option(False, "--json"),
+) -> None:
+    """Show automatically captured incidents and historical recommendations."""
+    from company_os.error_intelligence.runtime import lookup
+
+    root = ConfigService().resolve_project(project)
+    result = lookup(root, component=component)
+    if as_json:
+        typer.echo(json.dumps(result, indent=2, ensure_ascii=False))
+        return
+    typer.echo(f"Error Intelligence: {result['status']}")
+    typer.echo("Historical information; recommendations require verification before use.")
+    for match in result.get("matches", []):
+        incident = match.get("incident", match)
+        typer.echo(json.dumps(incident, ensure_ascii=False))
+    for solution in result.get("verified_solutions", []):
+        typer.echo("Verified historical recommendation: " + json.dumps(solution, ensure_ascii=False))
+
+
 @app.command("tasks")
 def tasks_command(
     project: Path | None = typer.Option(

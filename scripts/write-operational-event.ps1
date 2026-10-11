@@ -41,4 +41,6 @@ finally {
     $mutex.Dispose()
 }
 
+try { & (Join-Path $PSScriptRoot "error-intelligence.ps1") -ProjectPath $root -Event $payload } catch { Write-Host "ERROR_INTELLIGENCE_CAPTURE_UNAVAILABLE" -ForegroundColor DarkYellow }
+
 return $path

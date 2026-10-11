@@ -2,8 +2,32 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const os = require("node:os");
+const { runtimeFingerprint } = require("./bootstrap");
 
 const root = path.resolve(__dirname, "..");
+
+test("Python runtime fingerprint detects source changes at the same package version", () => {
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "aico-runtime-fingerprint-"));
+  try {
+    fs.mkdirSync(path.join(fixture, "src", "company_os"), { recursive: true });
+    fs.writeFileSync(path.join(fixture, "pyproject.toml"), 'version="0.1.1"');
+    const modulePath = path.join(fixture, "src", "company_os", "runtime.py");
+    fs.writeFileSync(modulePath, "value = 1\n");
+    const original = runtimeFingerprint(fixture);
+    assert.equal(runtimeFingerprint(fixture), original);
+    fs.writeFileSync(modulePath, "value = 2\n");
+    assert.notEqual(runtimeFingerprint(fixture), original);
+    fs.writeFileSync(modulePath, "value = 1\n");
+    fs.mkdirSync(path.join(fixture, "src", "company_os", "__pycache__"));
+    fs.writeFileSync(path.join(fixture, "src", "company_os", "__pycache__", "runtime.pyc"), "cache");
+    assert.equal(runtimeFingerprint(fixture), original);
+    fs.writeFileSync(path.join(fixture, "pyproject.toml"), 'version="0.1.2"');
+    assert.notEqual(runtimeFingerprint(fixture), original);
+  } finally {
+    fs.rmSync(fixture, { recursive: true });
+  }
+});
 
 test("npm package contains required AI Company OS runtime", () => {
   const required = [
@@ -14,6 +38,8 @@ test("npm package contains required AI Company OS runtime", () => {
     "scripts/update-runtime.ps1",
     "scripts/provider-router.ps1",
     "scripts/single-attempt-execution.ps1",
+    "scripts/error-intelligence.ps1",
+    "src/company_os/error_intelligence/runtime.py",
     "scripts/validate-engineering-plan-result.ps1",
     "scripts/validate-analysis-result-semantics.ps1",
     "scripts/build-corrective-analysis-context.ps1",
