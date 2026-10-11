@@ -58,6 +58,23 @@ They return only a structured writable change set matching `schemas/writable-cha
 
 `Provider Auto` is restricted to configured free writable models. Explicit paid model selection, if ever allowed by a caller, must never be introduced as an automatic fallback.
 
+## Diagnostic evidence boundary
+
+For canonical BUG implementation work, writable execution must establish diagnostic evidence before the first source mutation.
+
+- the provider proposes a command-based reproduction signal and falsifiable hypotheses;
+- the runtime validates every diagnostic command through the same local safe-command parser used for verification;
+- the runtime executes the frozen reproduction signal before source writes and records the actual exit/result receipt;
+- a runtime-generated SHA-256 fingerprint identifies the frozen signal;
+- hypothesis experiments execute before mutation and their receipts determine whether a claimed confirmed cause is supportable;
+- REPAIR requires an evidence-backed confirmed cause; WORKAROUND requires explicit residual risk;
+- after application and regression verification, the runtime replays the exact frozen signal;
+- the durable artifact is recorded under `docs/engineering/diagnostics/<TASK>-diagnostic-v1.json` and is control-plane evidence, not provider-authored source.
+
+If the original signal does not reproduce the defect, source mutation is refused. If the exact post-fix replay still demonstrates the defect, source changes are restored and the failed attempt remains diagnostic evidence for corrective work.
+
+Manual/procedure evidence may be represented by the diagnostic evidence schema, but automated writable source mutation requires trusted executable/runtime evidence.
+
 ## Local application boundary
 
 The runtime applies validated `WRITE`/`DELETE` operations locally.

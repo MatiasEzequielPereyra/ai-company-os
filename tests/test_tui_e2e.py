@@ -136,6 +136,7 @@ Priority: P1
 Owner: frontend
 Workflow phase: PLANNING
 Workflow profile: standard
+Type: FEATURE
 Work request: WR-E2E
 Work kind: IMPLEMENTATION
 Updated: 2026-09-24T00:00:00Z

@@ -1,0 +1,176 @@
+{
+  "type": "object",
+  "properties": {
+    "schema_version": { "type": "string", "enum": ["1"] },
+    "task_id": { "type": "string", "minLength": 1 },
+    "workflow": { "type": "string", "enum": ["BUG"] },
+    "state": {
+      "type": "string",
+      "enum": ["NOT_REPRODUCED", "PREFLIGHT", "FAILED_VERIFICATION", "FAILED_POST_FIX", "COMPLETE"]
+    },
+    "reproduction": {
+      "type": "object",
+      "properties": {
+        "kind": { "type": "string", "enum": ["COMMAND", "PROCEDURE", "MANUAL_OBSERVATION"] },
+        "command": { "type": "string" },
+        "working_directory": { "type": "string" },
+        "broken_when": { "type": "string", "enum": ["EXIT_ZERO", "EXIT_NONZERO", "MANUAL"] },
+        "signal_fingerprint": { "type": "string", "minLength": 64, "maxLength": 64 },
+        "pre_fix": {
+          "type": "object",
+          "properties": {
+            "observation": {
+              "type": "string",
+              "enum": ["BROKEN_OBSERVED", "NOT_REPRODUCED", "MANUAL_EVIDENCE"]
+            },
+            "receipt_ref": { "type": "string" }
+          },
+          "required": ["observation", "receipt_ref"],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "kind",
+        "command",
+        "working_directory",
+        "broken_when",
+        "signal_fingerprint",
+        "pre_fix"
+      ],
+      "additionalProperties": false
+    },
+    "receipts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "phase": {
+            "type": "string",
+            "enum": ["PRE_FIX", "HYPOTHESIS", "REGRESSION", "POST_FIX", "MANUAL"]
+          },
+          "source": {
+            "type": "string",
+            "enum": ["RUNTIME", "REPOSITORY", "USER_SUPPLIED", "MANUAL"]
+          },
+          "command": { "type": "string" },
+          "exit_code": { "type": ["integer", "null"] },
+          "output_sha256": { "type": "string" },
+          "output_excerpt": { "type": "string", "maxLength": 4000 }
+        },
+        "required": [
+          "id",
+          "phase",
+          "source",
+          "command",
+          "exit_code",
+          "output_sha256",
+          "output_excerpt"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "attempts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "index": { "type": "integer", "minimum": 1 },
+          "corrective": { "type": "boolean" },
+          "hypotheses": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string", "minLength": 1 },
+                "statement": { "type": "string", "minLength": 1 },
+                "prediction": { "type": "string", "minLength": 1 },
+                "falsifier": { "type": "string", "minLength": 1 },
+                "experiment_command": { "type": "string", "minLength": 1 },
+                "supported_when": { "type": "string", "enum": ["EXIT_ZERO", "EXIT_NONZERO"] },
+                "result": { "type": "string", "enum": ["SUPPORTED", "FALSIFIED", "INCONCLUSIVE"] },
+                "receipt_ref": { "type": "string", "minLength": 1 }
+              },
+              "required": [
+                "id",
+                "statement",
+                "prediction",
+                "falsifier",
+                "experiment_command",
+                "supported_when",
+                "result",
+                "receipt_ref"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "cause": {
+            "type": "object",
+            "properties": {
+              "status": { "type": "string", "enum": ["CONFIRMED", "UNCONFIRMED"] },
+              "statement": { "type": "string", "minLength": 1 },
+              "hypothesis_refs": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 }
+              },
+              "receipt_refs": {
+                "type": "array",
+                "items": { "type": "string", "minLength": 1 }
+              }
+            },
+            "required": ["status", "statement", "hypothesis_refs", "receipt_refs"],
+            "additionalProperties": false
+          },
+          "resolution": {
+            "type": "object",
+            "properties": {
+              "classification": { "type": "string", "enum": ["REPAIR", "WORKAROUND"] },
+              "summary": { "type": "string", "minLength": 1 },
+              "residual_risk": { "type": "string" }
+            },
+            "required": ["classification", "summary", "residual_risk"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["index", "corrective", "hypotheses", "cause", "resolution"],
+        "additionalProperties": false
+      }
+    },
+    "regression": {
+      "type": "object",
+      "properties": {
+        "receipt_refs": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "required": ["receipt_refs"],
+      "additionalProperties": false
+    },
+    "post_fix_replay": {
+      "type": "object",
+      "properties": {
+        "signal_fingerprint": { "type": "string", "minLength": 64, "maxLength": 64 },
+        "observation": {
+          "type": "string",
+          "enum": ["NOT_RUN", "FIXED_OBSERVED", "BROKEN_OBSERVED", "MANUAL_EVIDENCE"]
+        },
+        "receipt_ref": { "type": "string" }
+      },
+      "required": ["signal_fingerprint", "observation", "receipt_ref"],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "task_id",
+    "workflow",
+    "state",
+    "reproduction",
+    "receipts",
+    "attempts",
+    "regression",
+    "post_fix_replay"
+  ],
+  "additionalProperties": false
+}

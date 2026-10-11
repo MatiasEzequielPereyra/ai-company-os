@@ -8,7 +8,7 @@ if ($null -eq (Get-Command git -ErrorAction SilentlyContinue)) {
 }
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$tempParent = Join-Path $env:TEMP ("aico-writable-auth-" + [Guid]::NewGuid().ToString("N"))
+$tempParent = Join-Path ([IO.Path]::GetTempPath()) ("aico-writable-auth-" + [Guid]::NewGuid().ToString("N"))
 $fixtureRepo = Join-Path $tempParent "repo"
 $workspaces = Join-Path $tempParent "worktrees"
 $savedOpenRouter = $env:OPENROUTER_API_KEY
@@ -33,7 +33,8 @@ function New-FixtureTask {
         "Status: $Status",
         "Priority: P1",
         "Owner: frontend",
-        "Workflow phase: IMPLEMENTATION"
+        "Workflow phase: IMPLEMENTATION",
+        "Type: FEATURE"
     )
 
     if (-not [string]::IsNullOrWhiteSpace($WorkKind)) {
@@ -174,7 +175,7 @@ function Assert-WritableRejected {
 }
 
 try {
-    foreach ($dir in @("scripts","tasks","schemas",".codex",".codex\agents","docs\engineering\dispatch","docs\engineering\reviews","src")) {
+    foreach ($dir in @("scripts","tasks","schemas",".codex",".codex\agents","docs\engineering\dispatch","docs\engineering\reviews","docs\engineering\work-requests","src")) {
         New-Item -ItemType Directory -Force -Path (Join-Path $fixtureRepo $dir) | Out-Null
     }
 
@@ -232,6 +233,7 @@ $payload = @{
     Write-NoBom (Join-Path $fixtureRepo ".codex\provider-config.json") $providerConfig
     Write-NoBom (Join-Path $fixtureRepo ".codex\agents\frontend.md") "Frontend fixture role."
     Write-NoBom (Join-Path $fixtureRepo "AGENTS.md") "Writable authorization fixture."
+    Write-NoBom (Join-Path $fixtureRepo "docs\engineering\work-requests\WR-AUTH.md") "# Work Request`nType: FEATURE`n"
 
     New-FixtureTask -Id "AICO-101" -Status "READY"  -WorkKind "PLANNING"       -FileName "planning-ready.txt"
     New-FixtureTask -Id "AICO-102" -Status "ACTIVE" -WorkKind "PLANNING"       -FileName "planning-active.txt"

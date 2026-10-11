@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory = $true)][string]$JsonPath,
     [Parameter(Mandatory = $true)][string]$SchemaPath
 )
@@ -35,6 +35,11 @@ function Assert-SchemaNode {
                 }
             }
             "string" {
+                # ConvertFrom-Json may materialize ISO-8601 JSON strings as DateTime values.
+                # They are still JSON strings; preserve strict checks for every other type.
+                if ($Value -is [datetime]) {
+                    $Value = $Value.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", [Globalization.CultureInfo]::InvariantCulture)
+                }
                 if ($Value -isnot [string]) { throw "$Path must be a string." }
             }
             "integer" {
@@ -122,7 +127,16 @@ function Assert-SchemaNode {
 if (-not (Test-Path $JsonPath -PathType Leaf)) { throw "JSON file not found: $JsonPath" }
 if (-not (Test-Path $SchemaPath -PathType Leaf)) { throw "Schema file not found: $SchemaPath" }
 
-try { $value = Get-Content $JsonPath -Raw -Encoding UTF8 | ConvertFrom-Json }
+try {
+    $jsonText = Get-Content $JsonPath -Raw -Encoding UTF8
+    $wrappedJsonText = '{"__aico_json_contract_value":' + $jsonText + '}'
+    if ((Get-Command ConvertFrom-Json).Parameters.ContainsKey("DateKind")) {
+        $parsedRoot = $wrappedJsonText | ConvertFrom-Json -DateKind String
+    } else {
+        $parsedRoot = $wrappedJsonText | ConvertFrom-Json
+    }
+    $value = $parsedRoot.PSObject.Properties["__aico_json_contract_value"].Value
+}
 catch { throw "Invalid JSON in $($JsonPath): $($_.Exception.Message)" }
 
 try { $schema = Get-Content $SchemaPath -Raw -Encoding UTF8 | ConvertFrom-Json }
