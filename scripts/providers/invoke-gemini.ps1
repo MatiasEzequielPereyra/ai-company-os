@@ -6,10 +6,18 @@ param(
     [string]$Model = "gemini-3.5-flash-lite",
     [switch]$SingleAttempt,
     [object]$SingleAttemptContext,
-    [ValidateRange(1,3600)][int]$TimeoutSeconds = 240
+    [ValidateRange(1,3600)][int]$TimeoutSeconds = 240,
+    [Nullable[int]]$GeminiMaxOutputTokens = $null,
+    [string]$GeminiThinkingLevel = ""
 )
 
 $ErrorActionPreference = "Stop"
+$geminiBudgetSpecified = $PSBoundParameters.ContainsKey('GeminiMaxOutputTokens') -or $PSBoundParameters.ContainsKey('GeminiThinkingLevel')
+if ($geminiBudgetSpecified) {
+    . (Join-Path (Split-Path $PSScriptRoot -Parent) 'single-attempt-execution.ps1')
+    Assert-GeminiBudgetConfiguration -OptionsSpecified $true -SingleAttempt ([bool]$SingleAttempt) -Provider 'Gemini' -Model $Model -MaxOutputTokens $GeminiMaxOutputTokens -ThinkingLevel $GeminiThinkingLevel
+}
+$effectiveMaxOutputTokens = if ($geminiBudgetSpecified) { [int]$GeminiMaxOutputTokens } else { 12000 }
 
 if ($SingleAttempt) {
     . (Join-Path (Split-Path $PSScriptRoot -Parent) 'single-attempt-execution.ps1')
@@ -137,10 +145,11 @@ $geminiSchema = ConvertTo-GeminiCompatibleSchema -Value $schema
 $fullPrompt = $Prompt + [Environment]::NewLine + [Environment]::NewLine + "# Repository Context Pack" + [Environment]::NewLine + $Context
 
 $generationConfig = @{
-    maxOutputTokens = 12000
+    maxOutputTokens = $effectiveMaxOutputTokens
     responseMimeType = "application/json"
     responseJsonSchema = $geminiSchema
 }
+if ($geminiBudgetSpecified) { $generationConfig.thinkingConfig = @{ thinkingLevel = $GeminiThinkingLevel } }
 
 # Gemini 3.5+ retired temperature/top_p/top_k. Keep the legacy sampling
 # override only for older model families so existing configurations do not
@@ -173,7 +182,7 @@ $maxAttempts = if ($SingleAttempt) { 1 } else { 3 }
 
 for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
     try {
-        if ($SingleAttempt) { Set-SingleAttemptProviderMetadata -Context $SingleAttemptContext -Result ([PSCustomObject]@{ OutputLimit=12000 }) }
+        if ($SingleAttempt) { Set-SingleAttemptProviderMetadata -Context $SingleAttemptContext -Result ([PSCustomObject]@{ OutputLimit=$effectiveMaxOutputTokens; ThinkingLevel=$(if ($geminiBudgetSpecified) { $GeminiThinkingLevel } else { $null }) }) }
         if ($SingleAttempt) { Start-SingleAttemptProviderCall -Context $SingleAttemptContext -Provider 'Gemini' -Model $Model }
         $singleTransport = @{}
         if ($SingleAttempt) { $singleTransport.MaximumRedirection = 0; if ($PSVersionTable.PSVersion.Major -ge 7) { $singleTransport.MaximumRetryCount = 0 } }
@@ -212,11 +221,12 @@ if ($SingleAttempt) {
     $actualModel = if ($null -ne $response.modelVersion) { [string]$response.modelVersion } else { $null }
     $finish = if ($null -ne $response.candidates -and $response.candidates.Count -gt 0) { [string]$response.candidates[0].finishReason } else { $null }
     $usage = $response.usageMetadata
-    $meta = [PSCustomObject]@{ Model=$actualModel; FinishReason=$finish; OutputLimit=12000; PromptTokens=$usage.promptTokenCount; CompletionTokens=$usage.candidatesTokenCount; TotalTokens=$usage.totalTokenCount; ReasoningTokens=$usage.thoughtsTokenCount }
+    $meta = [PSCustomObject]@{ Model=$actualModel; FinishReason=$finish; OutputLimit=$effectiveMaxOutputTokens; PromptTokens=$usage.promptTokenCount; CompletionTokens=$usage.candidatesTokenCount; TotalTokens=$usage.totalTokenCount; ReasoningTokens=$usage.thoughtsTokenCount }
     Set-SingleAttemptProviderMetadata -Context $SingleAttemptContext -Result $meta
     if ($finish -in @('SAFETY','RECITATION','BLOCKLIST','PROHIBITED_CONTENT','SPII') -or ($null -ne $response.promptFeedback.blockReason -and -not [string]::IsNullOrWhiteSpace([string]$response.promptFeedback.blockReason))) { throw 'SINGLE_ATTEMPT_PROVIDER_REFUSAL' }
     if ($finish -ceq 'MAX_TOKENS') { throw 'SINGLE_ATTEMPT_TRUNCATED_RESPONSE' }
     if ($finish -cne 'STOP') { throw 'SINGLE_ATTEMPT_INCOMPLETE_RESPONSE' }
+    if ($geminiBudgetSpecified -and [string]::IsNullOrWhiteSpace($actualModel)) { throw 'SINGLE_ATTEMPT_MODEL_IDENTITY_MISSING' }
     if ($null -ne $actualModel -and $actualModel -cne $Model) { throw 'SINGLE_ATTEMPT_MODEL_MISMATCH' }
 }
 

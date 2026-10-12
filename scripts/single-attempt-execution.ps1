@@ -58,6 +58,18 @@ if (-not (Get-Module AicoSingleAttemptV1)) {
             $record.Configured=$true
             Save-Record $record
         }
+        function Assert-GeminiBudgetConfiguration {
+            param([bool]$OptionsSpecified,[bool]$SingleAttempt,[string]$Provider,[string]$Model,
+                [Nullable[int]]$MaxOutputTokens,[string]$ThinkingLevel)
+            if (-not $OptionsSpecified) { return }
+            # Explicit budget controls are scoped to the verified Gemini contract.
+            # This check has no filesystem effects and must precede output cleanup.
+            if (-not $SingleAttempt -or $Provider -cne 'Gemini') { throw 'GEMINI_BUDGET_SINGLE_ATTEMPT_REQUIRED' }
+            if ($Model -cne 'gemini-3.8-flash') { throw 'GEMINI_BUDGET_MODEL_UNSUPPORTED' }
+            if ($null -eq $MaxOutputTokens -or [string]::IsNullOrWhiteSpace($ThinkingLevel)) { throw 'GEMINI_BUDGET_OPTIONS_REQUIRED' }
+            if ($MaxOutputTokens -lt 1 -or $MaxOutputTokens -gt 65536) { throw 'GEMINI_BUDGET_OUTPUT_LIMIT_INVALID' }
+            if ($ThinkingLevel -cne 'low') { throw 'GEMINI_BUDGET_THINKING_UNSUPPORTED' }
+        }
         function Start-SingleAttemptProviderCall {
             param([object]$Context,[string]$Provider,[string]$Model)
             $record = Get-Registered $Context
@@ -78,6 +90,7 @@ if (-not (Get-Module AicoSingleAttemptV1)) {
             }
             if (-not (Test-SecretIdentifier $Result.FinishReason) -and $null -ne $Result.FinishReason -and [string]$Result.FinishReason -match '^[A-Za-z0-9_-]{1,64}$') { $record.Public.finish_reason=[string]$Result.FinishReason }
             if (-not (Test-SecretIdentifier $Result.Model) -and $null -ne $Result.Model -and [string]$Result.Model -match '^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,255}$') { $record.Public['reported_model']=[string]$Result.Model }
+            if ($null -ne $Result.PSObject.Properties['ThinkingLevel'] -and $Result.ThinkingLevel -ceq 'low') { $record.Public['thinking_level']='low' }
             Save-Record $record
         }
         function Get-SingleAttemptStartedCount {
@@ -100,7 +113,7 @@ if (-not (Get-Module AicoSingleAttemptV1)) {
             $record.Public.duration_ms=[long]$record.Clock.ElapsedMilliseconds
             Save-Record $record
         }
-        Export-ModuleMember -Function Get-SingleAttemptStartedCount,Assert-SingleAttemptConfiguration,New-SingleAttemptExecution,Start-SingleAttemptProviderCall,Set-SingleAttemptProviderMetadata,Complete-SingleAttemptExecution
+        Export-ModuleMember -Function Get-SingleAttemptStartedCount,Assert-SingleAttemptConfiguration,Assert-GeminiBudgetConfiguration,New-SingleAttemptExecution,Start-SingleAttemptProviderCall,Set-SingleAttemptProviderMetadata,Complete-SingleAttemptExecution
     }
     Import-Module $module -Global
 }

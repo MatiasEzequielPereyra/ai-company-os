@@ -43,6 +43,7 @@ $tests = @(
     "test-openrouter-truncation.ps1",
     "test-provider-context-budget.ps1",
     "test-gemini-compatibility.ps1",
+    "test-gemini-single-attempt-budget.ps1",
     "test-gemini-engineering-plan-compatibility.ps1",
     "test-ollama-structured-reliability.ps1",
     "test-review-gate-provider-reliability.ps1",

@@ -15,10 +15,17 @@ param(
     [switch]$SingleAttempt,
     [string]$ProviderEndpoint = "",
     [string]$TaskId = "",
-    [object]$SingleAttemptContext
+    [object]$SingleAttemptContext,
+    [Nullable[int]]$GeminiMaxOutputTokens = $null,
+    [string]$GeminiThinkingLevel = ""
 )
 
 $ErrorActionPreference = "Stop"
+$geminiBudgetSpecified = $PSBoundParameters.ContainsKey('GeminiMaxOutputTokens') -or $PSBoundParameters.ContainsKey('GeminiThinkingLevel')
+if ($geminiBudgetSpecified) {
+    . (Join-Path $PSScriptRoot 'single-attempt-execution.ps1')
+    Assert-GeminiBudgetConfiguration -OptionsSpecified $true -SingleAttempt ([bool]$SingleAttempt) -Provider $Provider -Model $Model -MaxOutputTokens $GeminiMaxOutputTokens -ThinkingLevel $GeminiThinkingLevel
+}
 $singleContext = $SingleAttemptContext
 $operationalRunId = [Guid]::NewGuid().ToString('N')
 $singleOutputCleanupAuthorized = $false
@@ -713,6 +720,10 @@ foreach ($candidate in $attempts) {
             $singleAdapterArgs.SingleAttemptContext = $singleContext
             if ($candidateName -eq 'OpenRouter') { $singleAdapterArgs.ProviderEndpoint = $ProviderEndpoint }
         }
+        if ($geminiBudgetSpecified) {
+            $singleAdapterArgs.GeminiMaxOutputTokens = $GeminiMaxOutputTokens
+            $singleAdapterArgs.GeminiThinkingLevel = $GeminiThinkingLevel
+        }
         $invokeCandidate = {
             param([string]$EffectivePrompt)
 
@@ -911,7 +922,7 @@ catch {
         elseif ($_.Exception.Message -match 'TRUNCATED_RESPONSE') { $category='truncated' }
         elseif ($_.Exception.Message -match 'INCOMPLETE_RESPONSE') { $category='incomplete_response' }
         elseif ($_.Exception.Message -match 'PROVIDER_REFUSAL') { $category='provider_rejected' }
-        elseif ($_.Exception.Message -match 'MODEL_MISMATCH') { $category='identity' }
+        elseif ($_.Exception.Message -match 'MODEL_(MISMATCH|IDENTITY_MISSING)') { $category='identity' }
         elseif ($category -eq 'unknown') { $category='local_validation' }
         Complete-SingleAttemptExecution -Context $singleContext -ValidationStatus INVALID -ErrorCategory $category
         # Preserve the typed failure but never expose credential values.
