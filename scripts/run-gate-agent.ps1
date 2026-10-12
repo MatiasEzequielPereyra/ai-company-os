@@ -13,10 +13,17 @@ param(
 
     [string]$Model = "",
     [switch]$SingleAttempt,
-    [string]$ProviderEndpoint = ""
+    [string]$ProviderEndpoint = "",
+    [Nullable[int]]$GeminiMaxOutputTokens = $null,
+    [string]$GeminiThinkingLevel = ""
 )
 
 $ErrorActionPreference = "Stop"
+$geminiBudgetSpecified = $PSBoundParameters.ContainsKey('GeminiMaxOutputTokens') -or $PSBoundParameters.ContainsKey('GeminiThinkingLevel')
+if ($geminiBudgetSpecified) {
+    . (Join-Path $PSScriptRoot 'single-attempt-execution.ps1')
+    Assert-GeminiBudgetConfiguration -OptionsSpecified $true -SingleAttempt ([bool]$SingleAttempt) -Provider $Provider -Model $Model -MaxOutputTokens $GeminiMaxOutputTokens -ThinkingLevel $GeminiThinkingLevel
+}
 
 function Read-Field {
     param([string]$Content,[string]$Key)
@@ -545,6 +552,10 @@ if ($SingleAttempt) {
     $routerArgs.SingleAttempt = $true
     $routerArgs.ProviderEndpoint = $ProviderEndpoint
     $routerArgs.SingleAttemptContext = $singleAttemptContext
+}
+if ($geminiBudgetSpecified) {
+    $routerArgs.GeminiMaxOutputTokens = $GeminiMaxOutputTokens
+    $routerArgs.GeminiThinkingLevel = $GeminiThinkingLevel
 }
 if ($null -ne $groundingContext) { $routerArgs.SemanticValidationContext=$groundingContext }
 $execution = & $routerPath @routerArgs
