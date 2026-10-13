@@ -70,6 +70,16 @@ IDEA
 → SECURITY
 → RELEASE
 → DONE
+
+## Automatic Skill Selection Policy
+
+For substantive engineering work, identify available skills in `.agents/skills/` that fit the task's actual intent; do not select by keywords alone. By default, select `bug` for bug diagnosis and repair, `architecture` for technical design, `feature` for feature implementation, `code-review` for code or PR audits, and `release` for release preparation.
+
+Read a relevant `SKILL.md` before applying its process. Use multiple skills only when each contributes, do not load all skills by default, and avoid rereading skill content already available in context without need. Follow each applied skill's specific instructions. Do not invent skills or claim to have applied a skill that was not consulted. If no skill fits, continue with the standard workflow.
+
+Skills do not replace or weaken implementation authorization, role boundaries, Review Grounding, QA and Security, task execution locks, Git protection, verifiable evidence, or the existing task sequencing and delegation rules.
+
+For substantive handoffs, include `SKILLS_SELECTED`, `SKILLS_APPLIED`, `SKILL_SOURCES`, and `SKILL_SELECTION_REASON`, and list only skills actually used.
 # Agent Organization
 
 This repository uses Codex multi-agent roles.
