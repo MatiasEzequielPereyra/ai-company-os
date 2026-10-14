@@ -8,6 +8,8 @@ if ($null -eq (Get-Command git -ErrorAction SilentlyContinue)) {
 }
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+. (Join-Path $repoRoot "scripts\writable-authorization-guard.ps1")
+. (Join-Path $repoRoot "scripts\task-execution-lock.ps1")
 $tempParent = Join-Path ([IO.Path]::GetTempPath()) ("aico-writable-auth-" + [Guid]::NewGuid().ToString("N"))
 $fixtureRepo = Join-Path $tempParent "repo"
 $workspaces = Join-Path $tempParent "worktrees"
@@ -20,12 +22,42 @@ function Write-NoBom {
     [System.IO.File]::WriteAllText($Path,$Value,(New-Object System.Text.UTF8Encoding($false)))
 }
 
+function Set-TestAuthorizationReceipt {
+    param(
+        [string]$TaskId,
+        [string]$ImplementationAuthorization = "AUTHORIZED",
+        [string]$AuthorizedTask = "",
+        [string]$AuthorizedOperation = "WRITABLE",
+        [string]$ScopeFingerprint = "",
+        [string]$ExpiresAt = "2099-01-01T00:00:00Z"
+    )
+
+    $taskContent = Get-Content (Join-Path $fixtureRepo ("tasks\" + $TaskId + ".md")) -Raw -Encoding UTF8
+    if ([string]::IsNullOrWhiteSpace($ScopeFingerprint)) { $ScopeFingerprint = Get-WritableScopeFingerprint -TaskContent $taskContent }
+    if ([string]::IsNullOrWhiteSpace($AuthorizedTask)) { $AuthorizedTask = $TaskId }
+    $objectiveMatch = [regex]::Match($taskContent, "(?ms)^## Objective\s*\r?\n\s*\r?\n(.+?)(?:\r?\n\r?\n---|\r?\n\r?\n##|\z)")
+    $request = @(
+        "# WR-AUTH - Work Request", "", "## Metadata", "", "ID: WR-AUTH", "Type: FEATURE",
+        "Requested by: explicit fixture requester", "Created: $((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))", "Status: PLANNING", "", "## Authorization Receipt", "",
+        "Requested action: Implement task $TaskId - $($objectiveMatch.Groups[1].Value.Trim())",
+        "Permitted scope: WRITABLE_IMPLEMENTATION",
+        "Implementation authorization: $ImplementationAuthorization",
+        "Authorized task: $AuthorizedTask",
+        "Authorized operation: $AuthorizedOperation",
+        "Authorized scope SHA-256: $ScopeFingerprint",
+        "Authorization expires (UTC): $ExpiresAt",
+        "Retained restrictions: No real provider calls; mock transport only."
+    ) -join [Environment]::NewLine
+    Write-NoBom (Join-Path $fixtureRepo "docs\engineering\work-requests\WR-AUTH.md") $request
+}
+
 function New-FixtureTask {
     param(
         [string]$Id,
         [string]$Status,
         [AllowEmptyString()][string]$WorkKind,
-        [string]$FileName
+        [string]$FileName,
+        [string[]]$Dependencies = @()
     )
 
     $metadata = @(
@@ -72,7 +104,7 @@ function New-FixtureTask {
         "",
         "## Dependencies",
         "",
-        "-",
+        $(if ($Dependencies.Count -gt 0) { $Dependencies | ForEach-Object { "- " + $_ } } else { "-" }),
         "",
         "---",
         "",
@@ -181,7 +213,7 @@ try {
 
     New-Item -ItemType Directory -Force -Path $workspaces | Out-Null
 
-    foreach ($name in @("run-writable-agent.ps1","task-execution-lock.ps1","new-agent-workspace.ps1","advance-task.ps1","update-task.ps1","submit-task-result.ps1","build-agent-context.ps1","build-corrective-analysis-context.ps1","resolve-writable-required-files.ps1")) {
+    foreach ($name in @("run-writable-agent.ps1","writable-authorization-guard.ps1","task-execution-lock.ps1","new-agent-workspace.ps1","advance-task.ps1","update-task.ps1","submit-task-result.ps1","build-agent-context.ps1","build-corrective-analysis-context.ps1","resolve-writable-required-files.ps1")) {
         Copy-Item (Join-Path $repoRoot ("scripts\" + $name)) (Join-Path $fixtureRepo ("scripts\" + $name)) -Force
     }
 
@@ -233,12 +265,26 @@ $payload = @{
     Write-NoBom (Join-Path $fixtureRepo ".codex\provider-config.json") $providerConfig
     Write-NoBom (Join-Path $fixtureRepo ".codex\agents\frontend.md") "Frontend fixture role."
     Write-NoBom (Join-Path $fixtureRepo "AGENTS.md") "Writable authorization fixture."
-    Write-NoBom (Join-Path $fixtureRepo "docs\engineering\work-requests\WR-AUTH.md") "# Work Request`nType: FEATURE`n"
+    Write-NoBom (Join-Path $fixtureRepo "docs\engineering\work-requests\WR-AUTH.md") "# WR-AUTH - Work Request`n`nID: WR-AUTH`nType: FEATURE`nRequested by: fixture requester`n`n## Authorization Receipt`n`nRequested action: Not authorized.`nPermitted scope: planning only.`nImplementation authorization: NOT_INFERRED`nAuthorized task: NONE`nAuthorized operation: NONE`nAuthorized scope SHA-256: NONE`nAuthorization expires (UTC): NONE`nRetained restrictions: Implementation is not authorized."
 
     New-FixtureTask -Id "AICO-101" -Status "READY"  -WorkKind "PLANNING"       -FileName "planning-ready.txt"
     New-FixtureTask -Id "AICO-102" -Status "ACTIVE" -WorkKind "PLANNING"       -FileName "planning-active.txt"
     New-FixtureTask -Id "AICO-103" -Status "READY"  -WorkKind ""               -FileName "missing-kind.txt"
     New-FixtureTask -Id "AICO-104" -Status "READY"  -WorkKind "IMPLEMENTATION" -FileName "implementation.txt"
+    New-FixtureTask -Id "AICO-105" -Status "READY"  -WorkKind "IMPLEMENTATION" -FileName "no-receipt-ready.txt"
+    New-FixtureTask -Id "AICO-106" -Status "ACTIVE" -WorkKind "IMPLEMENTATION" -FileName "no-receipt-active.txt"
+    New-FixtureTask -Id "AICO-107" -Status "READY"  -WorkKind "IMPLEMENTATION" -FileName "wrong-task.txt"
+    New-FixtureTask -Id "AICO-108" -Status "READY"  -WorkKind "IMPLEMENTATION" -FileName "wrong-operation.txt"
+    New-FixtureTask -Id "AICO-109" -Status "READY"  -WorkKind "IMPLEMENTATION" -FileName "expired-receipt.txt"
+    New-FixtureTask -Id "AICO-110" -Status "READY"  -WorkKind "IMPLEMENTATION" -FileName "dependency-unsatisfied.txt" -Dependencies @("AICO-111")
+    New-FixtureTask -Id "AICO-111" -Status "READY"  -WorkKind "IMPLEMENTATION" -FileName "dependency.txt"
+    New-FixtureTask -Id "AICO-112" -Status "READY"  -WorkKind "IMPLEMENTATION" -FileName "unregistered-worktree.txt"
+    New-FixtureTask -Id "AICO-113" -Status "READY"  -WorkKind "IMPLEMENTATION" -FileName "race-dependency.txt" -Dependencies @("AICO-114")
+    New-FixtureTask -Id "AICO-114" -Status "DONE"   -WorkKind "IMPLEMENTATION" -FileName "race-dependency-done.txt"
+    New-FixtureTask -Id "AICO-115" -Status "READY"  -WorkKind "IMPLEMENTATION" -FileName "ambiguous-receipt.txt"
+    Set-TestAuthorizationReceipt -TaskId "AICO-104"
+    $sentinelEvidencePath = Join-Path $fixtureRepo "docs\engineering\writable-evidence\P0-preservation-sentinel.md"
+    Write-NoBom $sentinelEvidencePath "preserve pre-existing evidence byte-for-byte"
 
     & git -C $fixtureRepo init | Out-Null
     & git -C $fixtureRepo config user.email "aico-test@example.invalid"
@@ -264,6 +310,91 @@ $payload = @{
     Assert-WritableRejected -Id "AICO-101" -Workspace $planningReadyWorkspace
     Assert-WritableRejected -Id "AICO-102" -Workspace $planningActiveWorkspace
     Assert-WritableRejected -Id "AICO-103" -Workspace $missingKindWorkspace
+
+    function Assert-AuthorizationBlocked {
+        param([string]$TaskId,[string]$Workspace)
+        $taskPath = Join-Path $fixtureRepo ("tasks\" + $TaskId + ".md")
+        $beforeContent = Get-Content $taskPath -Raw -Encoding UTF8
+        $beforeObjective = [regex]::Match($beforeContent,"(?ms)^## Objective\s*\r?\n\s*\r?\n(.+?)(?:\r?\n\r?\n---|\r?\n\r?\n##|\z)").Groups[1].Value
+        $sentinelBefore = [System.IO.File]::ReadAllBytes($sentinelEvidencePath)
+        $providerMarker = Join-Path $fixtureRepo ".codex\provider-called.txt"
+        Remove-Item $providerMarker -Force -ErrorAction SilentlyContinue
+        $rejected = $false
+        try { & (Join-Path $fixtureRepo "scripts\run-writable-agent.ps1") -Id $TaskId -ProjectPath $fixtureRepo -WorkspacePath $Workspace -Provider Auto }
+        catch { if ($_.Exception.Message -match "BLOCKED") { $rejected = $true } else { throw } }
+        if (-not $rejected) {
+            if ($TaskId -eq "AICO-113" -and -not (Test-Path (Join-Path $fixtureRepo ".codex\context-mutation-ran.txt"))) { throw "Race fixture did not run between guard checks." }
+            throw "${TaskId}: writable authorization/dependency guard did not reject."
+        }
+        if ((Get-TaskStatus -Id $TaskId) -ne "BLOCKED") { throw "${TaskId}: rejected task was not BLOCKED." }
+        if (Test-Path $providerMarker) { throw "${TaskId}: provider was called before the guard rejected execution." }
+        $afterContent = Get-Content $taskPath -Raw -Encoding UTF8
+        $afterObjective = [regex]::Match($afterContent,"(?ms)^## Objective\s*\r?\n\s*\r?\n(.+?)(?:\r?\n\r?\n---|\r?\n\r?\n##|\z)").Groups[1].Value
+        if ($beforeObjective -cne $afterObjective) { throw "${TaskId}: rejection changed task scope." }
+        if (-not [System.Linq.Enumerable]::SequenceEqual([byte[]]$sentinelBefore,[System.IO.File]::ReadAllBytes($sentinelEvidencePath))) {
+            throw "${TaskId}: rejection modified pre-existing evidence."
+        }
+        foreach ($artifact in @(
+            (Join-Path $fixtureRepo ("docs\engineering\writable-evidence\" + $TaskId + ".md")),
+            (Join-Path $fixtureRepo ("docs\engineering\results\" + $TaskId + "-result-001.md"))
+        )) { if (Test-Path $artifact) { throw "${TaskId}: rejection created completion output." } }
+        if ($Workspace -and (Test-Path (Join-Path $Workspace ".git"))) {
+            $workspaceChanges = @(& git -C $Workspace status --porcelain)
+            if ($workspaceChanges.Count -gt 0) { throw "${TaskId}: rejection changed the worktree." }
+        }
+        $lease = Enter-TaskExecutionLock -ProjectPath $fixtureRepo -Id $TaskId -Operation "LOCK-RELEASE-CHECK"
+        Exit-TaskExecutionLock -Lock $lease
+    }
+
+    foreach ($taskId in @("AICO-105","AICO-106","AICO-107","AICO-108","AICO-109","AICO-110","AICO-113","AICO-115")) {
+        $workspace = Join-Path $workspaces $taskId
+        & git -C $fixtureRepo worktree add -b ("aico/" + $taskId.ToLowerInvariant()) $workspace HEAD | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "Unable to create test worktree for $taskId." }
+    }
+
+    Set-TestAuthorizationReceipt -TaskId "AICO-105" -ImplementationAuthorization "NOT_INFERRED"
+    Assert-AuthorizationBlocked -TaskId "AICO-105" -Workspace (Join-Path $workspaces "AICO-105")
+    Set-TestAuthorizationReceipt -TaskId "AICO-106" -ImplementationAuthorization "NOT_INFERRED"
+    Assert-AuthorizationBlocked -TaskId "AICO-106" -Workspace (Join-Path $workspaces "AICO-106")
+    Set-TestAuthorizationReceipt -TaskId "AICO-107" -AuthorizedTask "AICO-999"
+    Assert-AuthorizationBlocked -TaskId "AICO-107" -Workspace (Join-Path $workspaces "AICO-107")
+    Set-TestAuthorizationReceipt -TaskId "AICO-108" -ScopeFingerprint ("0" * 64)
+    Assert-AuthorizationBlocked -TaskId "AICO-108" -Workspace (Join-Path $workspaces "AICO-108")
+    Set-TestAuthorizationReceipt -TaskId "AICO-109" -ExpiresAt "2000-01-01T00:00:00Z"
+    Assert-AuthorizationBlocked -TaskId "AICO-109" -Workspace (Join-Path $workspaces "AICO-109")
+    Set-TestAuthorizationReceipt -TaskId "AICO-115"
+    $ambiguousReceiptPath = Join-Path $fixtureRepo "docs\engineering\work-requests\WR-AUTH.md"
+    Write-NoBom $ambiguousReceiptPath ((Get-Content $ambiguousReceiptPath -Raw -Encoding UTF8) + "`nAuthorized task: AICO-999")
+    Assert-AuthorizationBlocked -TaskId "AICO-115" -Workspace (Join-Path $workspaces "AICO-115")
+    Set-TestAuthorizationReceipt -TaskId "AICO-110"
+    Assert-AuthorizationBlocked -TaskId "AICO-110" -Workspace (Join-Path $workspaces "AICO-110")
+    Set-TestAuthorizationReceipt -TaskId "AICO-112"
+    $unregisteredWorkspace = Join-Path $tempParent "unregistered-AICO-112"
+    New-Item -ItemType Directory -Force -Path $unregisteredWorkspace | Out-Null
+    Assert-AuthorizationBlocked -TaskId "AICO-112" -Workspace $unregisteredWorkspace
+
+    Set-TestAuthorizationReceipt -TaskId "AICO-113"
+    $mutatingContextBuilder = @'
+param([string]$ProjectPath,[string]$Id,[string]$Owner,[int]$MaxChars,[string[]]$RequiredFiles)
+if ($env:AICO_TEST_MUTATE_TASK_STATE -eq "1") {
+    $racingTaskPath = Join-Path $env:AICO_TEST_PROJECT "tasks\AICO-113.md"
+    [IO.File]::WriteAllText((Join-Path $env:AICO_TEST_PROJECT ".codex\context-mutation-ran.txt"),"ran")
+    $racingTaskContent = Get-Content $racingTaskPath -Raw -Encoding UTF8
+    $racingTaskContent = $racingTaskContent.Replace("Status: ACTIVE", "Status: READY")
+    [IO.File]::WriteAllText($racingTaskPath,$racingTaskContent,(New-Object Text.UTF8Encoding($false)))
+}
+"mock context"
+'@
+    Write-NoBom (Join-Path $fixtureRepo "scripts\build-agent-context.ps1") $mutatingContextBuilder
+    $env:AICO_TEST_PROJECT = $fixtureRepo
+    $env:AICO_TEST_MUTATE_TASK_STATE = "1"
+    try {
+        Assert-AuthorizationBlocked -TaskId "AICO-113" -Workspace (Join-Path $workspaces "AICO-113")
+        if (-not (Test-Path (Join-Path $fixtureRepo ".codex\context-mutation-ran.txt"))) { throw "Race fixture did not run between guard checks." }
+    }
+    finally { Remove-Item Env:AICO_TEST_MUTATE_TASK_STATE -ErrorAction SilentlyContinue; Remove-Item Env:AICO_TEST_PROJECT -ErrorAction SilentlyContinue }
+    Copy-Item (Join-Path $repoRoot "scripts\build-agent-context.ps1") (Join-Path $fixtureRepo "scripts\build-agent-context.ps1") -Force
+    Set-TestAuthorizationReceipt -TaskId "AICO-104"
 
     $implementationWorkspaceRoot = Join-Path $tempParent "implementation-workspaces"
     & (Join-Path $fixtureRepo "scripts\new-agent-workspace.ps1") -Id "AICO-104" -ProjectPath $fixtureRepo -WorkspaceRoot $implementationWorkspaceRoot | Out-Null
@@ -292,10 +423,18 @@ finally {
     $env:OPENROUTER_API_KEY = $savedOpenRouter
 
     if (Test-Path $fixtureRepo) {
-        foreach ($candidate in @(
+    foreach ($candidate in @(
             (Join-Path $workspaces "AICO-101"),
             (Join-Path $workspaces "AICO-102"),
             (Join-Path $workspaces "AICO-103"),
+            (Join-Path $workspaces "AICO-105"),
+            (Join-Path $workspaces "AICO-106"),
+            (Join-Path $workspaces "AICO-107"),
+            (Join-Path $workspaces "AICO-108"),
+            (Join-Path $workspaces "AICO-109"),
+            (Join-Path $workspaces "AICO-110"),
+            (Join-Path $workspaces "AICO-113"),
+            (Join-Path $workspaces "AICO-115"),
             (Join-Path $tempParent "implementation-workspaces\AICO-104")
         )) {
             if (Test-Path $candidate) {

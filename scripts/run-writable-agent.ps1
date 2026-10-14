@@ -624,6 +624,95 @@ function Restore-PlannedFiles {
 
 $root = (Resolve-Path $ProjectPath).Path
 . (Join-Path $PSScriptRoot "task-execution-lock.ps1")
+. (Join-Path $PSScriptRoot "writable-authorization-guard.ps1")
+if ($Id -notmatch '^AICO-\d+$') { throw "Writable task ID is not canonical: $Id" }
+
+function Block-WritablePreflightTask {
+    param([string]$TaskId,[string]$TaskPath,[string]$Reason,[object]$Lease)
+
+    $content = Get-Content -LiteralPath $TaskPath -Raw -Encoding UTF8
+    $currentStatus = Read-Field -Content $content -Key "Status"
+    if ($currentStatus -notin @("READY", "ACTIVE")) { return }
+    $ownerValue = Read-Field -Content $content -Key "Owner"
+    $advancePath = Join-Path $PSScriptRoot "advance-task.ps1"
+    if (-not (Test-Path -LiteralPath $advancePath -PathType Leaf)) { throw "advance-task.ps1 not found while blocking writable execution." }
+    & $advancePath -Id $TaskId -Status BLOCKED -Actor $ownerValue `
+        -Reason ("Writable authorization/dependency preflight rejected: " + $Reason) `
+        -Evidence "scripts/run-writable-agent.ps1 fail-closed preflight" `
+        -TasksPath (Split-Path -Parent $TaskPath) -TaskExecutionLease $Lease
+}
+
+function Assert-WritableExecutionGuard {
+    param(
+        [string]$TaskId,[string]$TaskPath,[string]$TasksPath,[string]$ExpectedStatus,
+        [string]$WorkRequestId,[string]$Root,[string]$Workspace,
+        [string[]]$ExpectedChangedPaths,[string]$ExpectedReceiptFingerprint,[object]$Lease
+    )
+
+    try {
+        Assert-TaskExecutionLease -ProjectPath $Root -Id $TaskId -Lease $Lease -Operation "WRITABLE"
+        if ([string]::IsNullOrWhiteSpace($WorkRequestId) -or $WorkRequestId -notmatch '^WR-[A-Za-z0-9-]+$') {
+            throw "Writable implementation requires one canonical Work Request authorization receipt."
+        }
+        $currentTask = Get-Content -LiteralPath $TaskPath -Raw -Encoding UTF8
+        foreach ($key in @("ID", "Status", "Work kind", "Work request")) {
+            if ([regex]::Matches($currentTask, "(?m)^" + [regex]::Escape($key) + ":\s*.*$").Count -ne 1) {
+                throw "Writable task must contain exactly one canonical field: $key"
+            }
+        }
+        if ((Read-Field -Content $currentTask -Key "ID") -cne $TaskId -or
+            (Read-Field -Content $currentTask -Key "Status") -cne $ExpectedStatus -or
+            (Read-Field -Content $currentTask -Key "Work kind") -cne "IMPLEMENTATION" -or
+            (Read-Field -Content $currentTask -Key "Work request") -cne $WorkRequestId) {
+            throw "Task identity, status, work kind or Work Request changed during writable preflight."
+        }
+
+        $requestPath = Join-Path $Root ("docs\engineering\work-requests\" + $WorkRequestId + ".md")
+        if (-not (Test-Path -LiteralPath $requestPath -PathType Leaf)) {
+            throw "Authorization Work Request not found: $WorkRequestId"
+        }
+        $requestContent = Get-Content -LiteralPath $requestPath -Raw -Encoding UTF8
+        $receipt = Assert-WritableAuthorizationReceipt -TaskId $TaskId -TaskContent $currentTask `
+            -WorkRequestContent $requestContent -WorkRequestId $WorkRequestId -Operation "WRITABLE"
+        if (-not [string]::IsNullOrWhiteSpace($ExpectedReceiptFingerprint) -and
+            $receipt.ReceiptFingerprint -cne $ExpectedReceiptFingerprint) {
+            throw "Authorization receipt changed after writable preflight."
+        }
+        Assert-WritableDependencies -TasksPath $TasksPath -TaskContent $currentTask -TaskId $TaskId
+
+        if (-not [string]::IsNullOrWhiteSpace($Workspace)) {
+            $workspaceFull = [System.IO.Path]::GetFullPath((Resolve-Path -LiteralPath $Workspace).Path).TrimEnd([char[]]@("\", "/"))
+            $worktreeLines = @(Invoke-GitOutput -Arguments @("-C",$Root,"worktree","list","--porcelain") -FailureMessage "git worktree list failed during writable guard revalidation.")
+            $registeredPath = $false
+            foreach ($line in $worktreeLines) {
+                if (-not $line.StartsWith("worktree ")) { continue }
+                $candidate = [System.IO.Path]::GetFullPath($line.Substring(9).Trim()).TrimEnd([char[]]@("\", "/"))
+                if ([string]::Equals($candidate,$workspaceFull,[System.StringComparison]::OrdinalIgnoreCase)) { $registeredPath = $true; break }
+            }
+            if (-not $registeredPath) { throw "Writable workspace is no longer a registered Git worktree: $Workspace" }
+
+            $branch = ([string](& git -C $workspaceFull branch --show-current)).Trim()
+            if ($LASTEXITCODE -ne 0 -or $branch -cne ("aico/" + $TaskId.ToLowerInvariant())) {
+                throw "Writable worktree branch changed or is outside task scope: $branch"
+            }
+            if ($null -ne $ExpectedChangedPaths) {
+                $actual = @(Get-ChangedPaths -Workspace $workspaceFull)
+                $expected = @($ExpectedChangedPaths | Sort-Object -Unique)
+                if (($actual -join "`n") -cne ($expected -join "`n")) {
+                    throw "Writable worktree changed after preflight."
+                }
+            }
+        }
+        return $receipt
+    }
+    catch {
+        $message = $_.Exception.Message
+        try { Block-WritablePreflightTask -TaskId $TaskId -TaskPath $TaskPath -Reason $message -Lease $Lease }
+        catch { throw ("Writable preflight failed closed and task could not be recorded BLOCKED: " + $message + ". Block transition error: " + $_.Exception.Message) }
+        throw ("Writable execution BLOCKED: " + $message)
+    }
+}
+
 try {
     $writerScope = Enter-TaskExecutionScope -ProjectPath $root -Id $Id -Operation "WRITABLE" -Lease $TaskExecutionLease
 }
@@ -707,6 +796,10 @@ if ([string]::IsNullOrWhiteSpace($owner)) {
     throw "Task $Id has no owner."
 }
 
+$initialAuthorization = Assert-WritableExecutionGuard -TaskId $Id -TaskPath $taskPath `
+    -TasksPath $tasksPath -ExpectedStatus $status -WorkRequestId $workRequestId `
+    -Root $root -Workspace "" -Lease $taskExecutionLock
+$authorizationReceiptFingerprint = $initialAuthorization.ReceiptFingerprint
 
 
 if ([string]::IsNullOrWhiteSpace($WorkspacePath)) {
@@ -715,7 +808,9 @@ if ([string]::IsNullOrWhiteSpace($WorkspacePath)) {
 }
 
 if (-not (Test-Path $WorkspacePath)) {
-    throw "Task worktree not found: $WorkspacePath. Create it with scripts/new-agent-workspace.ps1 first."
+    $reason = "Task worktree not found: $WorkspacePath. Create it with scripts/new-agent-workspace.ps1 first."
+    Block-WritablePreflightTask -TaskId $Id -TaskPath $taskPath -Reason $reason -Lease $taskExecutionLock
+    throw ("Writable execution BLOCKED: " + $reason)
 }
 
 $workspace = (Resolve-Path $WorkspacePath).Path
@@ -725,7 +820,9 @@ if ([string]::Equals(
     [System.IO.Path]::GetFullPath($root).TrimEnd([char[]]@("\","/")),
     [System.StringComparison]::OrdinalIgnoreCase
 )) {
-    throw "Writable execution refuses to use the primary checkout as its workspace."
+    $reason = "Writable execution refuses to use the primary checkout as its workspace."
+    Block-WritablePreflightTask -TaskId $Id -TaskPath $taskPath -Reason $reason -Lease $taskExecutionLock
+    throw ("Writable execution BLOCKED: " + $reason)
 }
 
 $registered = $false
@@ -743,7 +840,9 @@ foreach ($line in $worktreeLines) {
 }
 
 if (-not $registered) {
-    throw "Workspace is not a registered Git worktree of the project: $workspace"
+    $reason = "Workspace is not a registered Git worktree of the project: $workspace"
+    Block-WritablePreflightTask -TaskId $Id -TaskPath $taskPath -Reason $reason -Lease $taskExecutionLock
+    throw ("Writable execution BLOCKED: " + $reason)
 }
 
 $expectedBranch = "aico/" + $Id.ToLowerInvariant()
@@ -751,7 +850,9 @@ $currentBranch = ([string](& git -C $workspace branch --show-current)).Trim()
 if ($LASTEXITCODE -ne 0) { throw "Unable to resolve writable worktree branch." }
 
 if ($currentBranch -ne $expectedBranch) {
-    throw "Writable workspace branch mismatch. Expected '$expectedBranch', found '$currentBranch'."
+    $reason = "Writable workspace branch mismatch. Expected '$expectedBranch', found '$currentBranch'."
+    Block-WritablePreflightTask -TaskId $Id -TaskPath $taskPath -Reason $reason -Lease $taskExecutionLock
+    throw ("Writable execution BLOCKED: " + $reason)
 }
 
 # Resolve pending corrective evidence from the canonical primary-root lifecycle,
@@ -765,8 +866,15 @@ $corrective = -not [string]::IsNullOrWhiteSpace($correctiveContext)
 $baselineChanged = @(Get-ChangedPaths -Workspace $workspace)
 
 if ($baselineChanged.Count -gt 0 -and -not $corrective) {
-    throw ("Writable worktree must be clean for a fresh implementation. Existing changes: " + ($baselineChanged -join ", "))
+    $reason = "Writable worktree must be clean for a fresh implementation. Existing changes: " + ($baselineChanged -join ", ")
+    Block-WritablePreflightTask -TaskId $Id -TaskPath $taskPath -Reason $reason -Lease $taskExecutionLock
+    throw ("Writable execution BLOCKED: " + $reason)
 }
+
+$null = Assert-WritableExecutionGuard -TaskId $Id -TaskPath $taskPath `
+    -TasksPath $tasksPath -ExpectedStatus $status -WorkRequestId $workRequestId `
+    -Root $root -Workspace $workspace -ExpectedChangedPaths $baselineChanged `
+    -ExpectedReceiptFingerprint $authorizationReceiptFingerprint -Lease $taskExecutionLock
 
 if ($status -eq "READY") {
     $advance = Join-Path $PSScriptRoot "advance-task.ps1"
@@ -781,6 +889,11 @@ if ($status -eq "READY") {
 if ($status -ne "ACTIVE") {
     throw "Task $Id could not be activated for writable execution."
 }
+
+$null = Assert-WritableExecutionGuard -TaskId $Id -TaskPath $taskPath `
+    -TasksPath $tasksPath -ExpectedStatus "ACTIVE" -WorkRequestId $workRequestId `
+    -Root $root -Workspace $workspace -ExpectedChangedPaths $baselineChanged `
+    -ExpectedReceiptFingerprint $authorizationReceiptFingerprint -Lease $taskExecutionLock
 
 $dispatchPath = Join-Path $root ("docs\engineering\dispatch\" + $Id + ".md")
 $rolePath = Join-Path $root (".codex\agents\" + $owner + ".md")
@@ -989,6 +1102,10 @@ try {
                     continue
                 }
             }
+            $null = Assert-WritableExecutionGuard -TaskId $Id -TaskPath $taskPath `
+                -TasksPath $tasksPath -ExpectedStatus "ACTIVE" -WorkRequestId $workRequestId `
+                -Root $root -Workspace $workspace -ExpectedChangedPaths $baselineChanged `
+                -ExpectedReceiptFingerprint $authorizationReceiptFingerprint -Lease $taskExecutionLock
             try {
                 $execution = & $routerPath -Provider $candidate -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $outputPath -Model $candidateModel -Role $owner -Workload "writable" -TaskId $Id -CorrectiveContext $correctiveContext
                 break
@@ -1007,6 +1124,12 @@ try {
         if ([string]::IsNullOrWhiteSpace($selectedModel)) {
             $selectedModel = Get-ConfiguredModel -Config $config -ProviderName $Provider -CollectionName "writable_models"
         }
+
+        $null = Assert-WritableExecutionGuard -TaskId $Id -TaskPath $taskPath `
+            -TasksPath $tasksPath -ExpectedStatus "ACTIVE" -WorkRequestId $workRequestId `
+            -Root $root -Workspace $workspace -ExpectedChangedPaths $baselineChanged `
+            -ExpectedReceiptFingerprint $authorizationReceiptFingerprint -Lease $taskExecutionLock
+
         if ([string]::IsNullOrWhiteSpace($selectedModel)) {
             $selectedModel = Get-ConfiguredModel -Config $config -ProviderName $Provider -CollectionName "models"
         }
