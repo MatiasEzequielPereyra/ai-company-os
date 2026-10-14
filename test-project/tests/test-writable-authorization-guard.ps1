@@ -282,6 +282,8 @@ $payload = @{
     New-FixtureTask -Id "AICO-113" -Status "READY"  -WorkKind "IMPLEMENTATION" -FileName "race-dependency.txt" -Dependencies @("AICO-114")
     New-FixtureTask -Id "AICO-114" -Status "DONE"   -WorkKind "IMPLEMENTATION" -FileName "race-dependency-done.txt"
     New-FixtureTask -Id "AICO-115" -Status "READY"  -WorkKind "IMPLEMENTATION" -FileName "ambiguous-receipt.txt"
+    New-FixtureTask -Id "AICO-116" -Status "READY"  -WorkKind "IMPLEMENTATION" -FileName "race-dependency-status.txt" -Dependencies @("AICO-117")
+    New-FixtureTask -Id "AICO-117" -Status "DONE"   -WorkKind "IMPLEMENTATION" -FileName "race-dependency-status-done.txt"
     Set-TestAuthorizationReceipt -TaskId "AICO-104"
     $sentinelEvidencePath = Join-Path $fixtureRepo "docs\engineering\writable-evidence\P0-preservation-sentinel.md"
     Write-NoBom $sentinelEvidencePath "preserve pre-existing evidence byte-for-byte"
@@ -346,7 +348,7 @@ $payload = @{
         Exit-TaskExecutionLock -Lock $lease
     }
 
-    foreach ($taskId in @("AICO-105","AICO-106","AICO-107","AICO-108","AICO-109","AICO-110","AICO-113","AICO-115")) {
+    foreach ($taskId in @("AICO-105","AICO-106","AICO-107","AICO-108","AICO-109","AICO-110","AICO-113","AICO-115","AICO-116")) {
         $workspace = Join-Path $workspaces $taskId
         & git -C $fixtureRepo worktree add -b ("aico/" + $taskId.ToLowerInvariant()) $workspace HEAD | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "Unable to create test worktree for $taskId." }
@@ -383,6 +385,13 @@ if ($env:AICO_TEST_MUTATE_TASK_STATE -eq "1") {
     $racingTaskContent = $racingTaskContent.Replace("Status: ACTIVE", "Status: READY")
     [IO.File]::WriteAllText($racingTaskPath,$racingTaskContent,(New-Object Text.UTF8Encoding($false)))
 }
+if ($env:AICO_TEST_MUTATE_DEPENDENCY -eq "1") {
+    $racingDependencyPath = Join-Path $env:AICO_TEST_PROJECT "tasks\AICO-117.md"
+    [IO.File]::WriteAllText((Join-Path $env:AICO_TEST_PROJECT ".codex\dependency-mutation-ran.txt"),"ran")
+    $racingDependencyContent = Get-Content $racingDependencyPath -Raw -Encoding UTF8
+    $racingDependencyContent = $racingDependencyContent.Replace("Status: DONE", "Status: ACTIVE")
+    [IO.File]::WriteAllText($racingDependencyPath,$racingDependencyContent,(New-Object Text.UTF8Encoding($false)))
+}
 "mock context"
 '@
     Write-NoBom (Join-Path $fixtureRepo "scripts\build-agent-context.ps1") $mutatingContextBuilder
@@ -393,6 +402,16 @@ if ($env:AICO_TEST_MUTATE_TASK_STATE -eq "1") {
         if (-not (Test-Path (Join-Path $fixtureRepo ".codex\context-mutation-ran.txt"))) { throw "Race fixture did not run between guard checks." }
     }
     finally { Remove-Item Env:AICO_TEST_MUTATE_TASK_STATE -ErrorAction SilentlyContinue; Remove-Item Env:AICO_TEST_PROJECT -ErrorAction SilentlyContinue }
+    Copy-Item (Join-Path $repoRoot "scripts\build-agent-context.ps1") (Join-Path $fixtureRepo "scripts\build-agent-context.ps1") -Force
+    Write-NoBom (Join-Path $fixtureRepo "scripts\build-agent-context.ps1") $mutatingContextBuilder
+    Set-TestAuthorizationReceipt -TaskId "AICO-116"
+    $env:AICO_TEST_PROJECT = $fixtureRepo
+    $env:AICO_TEST_MUTATE_DEPENDENCY = "1"
+    try {
+        Assert-AuthorizationBlocked -TaskId "AICO-116" -Workspace (Join-Path $workspaces "AICO-116")
+        if (-not (Test-Path (Join-Path $fixtureRepo ".codex\dependency-mutation-ran.txt"))) { throw "Dependency race fixture did not run between guard checks." }
+    }
+    finally { Remove-Item Env:AICO_TEST_MUTATE_DEPENDENCY -ErrorAction SilentlyContinue; Remove-Item Env:AICO_TEST_PROJECT -ErrorAction SilentlyContinue }
     Copy-Item (Join-Path $repoRoot "scripts\build-agent-context.ps1") (Join-Path $fixtureRepo "scripts\build-agent-context.ps1") -Force
     Set-TestAuthorizationReceipt -TaskId "AICO-104"
 
@@ -435,6 +454,7 @@ finally {
             (Join-Path $workspaces "AICO-110"),
             (Join-Path $workspaces "AICO-113"),
             (Join-Path $workspaces "AICO-115"),
+            (Join-Path $workspaces "AICO-116"),
             (Join-Path $tempParent "implementation-workspaces\AICO-104")
         )) {
             if (Test-Path $candidate) {
