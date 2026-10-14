@@ -46,6 +46,9 @@ and the following explicit implementation fields:
 - `Implementation authorization: AUTHORIZED`
 - `Authorized task: <exact task ID>`
 - `Authorized operation: WRITABLE`
+- `Authorized execution mode: WRITABLE`
+- `Authorized provider invocation: ALLOWED`
+- `Authorized write scope: TASK_WORKTREE_ONLY`
 - `Authorized scope SHA-256: <64 lowercase or uppercase hex characters>`
 - `Authorization expires (UTC): <yyyy-MM-ddTHH:mm:ssZ>`
 
@@ -56,8 +59,12 @@ Criteria section. Task and Work Request types must match.
 `scripts/writable-authorization-guard.ps1` exposes
 `Get-WritableScopeFingerprint` to calculate the fingerprint from canonical task
 content. A scope edit, wrong task/operation, expired or malformed receipt,
-duplicate/ambiguous field, missing receipt, or retained read-only/no-write
-restriction fails closed.
+duplicate/ambiguous field, missing receipt, or retained restriction fails
+closed. Writable execution requires `Retained restrictions: NONE`; the guard does
+not interpret arbitrary natural-language restrictions. These explicit fields
+bind authorization to writable execution, provider invocation and writes limited
+to the registered task worktree. New Work Requests initialize all such fields to
+`NONE`, so authorization is never inferred from request creation or task state.
 
 Every dependency declared in the task's canonical `Dependencies` section must
 resolve to exactly one matching task record whose status is `DONE`. Missing,

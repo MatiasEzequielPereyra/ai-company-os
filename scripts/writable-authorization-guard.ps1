@@ -84,6 +84,9 @@ function Assert-WritableAuthorizationReceipt {
     $implementationAuthorization = Get-WritableReceiptField -Receipt $receipt -Key "Implementation authorization"
     $authorizedTask = Get-WritableReceiptField -Receipt $receipt -Key "Authorized task"
     $authorizedOperation = Get-WritableReceiptField -Receipt $receipt -Key "Authorized operation"
+    $authorizedExecutionMode = Get-WritableReceiptField -Receipt $receipt -Key "Authorized execution mode"
+    $authorizedProviderInvocation = Get-WritableReceiptField -Receipt $receipt -Key "Authorized provider invocation"
+    $authorizedWriteScope = Get-WritableReceiptField -Receipt $receipt -Key "Authorized write scope"
     $authorizedScope = Get-WritableReceiptField -Receipt $receipt -Key "Authorized scope SHA-256"
     $expiresAt = Get-WritableReceiptField -Receipt $receipt -Key "Authorization expires (UTC)"
     $retainedRestrictions = Get-WritableReceiptField -Receipt $receipt -Key "Retained restrictions"
@@ -94,12 +97,16 @@ function Assert-WritableAuthorizationReceipt {
     if ($authorizedTask -cne $TaskId -or $authorizedOperation -cne $Operation) {
         throw "Authorization receipt belongs to another task or operation."
     }
+    if ($authorizedExecutionMode -cne "WRITABLE" -or
+        $authorizedProviderInvocation -cne "ALLOWED" -or
+        $authorizedWriteScope -cne "TASK_WORKTREE_ONLY") {
+        throw "Authorization receipt does not explicitly permit writable execution, provider invocation and task-worktree writes."
+    }
     if ($permittedScope -cnotmatch '(?i)(^|[^A-Z0-9_])WRITABLE_IMPLEMENTATION([^A-Z0-9_]|$)') {
         throw "Authorization receipt does not permit WRITABLE_IMPLEMENTATION."
     }
-    if ($permittedScope -match '(?i)\b(?:READ[- ]ONLY|DRY[- ]RUN|NO WRIT(?:E|ABLE)|NO IMPLEMENTATION)\b' -or
-        $retainedRestrictions -match '(?i)\b(?:READ[- ]ONLY|DRY[- ]RUN|NO WRIT(?:E|ABLE)|NO IMPLEMENTATION)\b') {
-        throw "Authorization receipt retains a restriction that prohibits writable implementation."
+    if ($permittedScope -match '(?i)\b(?:READ[- ]ONLY|DRY[- ]RUN|NO WRIT(?:E|ABLE)|NO IMPLEMENTATION)\b') {
+        throw "Authorization receipt retains a scope restriction that prohibits writable implementation."
     }
     if ($requestedAction -notmatch [regex]::Escape($TaskId)) {
         throw "Authorization receipt requested action is not bound to task $TaskId."
@@ -108,11 +115,8 @@ function Assert-WritableAuthorizationReceipt {
         $authorizedScope.ToLowerInvariant() -cne (Get-WritableScopeFingerprint -TaskContent $TaskContent)) {
         throw "Authorization receipt scope is invalid or stale for task $TaskId."
     }
-    if ($retainedRestrictions -match '(?i)\b(?:NONE|NO RESTRICTIONS)\b' -and $retainedRestrictions -notmatch '(?i)^\s*(?:NONE|NO RESTRICTIONS)\s*$') {
-        throw "Authorization receipt retained restrictions are ambiguous."
-    }
-    if ($retainedRestrictions -notmatch '(?i)^\s*(?:NONE|NO RESTRICTIONS|.+)$') {
-        throw "Authorization receipt retained restrictions are invalid."
+    if ($retainedRestrictions -cne "NONE") {
+        throw "Authorization receipt retains restrictions; writable execution requires the explicit NONE value."
     }
 
     $expiry = [DateTimeOffset]::MinValue

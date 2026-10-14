@@ -99,8 +99,17 @@ function Set-FakeResult {
 function Set-ValidAuthorizationReceipt {
     param([string]$Id)
     $task = Get-Content -LiteralPath (Join-Path $fixtureRepo ("tasks\" + $Id + ".md")) -Raw -Encoding UTF8
-    $type = [regex]::Match($task, '(?m)^Type:\s*(\S+)').Groups[1].Value
+    $taskTypeMatches = [regex]::Matches($task, '(?m)^Type:\s*(\S+)\s*$')
+    $requestPath = Join-Path $fixtureRepo 'docs\engineering\work-requests\WR-TEST.md'
+    $requestTypeMatches = @()
+    if (Test-Path -LiteralPath $requestPath -PathType Leaf) {
+        $existingRequest = Get-Content -LiteralPath $requestPath -Raw -Encoding UTF8
+        $requestTypeMatches = [regex]::Matches($existingRequest, '(?m)^Type:\s*(\S+)\s*$')
+    }
+    if ($taskTypeMatches.Count -ne 1 -or $requestTypeMatches.Count -gt 1) { return }
+    $type = $taskTypeMatches[0].Groups[1].Value
     if (-not $type) { return }
+    if ($requestTypeMatches.Count -eq 1 -and $requestTypeMatches[0].Groups[1].Value -cne $type) { return }
     . (Join-Path $repoRoot 'scripts\writable-authorization-guard.ps1')
     $scope = Get-WritableScopeFingerprint -TaskContent $task
     $created = [DateTimeOffset]::UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'")
@@ -120,6 +129,9 @@ Permitted scope: WRITABLE_IMPLEMENTATION
 Implementation authorization: AUTHORIZED
 Authorized task: $Id
 Authorized operation: WRITABLE
+Authorized execution mode: WRITABLE
+Authorized provider invocation: ALLOWED
+Authorized write scope: TASK_WORKTREE_ONLY
 Authorized scope SHA-256: $scope
 Authorization expires (UTC): $expires
 Retained restrictions: NONE

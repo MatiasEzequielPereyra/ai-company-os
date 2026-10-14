@@ -138,6 +138,9 @@ Permitted scope: WRITABLE_IMPLEMENTATION
 Implementation authorization: AUTHORIZED
 Authorized task: $Id
 Authorized operation: WRITABLE
+Authorized execution mode: WRITABLE
+Authorized provider invocation: ALLOWED
+Authorized write scope: TASK_WORKTREE_ONLY
 Authorized scope SHA-256: $scope
 Authorization expires (UTC): $expires
 Retained restrictions: NONE

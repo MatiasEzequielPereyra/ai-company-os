@@ -28,8 +28,12 @@ function Set-TestAuthorizationReceipt {
         [string]$ImplementationAuthorization = "AUTHORIZED",
         [string]$AuthorizedTask = "",
         [string]$AuthorizedOperation = "WRITABLE",
+        [string]$AuthorizedExecutionMode = "WRITABLE",
+        [string]$AuthorizedProviderInvocation = "ALLOWED",
+        [string]$AuthorizedWriteScope = "TASK_WORKTREE_ONLY",
         [string]$ScopeFingerprint = "",
-        [string]$ExpiresAt = "2099-01-01T00:00:00Z"
+        [string]$ExpiresAt = "2099-01-01T00:00:00Z",
+        [string]$RetainedRestrictions = "NONE"
     )
 
     $taskContent = Get-Content (Join-Path $fixtureRepo ("tasks\" + $TaskId + ".md")) -Raw -Encoding UTF8
@@ -44,9 +48,12 @@ function Set-TestAuthorizationReceipt {
         "Implementation authorization: $ImplementationAuthorization",
         "Authorized task: $AuthorizedTask",
         "Authorized operation: $AuthorizedOperation",
+        "Authorized execution mode: $AuthorizedExecutionMode",
+        "Authorized provider invocation: $AuthorizedProviderInvocation",
+        "Authorized write scope: $AuthorizedWriteScope",
         "Authorized scope SHA-256: $ScopeFingerprint",
         "Authorization expires (UTC): $ExpiresAt",
-        "Retained restrictions: No real provider calls; mock transport only."
+        "Retained restrictions: $RetainedRestrictions"
     ) -join [Environment]::NewLine
     Write-NoBom (Join-Path $fixtureRepo "docs\engineering\work-requests\WR-AUTH.md") $request
 }
@@ -284,6 +291,7 @@ $payload = @{
     New-FixtureTask -Id "AICO-115" -Status "READY"  -WorkKind "IMPLEMENTATION" -FileName "ambiguous-receipt.txt"
     New-FixtureTask -Id "AICO-116" -Status "READY"  -WorkKind "IMPLEMENTATION" -FileName "race-dependency-status.txt" -Dependencies @("AICO-117")
     New-FixtureTask -Id "AICO-117" -Status "DONE"   -WorkKind "IMPLEMENTATION" -FileName "race-dependency-status-done.txt"
+    New-FixtureTask -Id "AICO-118" -Status "READY"  -WorkKind "IMPLEMENTATION" -FileName "retained-provider-restriction.txt"
     Set-TestAuthorizationReceipt -TaskId "AICO-104"
     $sentinelEvidencePath = Join-Path $fixtureRepo "docs\engineering\writable-evidence\P0-preservation-sentinel.md"
     Write-NoBom $sentinelEvidencePath "preserve pre-existing evidence byte-for-byte"
@@ -348,7 +356,7 @@ $payload = @{
         Exit-TaskExecutionLock -Lock $lease
     }
 
-    foreach ($taskId in @("AICO-105","AICO-106","AICO-107","AICO-108","AICO-109","AICO-110","AICO-113","AICO-115","AICO-116")) {
+    foreach ($taskId in @("AICO-105","AICO-106","AICO-107","AICO-108","AICO-109","AICO-110","AICO-113","AICO-115","AICO-116","AICO-118")) {
         $workspace = Join-Path $workspaces $taskId
         & git -C $fixtureRepo worktree add -b ("aico/" + $taskId.ToLowerInvariant()) $workspace HEAD | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "Unable to create test worktree for $taskId." }
@@ -364,6 +372,9 @@ $payload = @{
     Assert-AuthorizationBlocked -TaskId "AICO-108" -Workspace (Join-Path $workspaces "AICO-108")
     Set-TestAuthorizationReceipt -TaskId "AICO-109" -ExpiresAt "2000-01-01T00:00:00Z"
     Assert-AuthorizationBlocked -TaskId "AICO-109" -Workspace (Join-Path $workspaces "AICO-109")
+    $env:OPENROUTER_API_KEY = "fixture-only-not-a-real-credential"
+    Set-TestAuthorizationReceipt -TaskId "AICO-118" -RetainedRestrictions "No real provider calls; mock transport only."
+    Assert-AuthorizationBlocked -TaskId "AICO-118" -Workspace (Join-Path $workspaces "AICO-118")
     Set-TestAuthorizationReceipt -TaskId "AICO-115"
     $ambiguousReceiptPath = Join-Path $fixtureRepo "docs\engineering\work-requests\WR-AUTH.md"
     Write-NoBom $ambiguousReceiptPath ((Get-Content $ambiguousReceiptPath -Raw -Encoding UTF8) + "`nAuthorized task: AICO-999")
