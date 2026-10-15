@@ -427,6 +427,7 @@ function Invoke-VerificationCommand {
         [string]$Workspace
     )
 
+    $null = Assert-WritableExecutionGuard @continuationGuard
     $resolved = Get-Command $SafeCommand.Executable -ErrorAction SilentlyContinue
     if ($null -eq $resolved) {
         throw "Verification executable is not available: $($SafeCommand.Executable)"
@@ -456,6 +457,7 @@ function Invoke-VerificationCommand {
             }
         }
 
+        $null = Assert-WritableExecutionGuard @continuationGuard
         $lines = New-Object System.Collections.Generic.List[string]
         foreach ($entry in $capturedOutput) {
             $line = $entry.ToString()
@@ -500,6 +502,7 @@ function Invoke-DiagnosticCommand {
         [string]$Workspace
     )
 
+    $null = Assert-WritableExecutionGuard @continuationGuard
     $resolved = Get-Command $SafeCommand.Executable -ErrorAction SilentlyContinue
     if ($null -eq $resolved) {
         throw "Diagnostic executable is not available: $($SafeCommand.Executable)"
@@ -527,6 +530,7 @@ function Invoke-DiagnosticCommand {
             }
         }
 
+        $null = Assert-WritableExecutionGuard @continuationGuard
         if ($null -eq $exitCode) { $exitCode = 0 }
 
         $lines = New-Object System.Collections.Generic.List[string]
@@ -595,6 +599,7 @@ function Save-DiagnosticArtifact {
         [object]$Artifact
     )
 
+    $null = Assert-WritableExecutionGuard @continuationGuard
     $parent = Split-Path $Path -Parent
     if (-not (Test-Path $parent)) {
         New-Item -ItemType Directory -Force -Path $parent | Out-Null
@@ -706,6 +711,7 @@ function Assert-WritableExecutionGuard {
         return $receipt
     }
     catch {
+        $script:writableAuthorizationRejected = $true
         $message = $_.Exception.Message
         try { Block-WritablePreflightTask -TaskId $TaskId -TaskPath $TaskPath -Reason $message -Lease $Lease }
         catch { throw ("Writable preflight failed closed and task could not be recorded BLOCKED: " + $message + ". Block transition error: " + $_.Exception.Message) }
@@ -1046,6 +1052,14 @@ $outputPath = Join-Path $tempRoot ($Id + "-" + [Guid]::NewGuid().ToString("N") +
 
 $primaryStatusBefore = (@(Invoke-GitOutput -Arguments @("-C",$root,"status","--porcelain","--untracked-files=no") -FailureMessage "Unable to snapshot primary checkout status.") -join [Environment]::NewLine)
 
+$writableAuthorizationRejected = $false
+$authorizationArtifactBackups = @{}
+$continuationGuard = @{
+    TaskId = $Id; TaskPath = $taskPath; TasksPath = $tasksPath; ExpectedStatus = 'ACTIVE'
+    WorkRequestId = $workRequestId; Root = $root; Workspace = $workspace
+    ExpectedChangedPaths = $baselineChanged
+    ExpectedReceiptFingerprint = $authorizationReceiptFingerprint; Lease = $taskExecutionLock
+}
 $execution = $null
 $result = $null
 
@@ -1108,11 +1122,18 @@ try {
                 -ExpectedReceiptFingerprint $authorizationReceiptFingerprint -Lease $taskExecutionLock
             try {
                 $execution = & $routerPath -Provider $candidate -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $outputPath -Model $candidateModel -Role $owner -Workload "writable" -TaskId $Id -CorrectiveContext $correctiveContext
-                break
             }
             catch {
-                $providerErrors += ($candidate + ": " + $_.Exception.Message)
+                # A failed transport may have outlived its authorization too.
+                # Rejection here escapes this catch and forbids fallback.
+                $providerFailureMessage = $_.Exception.Message
+                $null = Assert-WritableExecutionGuard @continuationGuard
+                $providerErrors += ($candidate + ": " + $providerFailureMessage)
+                continue
             }
+            # Keep authorization rejection outside the recoverable provider catch.
+            $null = Assert-WritableExecutionGuard @continuationGuard
+            break
         }
 
         if ($null -eq $execution) {
@@ -1134,7 +1155,14 @@ try {
             $selectedModel = Get-ConfiguredModel -Config $config -ProviderName $Provider -CollectionName "models"
         }
 
-        $execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $outputPath -Model $selectedModel -Role $owner -Workload "writable" -TaskId $Id -CorrectiveContext $correctiveContext
+        try {
+            $execution = & $routerPath -Provider $Provider -ProjectPath $root -Prompt $prompt -Context $context -SchemaPath $schemaPath -OutputPath $outputPath -Model $selectedModel -Role $owner -Workload "writable" -TaskId $Id -CorrectiveContext $correctiveContext
+        }
+        catch {
+            $null = Assert-WritableExecutionGuard @continuationGuard
+            throw
+        }
+        $null = Assert-WritableExecutionGuard @continuationGuard
     }
 
     if (-not (Test-Path $outputPath)) {
@@ -1154,6 +1182,19 @@ if ($null -eq $result) {
 }
 
 $diagnosticPath = Join-Path $root ("docs\engineering\diagnostics\" + $Id + "-diagnostic-v1.json")
+# Authorization rejection must preserve evidence that predates this attempt.
+foreach ($relativeArtifact in @(
+    "docs\engineering\diagnostics\$Id-diagnostic-v1.json",
+    "docs\engineering\writable-evidence\$Id.md",
+    "docs\engineering\agent-reports\$Id.md"
+)) {
+    $artifactPath = Join-Path $root $relativeArtifact
+    $artifactExisted = Test-Path -LiteralPath $artifactPath -PathType Leaf
+    $authorizationArtifactBackups[$relativeArtifact] = [PSCustomObject]@{
+        Path = $artifactPath; Existed = $artifactExisted
+        Bytes = $(if ($artifactExisted) { [IO.File]::ReadAllBytes($artifactPath) } else { $null })
+    }
+}
 $diagnosticRelative = "docs/engineering/diagnostics/" + $Id + "-diagnostic-v1.json"
 $diagnosticArtifact = $null
 $safeReproductionCommand = $null
@@ -1457,8 +1498,10 @@ if ($result.outcome -eq "BLOCKED") {
         [string]$result.blockers
     ) -join [Environment]::NewLine
 
+    $null = Assert-WritableExecutionGuard @continuationGuard
     Write-Utf8NoBom -Path $evidencePath -Value $blockedReport
 
+    $null = Assert-WritableExecutionGuard @continuationGuard
     & $submitPath -ProjectPath $root -Id $Id -Outcome BLOCKED -Summary ([string]$result.summary) -ChangedArtifacts ("docs/engineering/writable-evidence/" + (Split-Path $evidencePath -Leaf)) -Verification ([string]$result.verification) -Decisions ([string]$result.decisions) -Blockers ([string]$result.blockers) -RecommendedNext ([string]$result.recommended_next) -TaskExecutionLease $taskExecutionLock
     return
 }
@@ -1498,7 +1541,12 @@ $totalWriteBytes = 0
 $effectiveChanges = 0
 
 try {
+    # Diagnostics can outlive the receipt. Check the original baseline before
+    # allowing source mutation, then let existing changed-path policy govern our diff.
+    $null = Assert-WritableExecutionGuard @continuationGuard
+    $continuationGuard.ExpectedChangedPaths = $null
     foreach ($change in $changes) {
+        $null = Assert-WritableExecutionGuard @continuationGuard
         $safe = Resolve-SafeChangePath -Workspace $workspace -RelativePath ([string]$change.path) -Policy $policy
         $key = $safe.Relative.ToLowerInvariant()
 
@@ -1668,6 +1716,7 @@ try {
         }
     }
 
+    $null = Assert-WritableExecutionGuard @continuationGuard
     $evidenceDir = Join-Path $root "docs\engineering\writable-evidence"
     New-Item -ItemType Directory -Force -Path $evidenceDir | Out-Null
     $evidencePath = Join-Path $evidenceDir ($Id + ".md")
@@ -1722,6 +1771,7 @@ try {
         "- Verification commands passed the local writable policy before execution."
     ) -join [Environment]::NewLine
 
+    $null = Assert-WritableExecutionGuard @continuationGuard
     Write-Utf8NoBom -Path $evidencePath -Value $evidence
 
     # Publish the canonical primary agent report expected by independent gates.
@@ -1775,6 +1825,7 @@ try {
         $(if ($isBugTask -and (Test-Path -LiteralPath $diagnosticPath -PathType Leaf)) { $diagnosticRelative } else { "NOT_APPLICABLE" })
     ) -join [Environment]::NewLine
 
+    $null = Assert-WritableExecutionGuard @continuationGuard
     Write-Utf8NoBom -Path $reportPath -Value $primaryReport
 
     $controlArtifacts = @(
@@ -1787,6 +1838,7 @@ try {
 
     $changedArtifacts = (($changedAfter + $controlArtifacts) -join "; ")
 
+    $null = Assert-WritableExecutionGuard @continuationGuard
     $verificationSummary = "git diff --check PASS. " + (($verificationCommands | ForEach-Object { $_ + " PASS" }) -join "; ")
     if ($isBugTask -and $null -ne $diagnosticArtifact -and [string]$diagnosticArtifact.state -eq "COMPLETE") {
         $verificationSummary += ". Diagnostic same-signal replay PASS: " + $signalFingerprint
@@ -1808,6 +1860,9 @@ catch {
 }
 }
 catch {
+    if ($writableAuthorizationRejected -and $null -ne $authorizationArtifactBackups) {
+        Restore-PlannedFiles -Backups $authorizationArtifactBackups
+    }
     try { & (Join-Path $PSScriptRoot "write-operational-event.ps1") -ProjectPath $root -Event @{ event_type = "runtime_failure"; component = "writable-runner"; task_id = $Id; error_category = "runtime" } | Out-Null } catch { Write-Host "ERROR_INTELLIGENCE_CAPTURE_UNAVAILABLE" -ForegroundColor DarkYellow }
     throw
 }

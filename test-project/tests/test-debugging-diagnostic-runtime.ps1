@@ -255,6 +255,10 @@ param(
 if ($Role -ne "frontend" -or $Workload -ne "writable") { throw "Unexpected writable routing identity." }
 if ([IO.Path]::GetFileName($SchemaPath) -ne "writable-bug-change-set.schema.json") { throw "BUG task did not select diagnostic writable schema." }
 Copy-Item (Join-Path $ProjectPath ".codex\fake-writable-result.json") $OutputPath -Force
+if ($env:AICO_AUTH_MUTATION_TEST) {
+    [IO.File]::AppendAllText((Join-Path $ProjectPath '.codex\mutation-provider-calls.txt'), "$Provider`n")
+    [IO.File]::WriteAllText((Join-Path $ProjectPath '.codex\mutation-output-path.txt'), $OutputPath)
+}
 [PSCustomObject]@{ Provider = $Provider; Model = $Model }
 '@
     Write-NoBom (Join-Path $fixtureRepo "scripts\provider-router.ps1") $fakeRouter
@@ -315,6 +319,48 @@ class Regression(unittest.TestCase):
     New-BugTask -Id "AICO-901" -SourceFile "bug_value.py" -TestDir "tests_bug"
     New-BugTask -Id "AICO-902" -SourceFile "bug_value2.py" -TestDir "tests_ok"
     New-BugTask -Id "AICO-903" -SourceFile "bug_value3.py" -TestDir "tests_still_broken"
+    foreach ($number in @(904,905)) {
+        $suffix = [string]$number
+        Write-NoBom (Join-Path $fixtureRepo "bug_value$suffix.py") ("def value():" + $nl + "    return 1" + $nl)
+        $regression = @"
+import pathlib
+import unittest
+
+class Regression(unittest.TestCase):
+    def test_value(self):
+        ns = {}
+        exec(pathlib.Path('bug_value$suffix.py').read_text(encoding='utf-8'), ns)
+        self.assertEqual(ns['value'](), 2)
+"@
+        Write-NoBom (Join-Path $fixtureRepo "tests_auth_$suffix\test_value.py") $regression
+        Write-NoBom (Join-Path $fixtureRepo "tests_auth_probe_$suffix\test_probe.py") @'
+import os
+import pathlib
+import re
+import unittest
+
+class Probe(unittest.TestCase):
+    def test_probe(self):
+        if os.environ.get('AICO_AUTH_MUTATION_TEST') == 'DIAGNOSTIC_EXPIRE':
+            request = pathlib.Path(os.environ['AICO_AUTH_FIXTURE_REQUEST'])
+            value = request.read_text(encoding='utf-8')
+            request.write_text(re.sub(r'(?m)^Authorization expires \(UTC\):.*$', 'Authorization expires (UTC): 2000-01-01T00:00:00Z', value), encoding='utf-8')
+        self.assertTrue(True)
+'@
+        if ($number -eq 905) {
+            $regression += @'
+
+        import os
+        if os.environ.get('AICO_AUTH_MUTATION_TEST') == 'VERIFY_REVOKE' and ns['value']() == 2:
+            request = pathlib.Path(os.environ['AICO_AUTH_FIXTURE_REQUEST'])
+            request.with_name('verification-observed-applied-source.txt').write_text('source value was 2 before revocation', encoding='utf-8')
+            value = request.read_text(encoding='utf-8')
+            request.write_text(value.replace('Implementation authorization: AUTHORIZED', 'Implementation authorization: NOT_INFERRED'), encoding='utf-8')
+'@
+            Write-NoBom (Join-Path $fixtureRepo "tests_auth_$suffix\test_value.py") $regression
+        }
+        New-BugTask -Id "AICO-$suffix" -SourceFile "bug_value$suffix.py" -TestDir "tests_auth_$suffix"
+    }
 
     & git -C $fixtureRepo init | Out-Null
     & git -C $fixtureRepo config user.email "aico-test@example.invalid"
@@ -323,7 +369,7 @@ class Regression(unittest.TestCase):
     & git -C $fixtureRepo commit -m "diagnostic runtime fixture" | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Fixture commit failed." }
 
-    foreach ($id in @("AICO-901","AICO-902","AICO-903")) {
+    foreach ($id in @("AICO-901","AICO-902","AICO-903","AICO-904","AICO-905")) {
         & (Join-Path $repoRoot "scripts\new-agent-workspace.ps1") -Id $id -ProjectPath $fixtureRepo -WorkspaceRoot $workspaces | Out-Null
     }
 
@@ -387,6 +433,44 @@ class Regression(unittest.TestCase):
     }
     $e903 = Get-Content (Join-Path $fixtureRepo "docs\engineering\diagnostics\AICO-903-diagnostic-v1.json") -Raw | ConvertFrom-Json
     if ($e903.state -ne "FAILED_POST_FIX") { throw "Failed post-fix evidence was not preserved." }
+
+    $env:AICO_AUTH_FIXTURE_REQUEST = Join-Path $fixtureRepo 'docs\engineering\work-requests\WR-TEST.md'
+    try {
+        foreach ($number in @(904,905)) {
+            $id = "AICO-$number"
+            $env:AICO_AUTH_MUTATION_TEST = if ($number -eq 904) { 'DIAGNOSTIC_EXPIRE' } else { 'VERIFY_REVOKE' }
+            $evidencePath = Join-Path $fixtureRepo "docs\engineering\writable-evidence\$id.md"
+            $reportPath = Join-Path $fixtureRepo "docs\engineering\agent-reports\$id.md"
+            foreach ($path in @($evidencePath,$reportPath)) { Write-NoBom $path 'retain prior authorization evidence' }
+            $callsPath = Join-Path $fixtureRepo '.codex\mutation-provider-calls.txt'
+            Remove-Item $callsPath -Force -ErrorAction SilentlyContinue
+            $repro = "python -B -m unittest discover -s tests_auth_$number"
+            $fixed = "def value():" + $nl + '    return 2' + $nl
+            Set-FakeResult (New-BugResult -SourceFile "bug_value$number.py" -FixedContent $fixed -ReproductionCommand $repro -HypothesisCommand "python -B -m unittest discover -s tests_auth_probe_$number" -VerificationCommand $repro)
+            $rejected = $false
+            try { Invoke-Runner -Id $id }
+            catch { if ($_.Exception.Message -match 'BLOCKED') { $rejected = $true } else { throw } }
+            if (-not $rejected) { throw "${id}: authorization invalidation was ignored." }
+            if ($number -eq 905 -and -not (Test-Path (Join-Path (Split-Path $env:AICO_AUTH_FIXTURE_REQUEST) 'verification-observed-applied-source.txt'))) { throw "${id}: verification did not observe applied source before revoking authorization." }
+            $taskContent = Get-Content (Join-Path $fixtureRepo "tasks\$id.md") -Raw
+            if ($taskContent -notmatch '(?m)^Status: BLOCKED\s*$') { throw "${id}: task not BLOCKED." }
+            if ((Get-Content (Join-Path $workspaces "$id\bug_value$number.py") -Raw) -notmatch 'return 1') { throw "${id}: source mutation survived rejection." }
+            if (@(& git -C (Join-Path $workspaces $id) status --porcelain).Count -ne 0) { throw "${id}: source worktree changed after rejection." }
+            foreach ($path in @($evidencePath,$reportPath)) {
+                if ((Get-Content $path -Raw) -cne 'retain prior authorization evidence') { throw "${id}: prior evidence was overwritten." }
+            }
+            if (Test-Path (Join-Path $fixtureRepo "docs\engineering\results\$id-result-001.md")) { throw "${id}: success result published." }
+            if (Test-Path (Join-Path $fixtureRepo "docs\engineering\diagnostics\$id-diagnostic-v1.json")) { throw "${id}: rejected attempt left a diagnostic artifact." }
+            if (@(Get-Content $callsPath).Count -ne 1) { throw "${id}: unexpected fallback call." }
+            $outputPath = Get-Content (Join-Path $fixtureRepo '.codex\mutation-output-path.txt') -Raw
+            if (Test-Path -LiteralPath $outputPath) { throw "${id}: provider temporary output was not removed." }
+            Write-Host "PASS: $env:AICO_AUTH_MUTATION_TEST; calls=1; state=BLOCKED; source/evidence preserved; temporary output removed."
+        }
+    }
+    finally {
+        Remove-Item Env:AICO_AUTH_MUTATION_TEST -ErrorAction SilentlyContinue
+        Remove-Item Env:AICO_AUTH_FIXTURE_REQUEST -ErrorAction SilentlyContinue
+    }
 
     $task902Path = Join-Path $fixtureRepo "tasks\AICO-902.md"
     $originalTask902 = Get-Content -LiteralPath $task902Path -Raw -Encoding UTF8

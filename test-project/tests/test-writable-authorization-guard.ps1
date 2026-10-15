@@ -235,10 +235,36 @@ param(
     [string]$Context,
     [string]$SchemaPath,
     [string]$OutputPath,
-    [string]$Model
+    [string]$Model,
+    [string]$TaskId
 )
 $marker = Join-Path $ProjectPath ".codex\provider-called.txt"
 [System.IO.File]::WriteAllText($marker,"called",(New-Object System.Text.UTF8Encoding($false)))
+if ($env:AICO_POST_PROVIDER_CASE) {
+    $calls = Join-Path $ProjectPath '.codex\post-provider-calls.txt'
+    [IO.File]::AppendAllText($calls, "$Provider`n")
+    [IO.File]::WriteAllText((Join-Path $ProjectPath '.codex\post-provider-output-path.txt'), $OutputPath)
+    $requestPath = Join-Path $ProjectPath 'docs\engineering\work-requests\WR-AUTH.md'
+    $request = Get-Content -LiteralPath $requestPath -Raw -Encoding UTF8
+    switch ($env:AICO_POST_PROVIDER_CASE) {
+        'REVOKE' { $request = $request.Replace('Implementation authorization: AUTHORIZED', 'Implementation authorization: NOT_INFERRED') }
+        'REVOKE_AUTO' { $request = $request.Replace('Implementation authorization: AUTHORIZED', 'Implementation authorization: NOT_INFERRED') }
+        'EXPIRE' { $request = $request -replace '(?m)^Authorization expires \(UTC\):.*$', 'Authorization expires (UTC): 2000-01-01T00:00:00Z' }
+        'RECEIPT' { $request = $request.Replace('Requested by: explicit fixture requester', 'Requested by: changed fixture requester') }
+        'DEPENDENCY' {
+            $path = Join-Path $ProjectPath 'tasks\AICO-120.md'
+            [IO.File]::WriteAllText($path, ((Get-Content $path -Raw).Replace('Status: DONE', 'Status: ACTIVE')))
+        }
+        'SCOPE' {
+            $path = Join-Path $ProjectPath 'tasks\AICO-119.md'
+            [IO.File]::WriteAllText($path, ((Get-Content $path -Raw).Replace('Safely update post-provider.txt.', 'Replace the authorized objective after provider invocation.')))
+        }
+        'REVOKE_THROW' { $request = $request.Replace('Implementation authorization: AUTHORIZED', 'Implementation authorization: NOT_INFERRED') }
+    }
+    [IO.File]::WriteAllText($requestPath, $request, (New-Object Text.UTF8Encoding($false)))
+    if ($env:AICO_POST_PROVIDER_CASE -eq 'REVOKE_THROW') { throw 'Simulated provider transport failure after revocation.' }
+    if ($env:AICO_POST_PROVIDER_CASE -eq 'VALID_FALLBACK' -and $Provider -eq 'OpenRouter') { throw 'Simulated recoverable transport failure with valid authorization.' }
+}
 $payload = @{
     outcome = "COMPLETED"
     summary = "Authorized implementation"
@@ -258,7 +284,7 @@ $payload = @{
     recommended_next = "REVIEW"
 } | ConvertTo-Json -Depth 20
 [System.IO.File]::WriteAllText($OutputPath,$payload,(New-Object System.Text.UTF8Encoding($false)))
-[PSCustomObject]@{ Provider = "OpenRouter"; Model = $Model }
+[PSCustomObject]@{ Provider = $Provider; Model = $Model }
 '@
     Write-NoBom (Join-Path $fixtureRepo "scripts\provider-router.ps1") $fakeRouter
 
@@ -292,6 +318,8 @@ $payload = @{
     New-FixtureTask -Id "AICO-116" -Status "READY"  -WorkKind "IMPLEMENTATION" -FileName "race-dependency-status.txt" -Dependencies @("AICO-117")
     New-FixtureTask -Id "AICO-117" -Status "DONE"   -WorkKind "IMPLEMENTATION" -FileName "race-dependency-status-done.txt"
     New-FixtureTask -Id "AICO-118" -Status "READY"  -WorkKind "IMPLEMENTATION" -FileName "retained-provider-restriction.txt"
+    New-FixtureTask -Id "AICO-119" -Status "READY"  -WorkKind "IMPLEMENTATION" -FileName "post-provider.txt" -Dependencies @('AICO-120')
+    New-FixtureTask -Id "AICO-120" -Status "DONE"   -WorkKind "IMPLEMENTATION" -FileName "post-provider-dependency.txt"
     Set-TestAuthorizationReceipt -TaskId "AICO-104"
     $sentinelEvidencePath = Join-Path $fixtureRepo "docs\engineering\writable-evidence\P0-preservation-sentinel.md"
     Write-NoBom $sentinelEvidencePath "preserve pre-existing evidence byte-for-byte"
@@ -426,6 +454,54 @@ if ($env:AICO_TEST_MUTATE_DEPENDENCY -eq "1") {
     Copy-Item (Join-Path $repoRoot "scripts\build-agent-context.ps1") (Join-Path $fixtureRepo "scripts\build-agent-context.ps1") -Force
     Set-TestAuthorizationReceipt -TaskId "AICO-104"
 
+    $postWorkspace = Add-DirectWorkspace -Id 'AICO-119'
+    $postTaskPath = Join-Path $fixtureRepo 'tasks\AICO-119.md'
+    $postTask = Get-Content $postTaskPath -Raw -Encoding UTF8
+    $postDependencyPath = Join-Path $fixtureRepo 'tasks\AICO-120.md'
+    $postDependency = Get-Content $postDependencyPath -Raw -Encoding UTF8
+    $postEvidence = Join-Path $fixtureRepo 'docs\engineering\writable-evidence\AICO-119.md'
+    $postReport = Join-Path $fixtureRepo 'docs\engineering\agent-reports\AICO-119.md'
+    $postDiagnostic = Join-Path $fixtureRepo 'docs\engineering\diagnostics\AICO-119-diagnostic-v1.json'
+    foreach ($path in @($postEvidence,$postReport,$postDiagnostic)) { Write-NoBom $path 'preserve prior evidence' }
+    $postConfig = Join-Path $fixtureRepo '.codex\provider-config.json'
+    $configBefore = Get-Content $postConfig -Raw -Encoding UTF8
+    $configValue = $configBefore | ConvertFrom-Json
+    $configValue.writable_auto_order = @('OpenRouter','Ollama')
+    Write-NoBom $postConfig ($configValue | ConvertTo-Json -Depth 10)
+    $env:OPENROUTER_API_KEY = 'fixture-only-not-a-real-credential'
+    try {
+        foreach ($case in @('REVOKE','REVOKE_AUTO','EXPIRE','DEPENDENCY','RECEIPT','SCOPE','REVOKE_THROW')) {
+            Write-NoBom $postTaskPath $postTask
+            Write-NoBom $postDependencyPath $postDependency
+            Set-TestAuthorizationReceipt -TaskId 'AICO-119'
+            $callsPath = Join-Path $fixtureRepo '.codex\post-provider-calls.txt'
+            Remove-Item $callsPath -Force -ErrorAction SilentlyContinue
+            $env:AICO_POST_PROVIDER_CASE = $case
+            $rejected = $false
+            $provider = if ($case -eq 'REVOKE') { 'OpenRouter' } else { 'Auto' }
+            try { & (Join-Path $fixtureRepo 'scripts\run-writable-agent.ps1') -Id 'AICO-119' -ProjectPath $fixtureRepo -WorkspacePath $postWorkspace -Provider $provider }
+            catch { if ($_.Exception.Message -match 'BLOCKED') { $rejected = $true } else { throw } }
+            if (-not $rejected) { throw "POST_PROVIDER_${case}: invalidated authorization was accepted." }
+            if ((Get-TaskStatus -Id 'AICO-119') -ne 'BLOCKED') { throw "POST_PROVIDER_${case}: task not BLOCKED." }
+            if (@(Get-Content $callsPath).Count -ne 1) { throw "POST_PROVIDER_${case}: fallback invoked another provider." }
+            $outputPath = Get-Content (Join-Path $fixtureRepo '.codex\post-provider-output-path.txt') -Raw
+            if (Test-Path -LiteralPath $outputPath) { throw "POST_PROVIDER_${case}: temporary provider output survived rejection." }
+            if (@(& git -C $postWorkspace status --porcelain).Count -ne 0) { throw "POST_PROVIDER_${case}: source changed." }
+            foreach ($path in @($postEvidence,$postReport,$postDiagnostic)) {
+                if ((Get-Content $path -Raw) -cne 'preserve prior evidence') { throw "POST_PROVIDER_${case}: existing evidence changed." }
+            }
+            if (Test-Path (Join-Path $fixtureRepo 'docs\engineering\results\AICO-119-result-001.md')) { throw "POST_PROVIDER_${case}: result published." }
+            $lease = Enter-TaskExecutionLock -ProjectPath $fixtureRepo -Id 'AICO-119' -Operation 'POST-PROVIDER-RELEASE-CHECK'
+            Exit-TaskExecutionLock -Lock $lease
+            Write-Host "PASS: POST_PROVIDER_$case; calls=1; state=BLOCKED; source/evidence preserved; no result."
+        }
+    }
+    finally {
+        Remove-Item Env:AICO_POST_PROVIDER_CASE -ErrorAction SilentlyContinue
+        Write-NoBom $postConfig $configBefore
+    }
+    Set-TestAuthorizationReceipt -TaskId 'AICO-104'
+
     $implementationWorkspaceRoot = Join-Path $tempParent "implementation-workspaces"
     & (Join-Path $fixtureRepo "scripts\new-agent-workspace.ps1") -Id "AICO-104" -ProjectPath $fixtureRepo -WorkspaceRoot $implementationWorkspaceRoot | Out-Null
 
@@ -433,8 +509,13 @@ if ($env:AICO_TEST_MUTATE_DEPENDENCY -eq "1") {
     if (-not (Test-Path $implementationWorkspace)) { throw "IMPLEMENTATION READY task could not create an isolated writable workspace." }
 
     $env:OPENROUTER_API_KEY = "writable-auth-test-key"
+    Write-NoBom $postConfig ($configValue | ConvertTo-Json -Depth 10)
+    $env:AICO_POST_PROVIDER_CASE = 'VALID_FALLBACK'
+    Remove-Item (Join-Path $fixtureRepo '.codex\post-provider-calls.txt') -Force -ErrorAction SilentlyContinue
 
     & (Join-Path $fixtureRepo "scripts\run-writable-agent.ps1") -Id "AICO-104" -ProjectPath $fixtureRepo -WorkspacePath $implementationWorkspace -Provider Auto
+    Remove-Item Env:AICO_POST_PROVIDER_CASE -ErrorAction SilentlyContinue
+    if (@(Get-Content (Join-Path $fixtureRepo '.codex\post-provider-calls.txt')).Count -ne 2) { throw 'Valid authorization incorrectly prevented recoverable provider fallback.' }
 
     if ((Get-TaskStatus -Id "AICO-104") -ne "REVIEW") {
         throw "Authorized IMPLEMENTATION READY task did not complete READY -> ACTIVE -> REVIEW."
@@ -450,6 +531,7 @@ if ($env:AICO_TEST_MUTATE_DEPENDENCY -eq "1") {
     Write-Host "PASS: writable lower-layer authorization guard" -ForegroundColor Green
 }
 finally {
+    Remove-Item Env:AICO_POST_PROVIDER_CASE -ErrorAction SilentlyContinue
     $env:OPENROUTER_API_KEY = $savedOpenRouter
 
     if (Test-Path $fixtureRepo) {
@@ -466,6 +548,8 @@ finally {
             (Join-Path $workspaces "AICO-113"),
             (Join-Path $workspaces "AICO-115"),
             (Join-Path $workspaces "AICO-116"),
+            (Join-Path $workspaces "AICO-118"),
+            (Join-Path $workspaces "AICO-119"),
             (Join-Path $tempParent "implementation-workspaces\AICO-104")
         )) {
             if (Test-Path $candidate) {
