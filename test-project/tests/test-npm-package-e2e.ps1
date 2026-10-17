@@ -44,6 +44,7 @@ $requiredProjectRuntimeArtifacts = @(
     "scripts\error-intelligence.ps1",
         "scripts\review-grounding.ps1",
         "scripts\task-execution-lock.ps1",
+        "scripts\writable-authorization-guard.ps1",
         "schemas\review-result.schema.json",
     "scripts\validate-engineering-plan-result.ps1",
     "scripts\validate-analysis-result-semantics.ps1",
@@ -72,7 +73,7 @@ function Assert-ManagedProjectRuntime {
         }
     }
 
-    foreach ($relative in @('scripts/error-intelligence.ps1','scripts/providers/invoke-codex.ps1', 'schemas/agent-result.schema.json', 'schemas/engineering-plan-result.schema.json','scripts/review-grounding.ps1','scripts/single-attempt-execution.ps1','scripts/task-execution-lock.ps1','schemas/review-result.schema.json','scripts/validate-diagnostic-evidence.ps1','scripts/assert-bug-diagnostic-evidence.ps1')) {
+    foreach ($relative in @('scripts/error-intelligence.ps1','scripts/providers/invoke-codex.ps1', 'schemas/agent-result.schema.json', 'schemas/engineering-plan-result.schema.json','scripts/review-grounding.ps1','scripts/single-attempt-execution.ps1','scripts/task-execution-lock.ps1','scripts/writable-authorization-guard.ps1','schemas/review-result.schema.json','scripts/validate-diagnostic-evidence.ps1','scripts/assert-bug-diagnostic-evidence.ps1')) {
         $expectedHash = (Get-FileHash (Join-Path $repoRoot $relative) -Algorithm SHA256).Hash
         $installedHash = (Get-FileHash (Join-Path $ProjectPath $relative) -Algorithm SHA256).Hash
         if ($installedHash -ne $expectedHash) {
@@ -81,7 +82,7 @@ function Assert-ManagedProjectRuntime {
     }
 
     $ownership=Get-Content (Join-Path $ProjectPath '.codex/managed-files.json') -Raw -Encoding UTF8|ConvertFrom-Json
-    foreach($relative in @('scripts/error-intelligence.ps1','scripts/review-grounding.ps1','scripts/single-attempt-execution.ps1','scripts/task-execution-lock.ps1','schemas/review-result.schema.json')){
+    foreach($relative in @('scripts/error-intelligence.ps1','scripts/review-grounding.ps1','scripts/single-attempt-execution.ps1','scripts/task-execution-lock.ps1','scripts/writable-authorization-guard.ps1','schemas/review-result.schema.json')){
         if(@($ownership.managed_files)-cnotcontains $relative){throw "$Scenario missing grounding/barrier ownership: $relative"}
     }
     . (Join-Path $ProjectPath 'scripts/task-execution-lock.ps1')
@@ -289,6 +290,7 @@ try {
         "scripts/provider-router.ps1",
         "scripts/review-grounding.ps1",
         "scripts/task-execution-lock.ps1",
+        "scripts/writable-authorization-guard.ps1",
         "schemas/review-result.schema.json",
         "scripts/validate-engineering-plan-result.ps1",
         "scripts/validate-engineering-backlog-semantics.ps1",
@@ -334,7 +336,7 @@ try {
     if ($driftedHash -eq $sourceHash) {
         throw "Release E2E could not create managed runtime drift before update."
     }
-    foreach($relative in @('scripts/review-grounding.ps1','scripts/task-execution-lock.ps1','schemas/review-result.schema.json')){
+    foreach($relative in @('scripts/review-grounding.ps1','scripts/task-execution-lock.ps1','scripts/writable-authorization-guard.ps1','schemas/review-result.schema.json')){
         $target=Join-Path $projectPath $relative
         [IO.File]::AppendAllText($target,[Environment]::NewLine,(New-Object Text.UTF8Encoding($false)))
         if((Get-FileHash $target).Hash -ceq (Get-FileHash (Join-Path $installedPackageRoot $relative)).Hash){throw "Could not create grounding/barrier update drift: $relative"}

@@ -29,6 +29,61 @@ The runtime must reject:
 - environment/secret/key/credential paths;
 - symlink, junction or reparse-point escapes.
 
+## Authorization and dependency preflight
+
+`READY` and `ACTIVE` describe task lifecycle only; neither status grants
+implementation permission. Before a writable task can be activated or a
+provider invoked, the runner requires the task's canonical Work Request at
+`docs/engineering/work-requests/<Work request>.md` to contain exactly one
+`Authorization Receipt` section and validates that receipt against the current
+task.
+
+The receipt reuses the Work Request's existing `Authorization Receipt`
+contract. It must identify a requester and request date (`Requested by` and
+`Created` metadata), requested action, permitted scope, retained restrictions,
+and the following explicit implementation fields:
+
+- `Implementation authorization: AUTHORIZED`
+- `Authorized task: <exact task ID>`
+- `Authorized operation: WRITABLE`
+- `Authorized execution mode: WRITABLE`
+- `Authorized provider invocation: ALLOWED`
+- `Authorized write scope: TASK_WORKTREE_ONLY`
+- `Authorized scope SHA-256: <64 lowercase or uppercase hex characters>`
+- `Authorization expires (UTC): <yyyy-MM-ddTHH:mm:ssZ>`
+
+The permitted scope must include `WRITABLE_IMPLEMENTATION`; the requested
+action must name the task. The scope fingerprint binds the task ID, type, work
+kind, owner, Work Request, complete Objective section and complete Acceptance
+Criteria section. Task and Work Request types must match.
+`scripts/writable-authorization-guard.ps1` exposes
+`Get-WritableScopeFingerprint` to calculate the fingerprint from canonical task
+content. A scope edit, wrong task/operation, expired or malformed receipt,
+duplicate/ambiguous field, missing receipt, or retained restriction fails
+closed. Writable execution requires `Retained restrictions: NONE`; the guard does
+not interpret arbitrary natural-language restrictions. These explicit fields
+bind authorization to writable execution, provider invocation and writes limited
+to the registered task worktree. New Work Requests initialize all such fields to
+`NONE`, so authorization is never inferred from request creation or task state.
+
+Every dependency declared in the task's canonical `Dependencies` section must
+resolve to exactly one matching task record whose status is `DONE`. Missing,
+ambiguous, malformed or non-DONE dependencies fail closed.
+
+Authorization, dependency state, the task worktree registration/branch and its
+baseline are checked before any `READY -> ACTIVE` transition. They are checked
+again immediately before provider invocation, and the authorization receipt
+text must remain identical across those checks. A failed authorization,
+dependency or worktree preflight records the task as `BLOCKED` through the
+lifecycle transition engine; it does not invoke a provider or promote the task.
+The existing task execution lease remains held throughout these checks and
+transition attempts.
+
+This receipt is a validated project authorization record, not a cryptographic
+signature. Provider availability/selection remains independently governed by
+the existing provider configuration and writable policy; this authorization
+guard does not enable or add a provider.
+
 ## Control plane
 
 After source application and verification succeed, the canonical control plane may record:

@@ -59,6 +59,26 @@ def write(path: Path, content: str) -> None:
     )
 
 
+def authorize_writable_fixture(root: Path, task_id: str) -> None:
+    subprocess.run(
+        [
+            "powershell",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(root / "scripts" / "authorize-writable-fixture.ps1"),
+            "-ProjectPath",
+            str(root),
+            "-TaskId",
+            task_id,
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+
 def prepare_engine_project(
     tmp_path: Path,
     engine_root: Path,
@@ -76,6 +96,10 @@ def prepare_engine_project(
     shutil.copy2(
         engine_root / "test-project" / "helpers" / "grounded-review-fixture.ps1",
         root / "scripts" / "e2e-grounded-review-fixture.ps1",
+    )
+    shutil.copy2(
+        engine_root / "test-project" / "helpers" / "authorize-writable-fixture.ps1",
+        root / "scripts" / "authorize-writable-fixture.ps1",
     )
 
     shutil.copytree(
@@ -1006,6 +1030,12 @@ def test_objective_to_done_is_operated_from_tui(
                     )
                     for task in tasks
                 ):
+                    for task in tasks:
+                        if (
+                            task.status == "ACTIVE"
+                            and task.work_kind == "IMPLEMENTATION"
+                        ):
+                            authorize_writable_fixture(root, task.id)
                     await pilot.press("w")
                     await wait_idle(
                         pilot,

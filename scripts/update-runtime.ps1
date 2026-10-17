@@ -320,6 +320,7 @@ $scriptNames = @(
     "summarize-metrics.ps1",
     "new-agent-workspace.ps1",
     "run-writable-agent.ps1",
+    "writable-authorization-guard.ps1",
     "resolve-writable-required-files.ps1",
     "task-execution-lock.ps1",
     "review-grounding.ps1",

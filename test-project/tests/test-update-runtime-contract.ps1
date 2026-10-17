@@ -201,6 +201,7 @@ try {
     foreach ($relative in @(
         "scripts/provider-router.ps1",
         "scripts/run-agent-task.ps1",
+        "scripts/writable-authorization-guard.ps1",
         "scripts/task-execution-lock.ps1",
         "scripts/validate-engineering-plan-result.ps1",
         "scripts/validate-analysis-result-semantics.ps1",
@@ -234,6 +235,11 @@ try {
 
     if (Test-Path (Join-Path $tempRoot "scripts\update-runtime.ps1")) {
         throw "Package-owned updater must not be materialized into client projects."
+    }
+
+    $updatedManifest = Get-Content (Join-Path $tempRoot ".codex\managed-files.json") -Raw -Encoding UTF8 | ConvertFrom-Json
+    if (@($updatedManifest.managed_files) -cnotcontains "scripts/writable-authorization-guard.ps1") {
+        throw "Runtime update did not register the writable authorization guard as managed runtime."
     }
 
     # Project-owned content must remain byte-for-byte unchanged.
