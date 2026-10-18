@@ -111,6 +111,7 @@ try {
         "scripts/provider-router.ps1",
         "scripts/review-grounding.ps1",
         "scripts/task-execution-lock.ps1",
+        "scripts/writable-authorization-guard.ps1",
         "schemas/review-result.schema.json",
         "scripts/run-agent-task.ps1",
         "scripts/run-gate-agent.ps1",
@@ -283,6 +284,7 @@ try {
             "scripts\provider-router.ps1",
         "scripts\review-grounding.ps1",
         "scripts\task-execution-lock.ps1",
+        "scripts\writable-authorization-guard.ps1",
         "schemas\review-result.schema.json",
             "scripts\validate-engineering-plan-result.ps1",
             "scripts\validate-engineering-backlog-semantics.ps1",
@@ -307,7 +309,7 @@ try {
         if (Test-Path (Join-Path $installedPackageRoot "npm-bin\package.test.js")) {
             throw "Installed npm tarball must not contain npm-bin/package.test.js."
         }
-        foreach($relative in @('scripts/review-grounding.ps1','scripts/task-execution-lock.ps1','schemas/review-result.schema.json')){
+        foreach($relative in @('scripts/review-grounding.ps1','scripts/task-execution-lock.ps1','scripts/writable-authorization-guard.ps1','schemas/review-result.schema.json')){
             if((Get-FileHash (Join-Path $repoRoot $relative)).Hash -cne (Get-FileHash (Join-Path $installedPackageRoot $relative)).Hash){throw "Installed tarball has stale grounding/barrier bytes: $relative"}
         }
         $barrierProject=Join-Path $installRoot 'shipped barrier probe'
