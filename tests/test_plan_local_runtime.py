@@ -4,8 +4,11 @@ import asyncio
 import threading
 from types import SimpleNamespace
 
+import pytest
 from rich.console import Console
 from textual.app import App
+from textual import work
+from textual.worker import WorkerCancelled, WorkerFailed
 from textual.widgets import Static
 
 from company_os.application.local_runtime_service import LocalRuntimeStatus
@@ -25,39 +28,97 @@ class RuntimePlanScreen(PlanControlScreen):
         self._refresh_local_runtime(self.fixture_tasks)
 
 
-def test_runtime_panel_worker_keeps_navigation_responsive(tmp_path):
+async def wait_for_runtime_worker(worker, screen):
+    try:
+        return await worker.wait()
+    except WorkerCancelled:
+        # Only cancellation of this captured worker after unmount is expected.
+        assert screen not in screen.app.screen_stack
+        assert worker.is_cancelled
+
+
+@pytest.mark.parametrize("finish_before_escape", [False, True])
+def test_runtime_panel_worker_keeps_navigation_responsive(tmp_path, finish_before_escape):
     async def scenario():
-        started, release = threading.Event(), threading.Event()
+        started, release, finished = threading.Event(), threading.Event(), threading.Event()
+        worker_finished = threading.Event()
         calls = []
-        screen = RuntimePlanScreen(SimpleNamespace(project_root=tmp_path), SimpleNamespace())
+
+        class ObservedRuntimeScreen(RuntimePlanScreen):
+            @work(thread=True, exclusive=True, group="local-runtime")
+            def _inspect_local_runtime(self, key, generation):
+                try:
+                    return PlanControlScreen._inspect_local_runtime.__wrapped__(self, key, generation)
+                finally:
+                    # Cancellation of Textual's awaitable does not stop executor work.
+                    worker_finished.set()
+
+        screen = ObservedRuntimeScreen(SimpleNamespace(project_root=tmp_path), SimpleNamespace())
         screen.fixture_tasks = [SimpleNamespace(owner="backend", status="ACTIVE", work_kind="IMPLEMENTATION")]
         def inspect(root, role, workload):
             calls.append((root, role, workload))
             started.set()
-            release.wait(timeout=5)
-            return LocalRuntimeStatus(available=True, profile="LOCAL_GPU_8GB", capability_score=72,
-                                      model="fixture-coder:7b", reason="Fixture selection", ram_gb=32,
-                                      gpu_name="Fixture GPU", vram_gb=8, num_ctx=8192, num_predict=2048)
+            try:
+                assert release.wait(timeout=5), "Inspection was not released"
+                return LocalRuntimeStatus(available=True, profile="LOCAL_GPU_8GB", capability_score=72,
+                                          model="fixture-coder:7b", reason="Fixture selection", ram_gb=32,
+                                          gpu_name="Fixture GPU", vram_gb=8, num_ctx=8192, num_predict=2048)
+            finally:
+                finished.set()
         screen.local_runtime.inspect = inspect
         class TestApp(App):
             language = "en"
             interface_theme = "hacker"
         app = TestApp()
         async with app.run_test() as pilot:
-            await app.push_screen(screen)
-            for _ in range(30):
-                if started.is_set():
-                    break
-                await asyncio.sleep(0.01)
-            assert started.is_set()
-            assert "Inspecting local runtime" in rendered(screen.query_one("#plan-local-runtime", Static))
-            assert screen.busy is False
-            # A pending hardware process must not occupy the UI thread or forbid back.
-            await pilot.press("escape")
-            assert app.screen is not screen
-            release.set()
-            await screen.workers.wait_for_complete()
+            try:
+                await app.push_screen(screen)
+                assert await asyncio.to_thread(started.wait, 5)
+                workers = [worker for worker in screen.workers if worker.group == "local-runtime"]
+                assert len(workers) == 1
+                worker = workers[0]
+                assert "Inspecting local runtime" in rendered(screen.query_one("#plan-local-runtime", Static))
+                assert screen.busy is False
+                if finish_before_escape:
+                    release.set()
+                    await asyncio.wait_for(worker.wait(), timeout=5)
+                    assert worker.is_finished and not worker.is_cancelled
+                else:
+                    assert not finished.is_set()
+                # A pending hardware process must not occupy the UI thread or forbid back.
+                await pilot.press("escape")
+                assert app.screen is not screen
+                assert screen not in app.screen_stack
+                if not finish_before_escape:
+                    assert worker.is_cancelled
+                    with pytest.raises(WorkerCancelled):
+                        await worker.wait()
+                release.set()
+                await asyncio.wait_for(wait_for_runtime_worker(worker, screen), timeout=5)
+            finally:
+                release.set()
+                assert await asyncio.to_thread(finished.wait, 5), "Inspection thread did not finish"
+                assert await asyncio.to_thread(worker_finished.wait, 5), "Worker body did not finish"
         assert calls == [(tmp_path, "backend", "writable")]
+    asyncio.run(scenario())
+
+
+def test_runtime_worker_unexpected_failure_is_not_hidden():
+    async def scenario():
+        class TestApp(App):
+            pass
+
+        def fail():
+            raise RuntimeError("unexpected inspection failure")
+
+        app = TestApp()
+        async with app.run_test():
+            worker = app.run_worker(fail, thread=True, exit_on_error=False)
+            with pytest.raises(WorkerFailed) as caught:
+                await asyncio.wait_for(wait_for_runtime_worker(worker, app.screen), timeout=5)
+            assert isinstance(caught.value.error, RuntimeError)
+            assert str(caught.value.error) == "unexpected inspection failure"
+
     asyncio.run(scenario())
 
 
