@@ -1,0 +1,110 @@
+{
+  "schema": "sbx002.documentary-provenance.v1",
+  "project": "AI_COMPANY_OS",
+  "revision": 1,
+  "updated_utc": "2026-10-18T21:10:43Z",
+  "task": "SBX002_S0_CANONICAL_DOCUMENTARY_PUBLICATION_V1",
+  "base_sha": "5d5fbf67630c48b98378e7f869acd90deec07057",
+  "authority": "Human Project Owner instruction: CENTRAL_DECISION_V1 — SBX-002 S0 PUBLICATION AUTHORIZED; documentation only",
+  "draft_recovery": {
+    "disposition": "New successor documents prepared from verified sources; not represented as exact recovered draft",
+    "exact_original_bytes": "UNKNOWN",
+    "output_id": "ORCHESTRATOR_A_SBX002_S0_BASELINE_DRAFT_V1"
+  },
+  "delegated_decision_source": {
+    "verified_by_A": true,
+    "name": "SBX002_DECISIONES_DELEGADAS_V1.md",
+    "sha256": "dfbd9cc8af22953ac1a963fc104283028b8c9a3c46b603aadb1b4110e383ab1c",
+    "exact_text_utf8": "# SBX-002 — seis decisiones técnicas delegadas\n\nProject: AI_COMPANY_OS\nRevision: 1\nUpdated: 2026-10-17T15:05:15Z\nUpdated by: Codex /root, selector técnico delegado por el usuario\nEstado: DECISIONES_TECNICAS_EMITIDAS; persistencia canónica y revisión A/B pendientes.\n\n## Autorización y evidencia primaria\n\nEl mensaje humano de esta sesión encomienda «Tomar las decisiones técnicas recomendadas con juicio independiente, sin pedirle que elija detalles», preparar el registro y, si la gobernanza lo permite, una corrección documental mínima de D6 y PR draft, sin merge. La delegación selecciona diseño y permite preparación controlada; no certifica el sandbox ni concede autorización operacional irrestricta.\n\nAntecedente recuperado: conversación 6ac6b5f4-239c-83e8-a297-2b28d9399ac0, mensaje d4770dec-cec2-4489-a47c-c5840d61b472: «sinceramente no tengo la mas puta idea de que decidir , implem,ente lo que sea mejor en cada caso de los 6». El adjunto Texto pegado(3).txt registra la designación previa del Human Project Owner y las seis propuestas; Texto pegado(2).txt contiene dictámenes reportados de CTO/Security/CEO. Estos dictámenes son antecedentes, no firmas externas comprobadas en este turno.\n\nAutoridad ejercida aquí: selección técnica expresamente delegada en el agente de esta sesión. Autoridad humana declarada en antecedentes; identidad externa: NOT_VERIFIED. Firmas institucionales CTO/Security: UNKNOWN. Este registro no atribuye al humano seis respuestas literales APPROVED ni inventa pronunciamientos de terceros.\n\nReferencia exacta para las seis decisiones: NATIVE_SBX_002_CTO_SECURITY_DECISION_RECORD_V1.md, SHA256 `11de899585c2782f480c88243a2f0991731b09841f33183b97a4f7c4f4dd6949`. Hash recalculado y coincidente en este turno. Original preservado; copia exacta incluida en esta entrega. Cada APPROVED siguiente tiene únicamente el alcance y condiciones expresos; no ratifica íntegramente el documento ni sus valores propuestos.\n\n## DR-1\n\n- DECISION: APPROVED, bajo condiciones; diseño solamente.\n- SOURCE_REQUIREMENT: C1/C2/C5/P1-03; secciones 3–4 de la referencia exacta.\n- APPROVED_SCOPE: receipt compuesto obligatorio, shapes cerrados, referencias acíclicas, separación guest/host y consumidor VerifyReceiptPackage obligatorio. V1 aislado nunca acredita verificación suficiente. EXECUTION_EVIDENCE exige V1 realmente observado; HOST_TERMINAL puede omitir V1 cuando no existe resultado guest y siempre rechaza.\n- JUSTIFICATION: conserva V1/SBX-001 sin permitir omitir evidencia host adicional ni fabricar datos guest.\n- CONDITIONS: verificar procedencia host, pertenencia, identidad, frescura y continuidad; hashes/dataclasses no conceden autoridad. Cleanup final confirmado es obligatorio para cualquier paquete sellado admisible. Rechazar origen simulado para uso operacional. Límites nuevos y retención quedan pendientes de política versionada; no se aprueban por arrastre.\n- EVIDENCE: bytes de referencia, propuesta individual del adjunto y delegación humana actual; consumidor operacional no demostrado.\n- UNKNOWN/RISKS: rollback coherente, almacenamiento durable, cuotas globales, implementación e integración del consumidor.\n- OPEN_DEPENDENCIES: revisión de registro, políticas materiales y evidencia futura de parsing, replay, origen, persistencia y purga autorizada.\n- IMPLEMENTATION_AUTHORIZED: FALSE para broker/runner/operación.\n\n## DR-2\n\n- DECISION: APPROVED, bajo condiciones; diseño solamente.\n- SOURCE_REQUIREMENT: C5/P1-01/P1-03; secciones 5–6.\n- APPROVED_SCOPE: snapshot_id lógico y única arista CLEANUP_VERIFY[g0] -> CAPTURING[g1], exclusivamente por PRE_RUN_TRANSPORT_FAILURE g0 anterior a enviar código. Una sola oportunidad consumida durablemente junto con generación e intención; request inmutable, autoridad/lease/reserva vigentes, cleanup g0 confirmado y VSS/VM nuevas.\n- JUSTIFICATION: permite recuperar preparación sin repetir código ni reutilizar recursos inciertos.\n- CONDITIONS: RetryResolution sólo resuelve la causa de transporte g0; no limpia invalidación. Prohibido tras código enviado, commit incierto, reinicio, pérdida de continuidad o retry consumido. Presupuestos de captura/preparación 120/180 s acumulados, sin reset de expiry; horizonte de cierre propuesto de 450 s desde primer cierre conservado como restricción de diseño, no garantía medida. Ningún tercer intento.\n- EVIDENCE: referencia exacta, adjunto y delegación actual; no hay pruebas ejecutadas de retry.\n- UNKNOWN/RISKS: viabilidad temporal, commit durable y recaptura coherente reales.\n- OPEN_DEPENDENCIES: evidencia futura de crashes por frontera, guardas negativas, persistencia y presupuestos.\n- IMPLEMENTATION_AUTHORIZED: FALSE para ejecución/retry real.\n\n## DR-3\n\n- DECISION: APPROVED como requisito de diseño, bajo condiciones.\n- SOURCE_REQUIREMENT: C2/C5/P1-02; sección 7.\n- APPROVED_SCOPE: actor por ejecución, CAS/epoch canónico, invalidación irreversible, stop independiente y fence validado dentro del mismo commit canónico que publica.\n- JUSTIFICATION: un check previo seguido de escritura o un mutex local no resuelve las carreras de revocación/publicación.\n- CONDITIONS: fallo del journal nunca retrasa stop ni permite éxito optimista. Exigir origen, secuencia y continuidad de observaciones. Revocación post-seal impide nueva publicación sin reescribir recibo histórico. Mecanismo operacional desconocido mantiene publicación bloqueada.\n- EVIDENCE: requisito documental y delegación; ninguna evidencia de implementación segura aportada por esta entrega.\n- UNKNOWN/RISKS: atomicidad interproceso, persistencia/antirollback, escritores externos, watchdog y latencias.\n- OPEN_DEPENDENCIES: mecanismo canónico revisado, evidencia futura de carreras y fallos de almacenamiento.\n- IMPLEMENTATION_AUTHORIZED: FALSE para broker/publicación operacional.\n\n## DR-4a\n\n- DECISION: APPROVED para criterio de admisión; perfiles certificados por esta decisión: NINGUNO.\n- SOURCE_REQUIREMENT: C3; sección 8.\n- APPROVED_SCOPE: fail-closed; únicamente perfil exacto registrado, protegido y certificado puede satisfacer admisión operacional.\n- JUSTIFICATION: validez de schema y compatibilidad no demuestran aislamiento.\n- CONDITIONS: UNKNOWN, drift, incoherencia o falta de certificación bloquean READY operacional. Recursos menores no heredan certificación. Sin instalaciones, elevaciones ni ampliaciones automáticas. CI de validadores no certifica aislamiento.\n- EVIDENCE: requisito documental y delegación; certificación E1–E5 NOT_RUN.\n- UNKNOWN/RISKS: versiones, reservas y comportamiento del entorno real.\n- OPEN_DEPENDENCIES: matriz exacta de perfiles y certificación posterior separadamente autorizada.\n- IMPLEMENTATION_AUTHORIZED: FALSE para aprovisionamiento/admisión real.\n\n## DR-4b\n\n- DECISION: CHANGES_REQUIRED.\n- SOURCE_REQUIREMENT: C5/P1-01; secciones 9–11.\n- REQUIRED_CHANGE: distinguir dependencia D6 (consumidor/commit fenced) de fila D6 (REQUESTED/PREFLIGHT). Enmienda sucesora mínima incluida; bytes nuevos pendientes de revisión, no ratificados por anticipado.\n- JUSTIFICATION: una misma etiqueta identifica dos conceptos distintos en tabla B, tabla D y dependencias de sección 11.\n- CONDITIONS: conservar terminales históricos inmutables, precedencias, rechazo residual, cleanup obligatorio y ausencia distinta de incertidumbre. COMPLETED, cleanup y ACCEPTED no equivalen a aprobación funcional. No fabricar V1.\n- EVIDENCE: coincidencia literal comprobada en referencia exacta; enmienda y comparación incluidas.\n- UNKNOWN/RISKS: exhaustividad y exclusión de predicados no probadas; aceptación del sucesor por revisores pendiente.\n- OPEN_DEPENDENCIES: revisión A/B de bytes del sucesor, nueva disposición sobre DR-4b y futura enumeración autorizada del modelo.\n- IMPLEMENTATION_AUTHORIZED: sólo preparación documental local de la enmienda; FALSE para comportamiento del broker.\n\n## POLICIES\n\n- DECISION: APPROVED sólo para distribución técnica de roles.\n- SOURCE_REQUIREMENT: sección 4.4 y dependencias/políticas de referencia y adjuntos.\n- APPROVED_SCOPE: DevOps propone capacidad/cuotas y opera almacenamiento/mantenimiento; CTO define arquitectura, cadena, recovery y compactación; Security revisa minimización, acceso, integridad y controles; PM aporta requisitos de privacidad confirmados; EM coordina. Human Project Owner identifica responsables organizacionales y autoridad competente para legal hold si aplica.\n- JUSTIFICATION: permite preparar políticas sin inventar responsables institucionales o decisiones legales.\n- CONDITIONS: asignación técnica no autoriza operaciones ni aprueba valores. Cuotas globales, límites nuevos, retención —incluidos los 30 días propuestos—, privacidad, aplicabilidad de legal hold, purgas, presupuestos de mantenimiento y responsables humanos concretos: PENDING/UNKNOWN. No purgar recovery, tombstones ni cadena obligatoria para obtener capacidad.\n- EVIDENCE: distribución propuesta en adjunto; selección técnica delegada actual.\n- UNKNOWN/RISKS: capacidad, reglas materiales de tratamiento y autoridades organizacionales.\n- OPEN_DEPENDENCIES: políticas versionadas y decisiones materiales de responsables competentes; posteriores verificaciones autorizadas.\n- IMPLEMENTATION_AUTHORIZED: FALSE para mantenimiento, purga o tratamiento operacional.\n\n## Estado común\n\nCANONICAL_RECORDING: NOT_PERFORMED\nCANONICAL_RATIFICATION_BY_EXTERNAL_AUTHORITIES: UNKNOWN\nIMPLEMENTATION_READINESS: BLOCKED\nMERGE_AUTHORIZED: FALSE\nWRITABLE_ENABLED: FALSE\nREAL_E2E_AUTHORIZED: FALSE\nRUN_A_AUTHORIZED: FALSE\nPROVIDERS_OR_VMS_INVOKED: NONE\nFIXTURES_CREATED: NONE\nNATIVE_SANDBOX_P0: OPEN\n\nLas seis selecciones están emitidas; no se requiere volver a pedir al usuario que elija esas alternativas técnicas. La revisión y persistencia canónica son pasos distintos. Ninguna aprobación condicionada pierde sus condiciones por esta delegación.\n",
+    "encoding": "UTF-8; reconstruct exact bytes by encoding exact_text_utf8, without newline normalization or added final newline",
+    "bytes": 9939,
+    "independent_receipt_or_authentication_by_B": "UNKNOWN"
+  },
+  "direct_delegation": {
+    "role": "user",
+    "exact_scope_excerpt": "Tomar las decisiones técnicas recomendadas con juicio independiente, sin pedirle que elija detalles.",
+    "content_utf8_sha256": "75f8331a2c64d174b3c5929bb0b273f0eea977a9cbb70f54f2a27f454b68642c",
+    "record_line": 10,
+    "timestamp_utc": "2026-10-17T15:03:54.343Z",
+    "session_id": "01a14a64-0a00-78f2-a6e5-15be050fb5ef",
+    "verified_by_A": "Local direct user instruction read; hashes recalculated in preceding source-authority audit",
+    "record_utf8_sha256_without_line_ending": "3ca5c2e89104c6d29bd0ba4f4fed1c5fcd9caea3c8342e127e681ec436f07b95",
+    "content_utf8_bytes": 4173,
+    "independent_receipt_or_authentication_by_B": "UNKNOWN",
+    "privacy": "Only relevant excerpt published; full conversation and unrelated data excluded"
+  },
+  "earlier_delegation": {
+    "message_id_reported": "d4770dec-cec2-4489-a47c-c5840d61b472",
+    "status": "Historical reference only; current direct instruction supplies scoped delegation",
+    "original_message_independently_recovered": "UNKNOWN",
+    "conversation_id": "6ac6b5f4-239c-83e8-a297-2b28d9399ac0"
+  },
+  "sources": [
+    {
+      "verified_by_A": "exact_bytes_and_reading",
+      "name": "NATIVE_SANDBOX_P0_CONTRACT_V1.md",
+      "sha256": "c4e52cda1b62fa3ed8c9a0196e4ac13954a56d51aa1c53d493f1f2b0ac8a2f2a",
+      "id": "contract_c1_c5",
+      "bytes": 37935,
+      "independent_receipt_or_authentication_by_B": "UNKNOWN"
+    },
+    {
+      "verified_by_A": "exact_bytes_and_reading",
+      "name": "NATIVE_SANDBOX_P0_CONTRACT_AMENDMENT_V1.md",
+      "sha256": "f89c271a4862850102490ab4bcfe559771f8193e2394bc4b30653700cecc6cf7",
+      "id": "contract_amendments",
+      "bytes": 18253,
+      "independent_receipt_or_authentication_by_B": "UNKNOWN"
+    },
+    {
+      "verified_by_A": "exact_bytes_and_reading",
+      "name": "NATIVE_SBX_002_CTO_SECURITY_DECISION_RECORD_V1.md",
+      "sha256": "11de899585c2782f480c88243a2f0991731b09841f33183b97a4f7c4f4dd6949",
+      "id": "historical_record",
+      "bytes": 61485,
+      "independent_receipt_or_authentication_by_B": "UNKNOWN",
+      "checkout_bytes": 61846,
+      "checkout_sha256": "75ba3b22c83f79db852c3611f3af8fe6c2eb3ba04ec42fb1e80e0cc1eac7197c",
+      "repository_path": "docs/engineering/sbx002-d6/NATIVE_SBX_002_CTO_SECURITY_DECISION_RECORD_V1.md",
+      "byte_authority": "Exact Git blob at publication base; checkout CRLF hash separately recorded"
+    },
+    {
+      "verified_by_A": "exact_bytes_and_reading",
+      "name": "SBX002_D6_ENMIENDA_DOCUMENTAL_V1.md",
+      "sha256": "98f0902bf7f279fabc323188a0036baee9f892a536852d52faf3184a0bb31791",
+      "id": "d6_amendment",
+      "bytes": 2631,
+      "independent_receipt_or_authentication_by_B": "UNKNOWN",
+      "checkout_bytes": 2658,
+      "checkout_sha256": "59bcb3129b4a138c46296851663d39b6d46f99990476ad6b9514c48449c0c5ee",
+      "repository_path": "docs/engineering/sbx002-d6/SBX002_D6_ENMIENDA_DOCUMENTAL_V1.md",
+      "byte_authority": "Exact Git blob at publication base; checkout CRLF hash separately recorded"
+    },
+    {
+      "verified_by_A": "exact_bytes_and_reading",
+      "name": "contracts.py",
+      "sha256": "844e938b252f1a3d23e0f8a1bb98dec8d271ea2ef366451b1ce1a58340f93c1d",
+      "id": "sbx001_validator",
+      "bytes": 18863,
+      "independent_receipt_or_authentication_by_B": "UNKNOWN",
+      "checkout_bytes": 19279,
+      "checkout_sha256": "0bbdefe2d3ebaf1b4e9e7b94a1db07ce86907bbc68880ca30d5281a3a231cb4a",
+      "repository_path": "src/company_os/sandbox/contracts.py",
+      "byte_authority": "Exact Git blob at publication base; checkout CRLF hash separately recorded"
+    },
+    {
+      "verified_by_A": "exact_bytes_and_reading",
+      "name": "test_native_sandbox_contracts.py",
+      "sha256": "3fef0d9dfff2cd704815b444f6f7fe3fbca80da75d947c5f2039ad67979ecfe8",
+      "id": "sbx001_tests",
+      "bytes": 26714,
+      "independent_receipt_or_authentication_by_B": "UNKNOWN",
+      "checkout_bytes": 27295,
+      "checkout_sha256": "0f74f21a0ac4216eeb18175770df5870c6205641d02ca04bc36a3693988818a9",
+      "repository_path": "tests/test_native_sandbox_contracts.py",
+      "byte_authority": "Exact Git blob at publication base; checkout CRLF hash separately recorded"
+    }
+  ],
+  "self_hash": "Excluded to avoid circular hashing; Git commit and final handoff identify this manifest",
+  "operational_authority": false
+}
