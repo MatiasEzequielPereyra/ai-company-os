@@ -26,6 +26,7 @@ try {
         "scripts\validate-artifacts.ps1",
         "scripts\new-agent-workspace.ps1",
         "scripts\run-writable-agent.ps1",
+        "scripts\writable-authorization-guard.ps1",
         "scripts\resolve-writable-required-files.ps1",
         "scripts\task-execution-lock.ps1",
         "scripts\validate-engineering-plan-result.ps1",
@@ -62,6 +63,7 @@ try {
     foreach ($relative in @(
         "scripts/build-agent-context.ps1",
         "scripts/run-agent-task.ps1",
+        "scripts/writable-authorization-guard.ps1",
         "scripts/task-execution-lock.ps1",
         "scripts/validate-engineering-plan-result.ps1",
         "scripts/validate-engineering-backlog-semantics.ps1",
@@ -84,7 +86,7 @@ try {
     }
 
     $sourceValidator = Join-Path $repoRoot "scripts\validate-artifacts.ps1"
-    foreach($relative in @('scripts/review-grounding.ps1','scripts/task-execution-lock.ps1','schemas/review-result.schema.json')) {
+    foreach($relative in @('scripts/review-grounding.ps1','scripts/task-execution-lock.ps1','scripts/writable-authorization-guard.ps1','schemas/review-result.schema.json')) {
         if((Get-FileHash (Join-Path $repoRoot $relative)).Hash -cne (Get-FileHash (Join-Path $projectPath $relative)).Hash){throw "Generated grounding/barrier artifact differs: $relative"}
     }
     . (Join-Path $projectPath 'scripts/task-execution-lock.ps1')

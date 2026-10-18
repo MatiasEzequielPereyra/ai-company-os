@@ -47,6 +47,26 @@ def write(path: Path, content: str) -> None:
     )
 
 
+def authorize_writable_fixture(root: Path, task_id: str) -> None:
+    subprocess.run(
+        [
+            "powershell",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(root / "scripts" / "authorize-writable-fixture.ps1"),
+            "-ProjectPath",
+            str(root),
+            "-TaskId",
+            task_id,
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+
 def prepare_project(
     tmp_path: Path,
     engine_root: Path,
@@ -63,6 +83,10 @@ def prepare_project(
     shutil.copy2(
         engine_root / "test-project" / "helpers" / "grounded-review-fixture.ps1",
         root / "scripts" / "e2e-grounded-review-fixture.ps1",
+    )
+    shutil.copy2(
+        engine_root / "test-project" / "helpers" / "authorize-writable-fixture.ps1",
+        root / "scripts" / "authorize-writable-fixture.ps1",
     )
 
     shutil.copytree(
@@ -192,6 +216,7 @@ This is an isolated deterministic TUI integration test.
         / f"{TASK_ID}.md",
         task,
     )
+    authorize_writable_fixture(root, TASK_ID)
 
     fake_router = r'''param(
     [string]$Provider,

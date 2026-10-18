@@ -48,6 +48,7 @@ try {
         "scripts\validate-artifacts.ps1",
         "scripts\new-agent-workspace.ps1",
         "scripts\run-writable-agent.ps1",
+        "scripts\writable-authorization-guard.ps1",
         "scripts\resolve-writable-required-files.ps1",
         "scripts\task-execution-lock.ps1",
         "scripts\validate-engineering-plan-result.ps1",
@@ -82,6 +83,7 @@ try {
     foreach ($relative in @(
         "scripts/build-agent-context.ps1",
         "scripts/run-agent-task.ps1",
+        "scripts/writable-authorization-guard.ps1",
         "scripts/task-execution-lock.ps1",
         "schemas/agent-result.schema.json",
         "schemas/engineering-plan-result.schema.json",

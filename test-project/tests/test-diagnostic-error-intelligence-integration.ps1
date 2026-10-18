@@ -58,6 +58,12 @@ function New-BugTask {
         "",
         "---",
         "",
+        "## Dependencies",
+        "",
+        "-",
+        "",
+        "---",
+        "",
         "## Testing Requirements",
         "",
         "Run python -B -m unittest discover -s $TestDir."
@@ -92,8 +98,43 @@ function Set-FakeResult {
     Write-NoBom (Join-Path $fixtureRepo ".codex\fake-writable-result.json") ($Payload | ConvertTo-Json -Depth 100)
 }
 
+function Set-ValidAuthorizationReceipt {
+    param([string]$Id)
+    $task = Get-Content -LiteralPath (Join-Path $fixtureRepo ("tasks\" + $Id + ".md")) -Raw -Encoding UTF8
+    $type = [regex]::Match($task, '(?m)^Type:\s*(\S+)').Groups[1].Value
+    if (-not $type) { return }
+    . (Join-Path $repoRoot 'scripts\writable-authorization-guard.ps1')
+    $scope = Get-WritableScopeFingerprint -TaskContent $task
+    $created = [DateTimeOffset]::UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'")
+    $expires = [DateTimeOffset]::UtcNow.AddHours(2).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'")
+    $receipt = @"
+# Work Request
+
+ID: WR-TEST
+Type: $type
+Requested by: fixture authorization test
+Created: $created
+
+## Authorization Receipt
+
+Requested action: Implement task $Id as described in its current objective and acceptance criteria.
+Permitted scope: WRITABLE_IMPLEMENTATION
+Implementation authorization: AUTHORIZED
+Authorized task: $Id
+Authorized operation: WRITABLE
+Authorized execution mode: WRITABLE
+Authorized provider invocation: ALLOWED
+Authorized write scope: TASK_WORKTREE_ONLY
+Authorized scope SHA-256: $scope
+Authorization expires (UTC): $expires
+Retained restrictions: NONE
+"@
+    Write-NoBom (Join-Path $fixtureRepo 'docs\engineering\work-requests\WR-TEST.md') $receipt
+}
+
 function Invoke-Runner {
     param([string]$Id)
+    Set-ValidAuthorizationReceipt -Id $Id
     & (Join-Path $fixtureRepo "scripts\run-writable-agent.ps1") -Id $Id -ProjectPath $fixtureRepo -WorkspacePath (Join-Path $workspaces $Id) -Provider Auto
 }
 
@@ -167,6 +208,7 @@ try {
 
     foreach ($name in @(
         "run-writable-agent.ps1",
+        "writable-authorization-guard.ps1",
         "task-execution-lock.ps1",
         "advance-task.ps1",
         "update-task.ps1",
