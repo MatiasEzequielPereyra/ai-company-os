@@ -84,6 +84,26 @@ Un Work Request puede generar múltiples tasks.
 
 ---
 
+## ¿Cómo selecciona AI Company OS las skills?
+
+Para trabajo de ingeniería sustantivo, la [política de selección de AGENTS.md](../AGENTS.md#automatic-skill-selection-policy) indica elegir las skills disponibles en `.agents/skills/` según la intención real de la tarea, sin basarse solamente en palabras clave.
+
+La selección por defecto es:
+
+- [bug](../.agents/skills/bug/SKILL.md): diagnóstico y reparación de bugs con evidencia.
+- [architecture](../.agents/skills/architecture/SKILL.md): diseño técnico y evaluación de alternativas.
+- [feature](../.agents/skills/feature/SKILL.md): implementación de funcionalidades dentro de requisitos y arquitectura aprobados.
+- [code-review](../.agents/skills/code-review/SKILL.md): revisión de código o PRs.
+- [release](../.agents/skills/release/SKILL.md): preparación y validación de releases.
+
+Antes de aplicar una skill, el agente debe leer su `SKILL.md` y seguir sus instrucciones. Puede combinar varias si cada una aporta; no debe cargar todas por defecto ni releer contenido ya disponible sin necesidad. Si ninguna encaja, continúa con el workflow estándar. No debe inventar skills ni afirmar que aplicó una que no consultó.
+
+Las skills no reemplazan ni debilitan la autorización de implementación, los límites de rol, Review Grounding, QA y Security, los locks de ejecución, la protección Git, la evidencia verificable ni las reglas de secuenciación y delegación.
+
+Los handoffs sustantivos deben incluir `SKILLS_SELECTED`, `SKILLS_APPLIED`, `SKILL_SOURCES` y `SKILL_SELECTION_REASON`, registrando únicamente las skills realmente utilizadas.
+
+---
+
 ## ¿Qué hace el orchestrator?
 
 Coordina:
