@@ -159,6 +159,39 @@ def validate_state_dimensions(lifecycle, result, resources, started, invalidated
         require(not started and resources == "NONE" and result != "PENDING")
 
 
+def validate_cause_result(result, generation, resolved_cause_sequence, causes):
+    """Shared cause dominance for validated model and wire records.
+
+    The pending g0 transport cause and the exact resolved g0 transport event
+    are the only exceptions; resolution never clears other causes or a latch.
+    """
+    codes = {code for code, _, _ in causes}
+    if codes & INVALIDATING:
+        require(result == "INVALIDATED")
+    elif "DEADLINE_EXCEEDED" in codes:
+        require(result in ("TIMED_OUT", "INVALIDATED"))
+    elif "CANCEL_REQUESTED" in codes:
+        require(result in ("CANCELLED", "TIMED_OUT", "INVALIDATED"))
+    else:
+        active = [
+            code
+            for code, cause_generation, sequence in causes
+            if not (
+                code == "PRE_RUN_TRANSPORT_FAILURE"
+                and (
+                    (generation == 0 and result == "PENDING")
+                    or (
+                        resolved_cause_sequence is not None
+                        and cause_generation == 0
+                        and sequence == resolved_cause_sequence
+                    )
+                )
+            )
+        ]
+        if active:
+            require(result in ("FAILED", "CANCELLED", "TIMED_OUT", "INVALIDATED"))
+
+
 @dataclass(frozen=True)
 class CoreState:
     lifecycle: Lifecycle
@@ -231,42 +264,19 @@ class CoreState:
                     for c in self.causes
                 )
             )
-        codes = {cause.code for cause in self.causes}
-        if codes & INVALIDATING:
-            require(self.result is Result.INVALIDATED)
-        elif "DEADLINE_EXCEEDED" in codes:
-            require(self.result in (Result.TIMED_OUT, Result.INVALIDATED))
-        elif "CANCEL_REQUESTED" in codes:
-            require(
-                self.result in (Result.CANCELLED, Result.TIMED_OUT, Result.INVALIDATED)
-            )
-        else:
-            active = [
-                cause
+        validate_cause_result(
+            self.result.value,
+            self.generation,
+            (
+                self.retry_resolution.cause_event_sequence
+                if self.retry_resolution
+                else None
+            ),
+            tuple(
+                (cause.code, cause.generation, cause.event_sequence)
                 for cause in self.causes
-                if not (
-                    cause.code == "PRE_RUN_TRANSPORT_FAILURE"
-                    and (
-                        (self.generation == 0 and self.result is Result.PENDING)
-                        or (
-                            self.retry_resolution is not None
-                            and cause.generation == 0
-                            and cause.event_sequence
-                            == self.retry_resolution.cause_event_sequence
-                        )
-                    )
-                )
-            ]
-            if active:
-                require(
-                    self.result
-                    in (
-                        Result.FAILED,
-                        Result.CANCELLED,
-                        Result.TIMED_OUT,
-                        Result.INVALIDATED,
-                    )
-                )
+            ),
+        )
         if self.lifecycle in TERMINAL:
             require(self.result is not Result.PENDING)
             if self.lifecycle is Lifecycle.REJECTED:
@@ -528,16 +538,6 @@ def evaluate_retry(state, context):
     _validate_record(state, CoreState)
     _validate_record(context, Context)
     s, c = state, context
-    if c.commit_uncertain:
-        cause = Cause("PERSISTENCE_FAILED", s.sequence + 1, s.tick_ns, s.generation)
-        n = replace(
-            s,
-            sequence=s.sequence + 1,
-            causes=s.causes + (cause,),
-            result=Result.INVALIDATED,
-            invalidated=True,
-        )
-        return _decision("RETRY_REJECTED", n, False, reason="RETRY_GUARD")
     transport = [
         x
         for x in s.causes
@@ -552,7 +552,7 @@ def evaluate_retry(state, context):
         and len(transport) == len(s.causes) == 1
         and s.resources is Resources.CLEANUP_CONFIRMED
         and c.cleanup_confirmed
-        and _authority(c)
+        and _authority(replace(c, commit_uncertain=False))
         and c.preflight_valid
         and c.capacity_valid
         and c.request_unchanged
@@ -569,6 +569,16 @@ def evaluate_retry(state, context):
     )
     if not good:
         return _decision("RETRY_REJECTED", s, False, reason="RETRY_GUARD")
+    if c.commit_uncertain:
+        cause = Cause("PERSISTENCE_FAILED", s.sequence + 1, s.tick_ns, s.generation)
+        n = replace(
+            s,
+            sequence=s.sequence + 1,
+            causes=s.causes + (cause,),
+            result=Result.INVALIDATED,
+            invalidated=True,
+        )
+        return _decision("RETRY_REJECTED", n, False, reason="RETRY_GUARD")
     if not c.commit_confirmed:
         return _decision("RETRY_ALLOWED", s, False, "CAPTURE_INTENT", "COMMIT_REQUIRED")
     resolution = RetryResolution(
@@ -843,7 +853,7 @@ def evaluate_transition(state, event, context):
     ):
         if event.kind is EventKind.RETRY:
             # Retry commits use the supplied event sequence, not an implicit second event.
-            r = evaluate_retry(original, c)
+            r = evaluate_retry(s, c)
             if r.allowed:
                 rr = replace(
                     r.next_state.retry_resolution, retry_commit_sequence=event.sequence

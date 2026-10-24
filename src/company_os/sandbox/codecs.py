@@ -15,7 +15,7 @@ from .contracts import (
 from .puretypes import S1SyntheticLimits, DecodedPiece, ConsistencyReport, freeze
 
 U64 = 2**64 - 1
-from .model import CAUSE_CODES, INVALIDATING, validate_state_dimensions
+from .model import CAUSE_CODES, validate_state_dimensions, validate_cause_result
 
 LIFECYCLES = frozenset(
     "REQUESTED PREFLIGHT CAPTURING PREPARING READY RUNNING COLLECTING STOPPING DESTROYING CLEANUP_VERIFY REVALIDATING SEALED PUBLISHED REJECTED QUARANTINED RECOVERING".split()
@@ -357,7 +357,30 @@ def validate(v, kind):
             v["invalidation_latched"] == (v["execution_result"] == "INVALIDATED"),
             "S1_LATCH",
         )
+        need(
+            all(c["generation"] <= v["generation"] for c in v["causes"]),
+            "S1_CAUSE_BINDING",
+        )
+        resolution = v["retry_resolution"]
+        validate_cause_result(
+            v["execution_result"],
+            v["generation"],
+            resolution["cause_event_sequence"] if resolution is not None else None,
+            tuple(
+                (c["code"], c["generation"], c["event_sequence"]) for c in v["causes"]
+            ),
+        )
         if kind == "host-evidence":
+            integer(v["seal_sequence"], 1)
+            need(
+                all(c["event_sequence"] <= v["seal_sequence"] for c in v["causes"]),
+                "S1_CAUSE_BINDING",
+            )
+            if resolution is not None:
+                need(
+                    resolution["retry_commit_sequence"] <= v["seal_sequence"],
+                    "S1_RETRY",
+                )
             binding(v["binding"])
             need(
                 v["lifecycle_at_seal"] == "SEALED"
@@ -388,43 +411,6 @@ def validate(v, kind):
                     digest(v[k])
             integer(v["seal_sequence"], 1)
             utc(v["sealed_utc"])
-            need(
-                all(
-                    c["generation"] <= v["generation"]
-                    and c["event_sequence"] <= v["seal_sequence"]
-                    for c in v["causes"]
-                ),
-                "S1_CAUSE_BINDING",
-            )
-            resolution = v["retry_resolution"]
-            if resolution is not None:
-                need(
-                    resolution["retry_commit_sequence"] <= v["seal_sequence"],
-                    "S1_RETRY",
-                )
-            active = [
-                c["code"]
-                for c in v["causes"]
-                if not (
-                    resolution is not None
-                    and c["event_sequence"] == resolution["cause_event_sequence"]
-                    and c["code"] == "PRE_RUN_TRANSPORT_FAILURE"
-                )
-            ]
-            if any(c in INVALIDATING for c in active):
-                need(v["execution_result"] == "INVALIDATED", "S1_CAUSE_RESULT")
-            elif "DEADLINE_EXCEEDED" in active:
-                need(
-                    v["execution_result"] in ("TIMED_OUT", "INVALIDATED"),
-                    "S1_CAUSE_RESULT",
-                )
-            elif "CANCEL_REQUESTED" in active:
-                need(
-                    v["execution_result"] in ("CANCELLED", "TIMED_OUT", "INVALIDATED"),
-                    "S1_CAUSE_RESULT",
-                )
-            elif active:
-                need(v["execution_result"] != "COMPLETED", "S1_CAUSE_RESULT")
             if v["monitor"] is not None:
                 monitor(v["monitor"])
         else:
@@ -495,7 +481,7 @@ def validate(v, kind):
 
 def validate_limits(limits):
     need(type(limits) is S1SyntheticLimits, "S1_LIMIT_CONFIGURATION")
-    limits.__post_init__()
+    S1SyntheticLimits.__post_init__(limits)
 
 
 def load(raw, dig, limits):
@@ -539,9 +525,18 @@ def load(raw, dig, limits):
     def bad(_):
         raise ContractError("S1_NONFINITE")
 
+    def bounded_integer(value):
+        # S1 integers are bounded by U64. Reject before int() so this never
+        # depends on the interpreter's process-wide digit-limit configuration.
+        need(len(value.lstrip("-")) <= 20, "S1_INTEGER")
+        return int(value)
+
     try:
         obj = json.loads(
-            raw.decode("utf-8"), object_pairs_hook=pairs, parse_constant=bad
+            raw.decode("utf-8"),
+            object_pairs_hook=pairs,
+            parse_constant=bad,
+            parse_int=bounded_integer,
         )
     except (UnicodeError, json.JSONDecodeError, RecursionError):
         raise ContractError("S1_JSON") from None
