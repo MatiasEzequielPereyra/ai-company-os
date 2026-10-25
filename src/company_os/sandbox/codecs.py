@@ -15,7 +15,12 @@ from .contracts import (
 from .puretypes import S1SyntheticLimits, DecodedPiece, ConsistencyReport, freeze
 
 U64 = 2**64 - 1
-from .model import CAUSE_CODES, validate_state_dimensions, validate_cause_result
+from .model import (
+    CAUSE_CODES,
+    validate_state_dimensions,
+    validate_cause_result,
+    validate_generation_chronology,
+)
 
 LIFECYCLES = frozenset(
     "REQUESTED PREFLIGHT CAPTURING PREPARING READY RUNNING COLLECTING STOPPING DESTROYING CLEANUP_VERIFY REVALIDATING SEALED PUBLISHED REJECTED QUARANTINED RECOVERING".split()
@@ -362,6 +367,10 @@ def validate(v, kind):
             "S1_CAUSE_BINDING",
         )
         resolution = v["retry_resolution"]
+        validate_generation_chronology(
+            tuple((c["generation"], c["event_sequence"]) for c in v["causes"]),
+            resolution["retry_commit_sequence"] if resolution is not None else None,
+        )
         validate_cause_result(
             v["execution_result"],
             v["generation"],

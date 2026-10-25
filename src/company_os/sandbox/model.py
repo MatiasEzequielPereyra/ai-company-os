@@ -159,6 +159,22 @@ def validate_state_dimensions(lifecycle, result, resources, started, invalidated
         require(not started and resources == "NONE" and result != "PENDING")
 
 
+def validate_generation_chronology(causes, retry_commit_sequence):
+    """Generation g1 exists only after the confirmed retry journal commit.
+
+    These are journal sequences, never the live-state CAS version. The commit
+    itself consumes g1; observations belonging to g1 must follow that event.
+    """
+    if retry_commit_sequence is not None:
+        require(
+            all(
+                generation != 1 or sequence > retry_commit_sequence
+                for generation, sequence in causes
+            ),
+            "S1_GENERATION_CHRONOLOGY",
+        )
+
+
 def validate_cause_result(result, generation, resolved_cause_sequence, causes):
     """Shared cause dominance for validated model and wire records.
 
@@ -264,6 +280,14 @@ class CoreState:
                     for c in self.causes
                 )
             )
+        validate_generation_chronology(
+            tuple((c.generation, c.event_sequence) for c in self.causes),
+            (
+                self.retry_resolution.retry_commit_sequence
+                if self.retry_resolution
+                else None
+            ),
+        )
         validate_cause_result(
             self.result.value,
             self.generation,
