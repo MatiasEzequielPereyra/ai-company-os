@@ -165,3 +165,199 @@ def test_forged_scope_fields_are_rejected_from_storage(ledger):
     with pytest.raises(api.LedgerError):
         api.read_snapshot(handle, execution_id=uid(1))
     assert handle.state == "POISONED"
+
+
+def establish_then_acquire(handle):
+    api.apply_observation(
+        handle,
+        **IDENTITY,
+        operation_id=uid(7),
+        expected_version=0,
+        observation=api.Observation(
+            uid(2), 1, 10, 12, api.ObservationResult.VALID, True, True
+        ),
+        now_ns=12,
+    )
+    result = api.commit_control_update(
+        handle,
+        **IDENTITY,
+        operation_id=uid(8),
+        expected_version=1,
+        action=api.ControlAction.ACQUIRE_OWNER,
+        new_owner_id=uid(3),
+        now_ns=20,
+    )
+    assert result.snapshot.last_observation is None
+    assert result.snapshot.lease_expires_ns == 0
+    return result
+
+
+def replacement(handle, sequence, now):
+    return api.apply_observation(
+        handle,
+        **IDENTITY,
+        operation_id=uid(9),
+        expected_version=2,
+        observation=api.Observation(
+            uid(2), sequence, now - 2, now, api.ObservationResult.VALID, True, True
+        ),
+        now_ns=now,
+    )
+
+
+def test_same_owner_acquire_cannot_reset_source_sequence(ledger):
+    handle, _, sink = ledger
+    establish_then_acquire(handle)
+    with pytest.raises(api.LedgerError) as caught:
+        replacement(handle, 1, 100)
+    assert caught.value.code == "OBSERVATION_ORDER"
+    assert api.read_snapshot(handle, execution_id=uid(1)).version == 2
+    assert (uid(1), "OBSERVATION_ORDER") in sink.requests
+
+
+def test_same_owner_acquire_cannot_hide_persisted_expiry(ledger):
+    handle, _, sink = ledger
+    establish_then_acquire(handle)
+    result = replacement(handle, 2, 100)
+    assert result.snapshot.invalidated is True
+    assert (uid(1), "INVALIDATED") in sink.requests
+    with pytest.raises(api.LedgerError):
+        api.commit_control_update(
+            handle,
+            **IDENTITY,
+            operation_id=uid(10),
+            expected_version=3,
+            action=api.ControlAction.CHECK,
+            new_owner_id=None,
+            now_ns=101,
+        )
+
+
+def test_same_owner_acquire_retains_live_observation_refresh(ledger):
+    handle, _, _ = ledger
+    establish_then_acquire(handle)
+    result = replacement(handle, 2, 30)
+    assert result.snapshot.invalidated is False
+    assert result.snapshot.last_observation.source_sequence == 2
+    assert result.snapshot.lease_expires_ns == 80
+
+
+def test_explicit_owner_change_allows_new_owner_first_observation(ledger):
+    handle, _, _ = ledger
+    api.apply_observation(
+        handle,
+        **IDENTITY,
+        operation_id=uid(7),
+        expected_version=0,
+        observation=api.Observation(
+            uid(2), 5, 10, 12, api.ObservationResult.VALID, True, True
+        ),
+        now_ns=12,
+    )
+    api.commit_control_update(
+        handle,
+        **IDENTITY,
+        operation_id=uid(8),
+        expected_version=1,
+        action=api.ControlAction.CHANGE_OWNER,
+        new_owner_id=uid(30),
+        now_ns=20,
+    )
+    identity = dict(IDENTITY, owner_id=uid(30))
+    result = api.apply_observation(
+        handle,
+        **identity,
+        operation_id=uid(9),
+        expected_version=2,
+        observation=api.Observation(
+            uid(2), 1, 98, 100, api.ObservationResult.VALID, True, True
+        ),
+        now_ns=100,
+    )
+    assert result.snapshot.invalidated is False
+    assert result.snapshot.owner_id == uid(30)
+
+
+@pytest.mark.parametrize("sequence,now", [(1, 30), (2, 100)])
+def test_recovery_rejects_coherent_legacy_acquire_continuity_bypass(
+    ledger, sequence, now
+):
+    import json
+
+    handle, directory, _ = ledger
+    establish_then_acquire(handle)
+    replacement(handle, 2, 30)
+    handle.close()
+
+    def encode(value):
+        return json.dumps(
+            value,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+            allow_nan=False,
+        ).encode("utf8")
+
+    # Rewrite a bounded, canonical transcript exactly as the vulnerable projection
+    # would have produced it. All identities, hashes, heads and results agree;
+    # only historical source continuity or expiry semantics are impossible.
+    with sqlite3.connect(directory / "ledger.sqlite3") as c:
+        event_raw = c.execute("SELECT event FROM journal WHERE sequence=4").fetchone()[
+            0
+        ]
+        event = json.loads(event_raw)
+        op = json.loads(bytes.fromhex(event["operation"]))
+        op["arguments"]["now_ns"] = now
+        obs = op["arguments"]["observation"]
+        obs.update(source_sequence=sequence, started_ns=now - 2, finished_ns=now)
+        raw = encode(op)
+        event["operation"] = raw.hex()
+        snapshot = event["after_snapshot"]
+        snapshot.update(
+            last_observation=obs, last_now_ns=now, lease_expires_ns=now + 50
+        )
+        changed = encode(event)
+        hasher = sha256()
+        for (prior,) in c.execute(
+            "SELECT event FROM journal WHERE sequence<4 ORDER BY sequence"
+        ):
+            hasher.update(len(prior).to_bytes(8, "big"))
+            hasher.update(prior)
+        hasher.update(len(changed).to_bytes(8, "big"))
+        hasher.update(changed)
+        prefix = hasher.hexdigest()
+        snapshot = dict(snapshot, journal_sha256=prefix)
+        result = json.loads(
+            c.execute(
+                "SELECT result FROM operations WHERE operation_id=?", (uid(9),)
+            ).fetchone()[0]
+        )
+        result.update(operation_digest=sha256(raw).hexdigest(), snapshot=snapshot)
+        c.execute(
+            "UPDATE journal SET event=?,prefix_sha256=? WHERE sequence=4",
+            (changed, prefix),
+        )
+        c.execute(
+            "UPDATE operations SET operation=?,operation_digest=?,result=? WHERE operation_id=?",
+            (raw, sha256(raw).hexdigest(), encode(result), uid(9)),
+        )
+        c.execute("UPDATE heads SET snapshot=?", (encode(snapshot),))
+    recovering = api.open_test_ledger(
+        directory=directory,
+        limits=LIMITS,
+        policy=POLICY,
+        mode=api.OpenMode.RECOVER,
+        session_id=uid(4),
+        database_id=uid(5),
+        session_continuity=False,
+        stop_sink=api.FakeStopSink(),
+    )
+    try:
+        with pytest.raises(api.LedgerError) as caught:
+            api.recover(
+                recovering, execution_id=uid(1), now_ns=101, uncertain_operation_id=None
+            )
+        assert caught.value.code == "RECOVERY_INVALID"
+        assert recovering.state == "POISONED"
+    finally:
+        recovering.close()

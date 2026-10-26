@@ -106,3 +106,79 @@ SKILLS_APPLIED: code-review
 SKILL_SOURCES: .agents/skills/code-review/SKILL.md
 SKILL_SELECTION_REASON: independent security implementation and hostile-input review against frozen API
 REPOSITORY_MUTATIONS: this implementation review report only; existing Security tests retained
+
+## Revision 2: same-owner continuity correction and renewed implementation review
+
+Revision: 2
+Updated: 2026-10-25
+Updated by: /root/ledger_security_resume, independent delegated Security reviewer
+Current disposition: APPROVED_TEST_ONLY_NO_OPEN_P0_P1_AFTER_CONTINUITY_CORRECTION
+Historical PR head reviewed before correction: 902d0c7767a2ef96183e83013c77df08fb0c4f3e
+
+Revision 1 approval above was WITHDRAWN after an additional concrete P1/High
+finding. Its original source hashes, 23-case results and limitations are retained
+as historical evidence; they do not approve the vulnerable implementation.
+
+Confirmed through public API: create at 0, VALID source sequence 1 at 12 with
+expiry 62, same-owner ACQUIRE_OWNER at 20, then VALID sequence 1 at 100 produced
+an uninvalidated lease ending 150. The visible snapshot clearing on ACQUIRE is
+specified, but treating it as genuinely unobserved initial state violated the
+frozen contract's explicit prohibition on removing previously observed history.
+The prior source also VERIFIED that impossible history during recovery.
+
+Added six independent Security cases, retaining all existing 23 negative cases:
+source-sequence reset rejection after acquisition; expiry discovery commits an
+invalidated snapshot; live refresh before expiry remains allowed; explicit
+CHANGE_OWNER allows the new owner its first observation; and two canonical,
+hash-consistent forged legacy transcripts that must fail recovery for source
+reset or hidden expiry. The tamper fixtures recompute operation digest, event
+bytes, length-framed journal prefix, historical result and head, so rejection
+requires semantic continuity validation rather than merely a broken hash.
+
+Authoritative pre-correction execution against the vulnerable source on Python
+3.11: **4 failed, 25 passed**, 0.64 seconds. Exclusive C: test storage and local
+log: C:/tmp/sbx002-security-continuity-before-corrected.log; temporary directory
+C:/tmp/sbx002-security-continuity-before-corrected. All four failures were the
+expected missing protections. An earlier fixture draft had a wrong journal-row
+number; that draft was corrected before this authoritative capture and supplies
+no evidence for the finding.
+
+Backend correction independently reviewed: a private per-execution context is
+rebuilt during the existing bounded journal payload pass and provided to the
+same live/recovery projection. It retains the prior same-owner observation's
+sequence, started/finished order, expiry and freshness even through repeated
+ACQUIRE_OWNER operations. Explicit owner change resets that context. The public
+Snapshot continues to clear observation/lease on acquisition as required. No
+new table, public record, wire codec, contract change, second SQL payload pass,
+trusted mutable cache or additional recovery visit is introduced. Exact replay
+and other reads validate the corrected journal progression as well.
+
+Final own execution AFTER final formatting, using the interpreter paths stated
+above, PYTHONPATH=src and pytest tests/test_sandbox_test_ledger_security.py -q
+-p no:cacheprovider with the exclusive --basetemp directories below:
+
+| Runtime | Final Security result | Exclusive temporary storage |
+| --- | --- | --- |
+| Python 3.11 | 29 passed, 0 failed (0.53 s) | C:/tmp/sbx002-security-final-311 |
+| Python 3.12 | 29 passed, 0 failed (0.53 s) | C:/tmp/sbx002-security-final-312 |
+
+Current exact final-byte SHA-256 manifest (supersedes affected revision 1 rows):
+
+| Source | SHA-256 |
+| --- | --- |
+| src/company_os/sandbox/test_ledger.py | ae7c9de161ed2f56cf0986a3717c95af07f9e7d95a94bfaa04ed75f2af229ed7 |
+| src/company_os/sandbox/test_ledger_types.py | 1e71d6a2c789e6e8cfb563d3e79d0d726ca4d2a31db3dc06451de6c8bf4c0361 |
+| tests/test_sandbox_test_ledger_security.py | 4086af2964c43078f6eb4ad6fad54f0dedcfe1fee5b89b0782eb94942ea6da4b |
+| docs/engineering/sbx002/D1_D5_API_CONTRACT_V1.md | 7af03df901c3b0698188a51ac9e8ab30ef4ae70fbd2dc5cec9c2fba7b4871b30 |
+
+Finding status: P1/High same-owner continuity bypass RESOLVED for these exact
+bytes. No open P0/Critical or P1/High implementation finding remains in this
+scoped review. The revised recommendation is approval for the synthetic test
+slice and submission to External B after the Orchestrator's remaining gates.
+Revision 1 retained operational limitations all still apply. Full suite, CI and
+package execution remain NOT_RUN by this Security reviewer; their other-owner
+evidence must identify the corrected head, not the historical PR head above.
+
+This corrective review modified only the owned Security tests and this report;
+no functional source edit, commit, push, merge or provider call was performed by
+Security. SKILLS_SELECTED/APPLIED: code-review; source and reason unchanged.

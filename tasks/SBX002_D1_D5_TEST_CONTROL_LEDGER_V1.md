@@ -1,8 +1,8 @@
 # SBX-002 D1/D5 test control ledger V1
 
 Project: AI_COMPANY_OS
-Revision: 3
-Updated: 2026-10-26T02:33:47Z
+Revision: 5
+Updated: 2026-10-26T02:44:00Z
 Updated by: Engineering Orchestrator A continuing EM coordination
 Task ID: SBX002_D1_D5_TEST_CONTROL_LEDGER_V1
 Owner: backend
@@ -140,3 +140,31 @@ all retained corrective findings are distinguished from passing final runs.
 Official checks on the published commit and External Orchestrator B contraaudit
 remain publication-stage gates. REVIEW is not DONE, merge permission, live D1
 authentication, operational D5 certification or permission for other S2 work.
+
+## Same-owner continuity corrective successor
+
+2026-10-26T02:38:23Z — Internal Security /root/ledger_security_resume confirmed
+a P1 after initial draft publication: same-owner ACQUIRE could clear the visible
+observation and allow source sequence/expiry reset. Existing approval of HEAD
+902d0c7767a2ef96183e83013c77df08fb0c4f3e is withdrawn for this finding. Six new
+independent Security cases preserve four failures and two valid controls; the
+authoritative predecessor reproduction is 4 FAIL / 25 PASS including prior cases.
+
+Engineering Orchestrator A continuing EM coordination records REVIEW -> READY
+on that failed criterion, then READY -> ACTIVE for assigned backend corrective
+work under the existing human authorization. No API/V1/S1 contract change is
+authorized or needed: retain hidden same-owner continuity from validated history
+for mutation/recovery guards, preserve visible Snapshot clearing, and preserve
+the explicit legitimate changed-owner exemption. PR83 remains draft. Earlier
+checks/source manifests describe their historical commit, not corrected readiness.
+
+2026-10-26T02:44:00Z — ACTIVE -> REVIEW, Engineering Orchestrator A continuing EM
+coordination. Corrected same-owner continuity is enforced by the existing bounded
+shared replay/projection, with no public API/schema/V1/S1 change. CTO delta review,
+QA revision3 and Security revision2 approve corrected TEST_ONLY bytes. Ledger116
+and ledger+SBX-001/S1 1146 cases pass on each target Python runtime. Corrected full
+Python3.11/3.12 each completed 1433 PASS and the same pre-existing symlink skip;
+the corrected installed tarball E2E passed. See the immutable successor
+[correction handoff](../docs/engineering/handoffs/ai-company-os/sbx002-d1-d5-continuity-correction-v1.md).
+PR83 stays draft; corrected published-HEAD official CI and B contraaudit remain
+required. No operational authority, merge permission or other increment follows.

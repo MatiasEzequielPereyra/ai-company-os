@@ -1,8 +1,8 @@
 # D1/D5 independent QA report V1
 
 Project: AI_COMPANY_OS
-Revision: 2
-Updated: 2026-10-26T02:24:12Z
+Revision: 3
+Updated: 2026-10-26T02:40:32Z
 Updated by: /root/ledger_qa_resume (independent QA)
 Task: SBX002_D1_D5_TEST_CONTROL_LEDGER_V1
 Base: dc313a01b487018ad27fdfd0591f6bb6dad37e38
@@ -154,3 +154,55 @@ Contract SHA256 remains
 7af03df901c3b0698188a51ac9e8ab30ef4ae70fbd2dc5cec9c2fba7b4871b30.
 Scope=TEST_ONLY; operational=False; authority_authenticated=False;
 execution_capability=NONE. No commit or push performed by QA.
+
+
+## Corrective P1 QA successor — revision 3
+
+PR83 corrective review found that same-owner ACQUIRE_OWNER cleared public
+observation/expiry fields and thereby allowed later source-sequence reset or
+missed lease continuity to be hidden. The prior 110-pass executions and their
+source hashes above remain historical evidence; they did not cover this defect.
+Security reported the new regressions before correction as 4 failed / 25 passed;
+this QA agent did not execute that failing pre-correction run.
+
+Reviewed correction: bounded journal replay retains private last-observed
+continuity for the same owner, and mutation projection checks this history.
+Public Snapshot clearing is preserved. Explicit owner change resets this private
+history and permits the new owner's first observation. Recovery uses the same
+projection rules to reject coherently rewritten legacy bypass records.
+
+Independent executions after final formatting, using actual installed Python
+executables and the same four ledger files specified above:
+
+| Corrective execution | Python | Actual result |
+| --- | --- | --- |
+| Four ledger files, corrected formatted source | 3.11 | 116 passed in 3.18s |
+| Four ledger files, corrected formatted source | 3.12 | 116 passed in 3.32s |
+
+Commands used PYTHONPATH=src, `-m pytest -q -c pyproject.toml`, and exclusive
+C:/Users/LA NAVE/AppData/Local/Temp/d1d5-qa-corrective-311-final and
+C:/Users/LA NAVE/AppData/Local/Temp/d1d5-qa-corrective-312-final basetemp paths.
+The six new Security cases cover same-owner sequence reset, persisted expiry,
+valid live refresh, explicit new-owner exemption, and two coherent legacy-history
+recovery attacks. All six pass on both interpreters together with all prior cases.
+
+Verdict: QA_APPROVED_TEST_ONLY for the corrected exact bytes below. The P1 is
+corrected in this independently executed selection; historical negative evidence
+is retained. Full repository regression and CI reruns belong to the parent and
+are NOT_RUN by this QA successor. This successor changes this report only;
+Security owns the added tests, Backend owns the correction. No new PR, source
+edit, provider call, operational execution, commit or push performed by QA.
+
+### Corrective tested source hashes
+
+| File | SHA256 |
+| --- | --- |
+| src/company_os/sandbox/test_ledger.py | ae7c9de161ed2f56cf0986a3717c95af07f9e7d95a94bfaa04ed75f2af229ed7 |
+| src/company_os/sandbox/test_ledger_types.py | 1e71d6a2c789e6e8cfb563d3e79d0d726ca4d2a31db3dc06451de6c8bf4c0361 |
+| tests/test_sandbox_test_ledger.py | d5159faa3ad9676c5512fcc08885fce2ede6283a93716884ead1a34eaed85bcf |
+| tests/test_sandbox_test_ledger_process.py | 54289e095191bc8b8410b80423127791965e78b96a6680b321dc4e2d011a3bdb |
+| tests/test_sandbox_test_ledger_qa.py | 05b9af7b992088c2ad68df1e88d366d8ec62733d4e78c4ccb7edfe15c156467d |
+| tests/test_sandbox_test_ledger_security.py | 4086af2964c43078f6eb4ad6fad54f0dedcfe1fee5b89b0782eb94942ea6da4b |
+| docs/engineering/sbx002/D1_D5_API_CONTRACT_V1.md | 7af03df901c3b0698188a51ac9e8ab30ef4ae70fbd2dc5cec9c2fba7b4871b30 |
+
+Scope=TEST_ONLY; operational=False; authority_authenticated=False; execution_capability=NONE.

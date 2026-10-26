@@ -529,14 +529,16 @@ def _validate_envelope(ledger, raw):
     return value
 
 
-def _expired(snapshot, now, policy):
+def _expired(snapshot, now, policy, continuity=None):
+    if continuity is not None:
+        snapshot = continuity
     obs = snapshot.last_observation
     return obs is not None and (
         now >= snapshot.lease_expires_ns or now - obs.started_ns > policy.freshness_ns
     )
 
 
-def _project(ledger, before, op):
+def _project(ledger, before, op, continuity=None):
     """The one control projection used by live writes and bounded recovery."""
     args, api = op["arguments"], op["api"]
     now = args["now_ns"]
@@ -573,10 +575,10 @@ def _project(ledger, before, op):
         journal_sequence=before.journal_sequence + 1,
         last_now_ns=now,
     )
-    expired = _expired(before, now, ledger._policy)
+    expired = _expired(before, now, ledger._policy, continuity)
     if api == "apply_observation":
         obs = _record(Observation, args["observation"])
-        old = before.last_observation
+        old = (before if continuity is None else continuity).last_observation
         require(
             obs.epoch == before.epoch
             and (
@@ -642,7 +644,7 @@ def _project(ledger, before, op):
     return after
 
 
-def _validate_all(ledger, *, recovery=False):
+def _validate_all(ledger, *, recovery=False, continuity=None):
     """Visit every payload row once after the scalar checks in this transaction."""
     counts = _precheck(ledger)
     visits = sum(counts.values())
@@ -679,6 +681,10 @@ def _validate_all(ledger, *, recovery=False):
         require(execution in heads and opid not in operations, "RECOVERY_INVALID")
         operations[opid] = (op, raw, result)
     projections, hashes, seen = {}, {}, set()
+    # Private replay context retains the last observed lease across same-owner
+    # acquisition, whose public snapshot must clear observation and expiry.
+    # It is rebuilt in this bounded payload pass, never trusted from a cache.
+    history = {}
     for execution, sequence, opid, event_raw, prefix in c.execute(
         "SELECT execution_id,sequence,operation_id,event,prefix_sha256 FROM journal ORDER BY execution_id,sequence"
     ):
@@ -707,7 +713,7 @@ def _validate_all(ledger, *, recovery=False):
             "RECOVERY_INVALID",
         )
         try:
-            after = _project(ledger, before, op)
+            after = _project(ledger, before, op, history.get(execution))
         except LedgerError:
             raise LedgerError("RECOVERY_INVALID") from None
         expected = _plain(after)
@@ -728,6 +734,10 @@ def _validate_all(ledger, *, recovery=False):
         after = replace(after, journal_sha256=prefix)
         require(result.snapshot == after, "RECOVERY_INVALID")
         projections[execution] = after
+        if before is None or after.owner_id != before.owner_id:
+            history[execution] = None
+        if after.last_observation is not None:
+            history[execution] = after
     require(set(operations) == seen and projections == heads, "RECOVERY_INVALID")
     # Bounded by database cap and row counts; stream at most one error.
     require(
@@ -736,6 +746,8 @@ def _validate_all(ledger, *, recovery=False):
     require(
         c.execute("PRAGMA foreign_key_check").fetchone() is None, "RECOVERY_INVALID"
     )
+    if continuity is not None:
+        continuity.update(history)
     return heads, operations, hashes, visits
 
 
@@ -920,7 +932,8 @@ def _mutation(ledger, raw):
                 and op["arguments"]["action"] == ControlAction.INVALIDATE.value,
                 "INVALIDATED",
             )
-        heads, _, hashes, _ = _validate_all(ledger)
+        continuity = {}
+        heads, _, hashes, _ = _validate_all(ledger, continuity=continuity)
         before = heads.get(execution)
         args = op["arguments"]
         negative_action = (
@@ -929,7 +942,7 @@ def _mutation(ledger, raw):
         )
         # _project first validates immutable identity/CAS/time, then computes loss.
         try:
-            after = _project(ledger, before, op)
+            after = _project(ledger, before, op, continuity.get(execution))
         except LedgerError as exc:
             if exc.code == "OBSERVATION_ORDER":
                 ledger._latch(execution, "OBSERVATION_ORDER")
@@ -941,7 +954,12 @@ def _mutation(ledger, raw):
         if latched and not (
             negative_action
             or negative_observation
-            or (before is not None and _expired(before, args["now_ns"], ledger._policy))
+            or (
+                before is not None
+                and _expired(
+                    before, args["now_ns"], ledger._policy, continuity.get(execution)
+                )
+            )
         ):
             raise LedgerError("INVALIDATED")
         # Loss/invalidation is visible to cooperating writers before any IO hook.
