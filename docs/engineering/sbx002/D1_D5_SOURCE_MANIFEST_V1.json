@@ -1,0 +1,101 @@
+{
+  "project": "AI_COMPANY_OS",
+  "task_id": "SBX002_D1_D5_TEST_CONTROL_LEDGER_V1",
+  "revision": 1,
+  "recorded_utc": "2026-10-26T02:34:32.591587+00:00",
+  "base_sha": "dc313a01b487018ad27fdfd0591f6bb6dad37e38",
+  "hash_domains": "SHA256 of exact checkout bytes and staged Git-normalized blob bytes; line-ending domains may differ",
+  "excluded_self_and_delivery_envelope": true,
+  "sources": [
+    {
+      "path": "docs/engineering/sbx002/D1_D5_API_CONTRACT_V1.md",
+      "checkout_sha256": "7af03df901c3b0698188a51ac9e8ab30ef4ae70fbd2dc5cec9c2fba7b4871b30",
+      "git_blob_sha256": "7af03df901c3b0698188a51ac9e8ab30ef4ae70fbd2dc5cec9c2fba7b4871b30"
+    },
+    {
+      "path": "docs/engineering/sbx002/D1_D5_CTO_IMPLEMENTATION_REVIEW_V1.md",
+      "checkout_sha256": "6c1202117d288924f9512a5730d982757c22e0f14f0ce9aeb267fb908cd58b84",
+      "git_blob_sha256": "6c1202117d288924f9512a5730d982757c22e0f14f0ce9aeb267fb908cd58b84"
+    },
+    {
+      "path": "docs/engineering/sbx002/D1_D5_CTO_PRECODE_REVIEW_V1.md",
+      "checkout_sha256": "d878ca56124203407a8f10f01cb14f37d443e505ec6e654b0129cc0011709cd7",
+      "git_blob_sha256": "65dc8c3e0ba2fc1c9226f6f8fb3d64689f5230f11c6abbc909beb32b44dfa0f0"
+    },
+    {
+      "path": "docs/engineering/sbx002/D1_D5_DEVOPS_VALIDATION_V1.md",
+      "checkout_sha256": "38fb0b19e1261e7db2cc984f9651a6046bd2382e5fd7b36275428d6a0e967803",
+      "git_blob_sha256": "a3875800fb43af6579dd5e320f8a7aeb92af7383ef2eb76f27cbaaf2b6e1d147"
+    },
+    {
+      "path": "docs/engineering/sbx002/D1_D5_EM_ASSIGNMENT_V1.md",
+      "checkout_sha256": "4e5d6383b8b0071c68eec09165ee7942b37e7b0ea02667e904fc5cdb7f122691",
+      "git_blob_sha256": "4e5d6383b8b0071c68eec09165ee7942b37e7b0ea02667e904fc5cdb7f122691"
+    },
+    {
+      "path": "docs/engineering/sbx002/D1_D5_QA_REPORT_V1.md",
+      "checkout_sha256": "13fab6b7547bad97a8a1cfae3843272c9cc2e1b719290993e6651456fc9ae824",
+      "git_blob_sha256": "13fab6b7547bad97a8a1cfae3843272c9cc2e1b719290993e6651456fc9ae824"
+    },
+    {
+      "path": "docs/engineering/sbx002/D1_D5_SECURITY_IMPLEMENTATION_REVIEW_V1.md",
+      "checkout_sha256": "46f8af3f756b0bdb939e356af520f61b5ec58549f988b0c3f4176302ecbdae32",
+      "git_blob_sha256": "dcb4e432db102ecbe1dec632c3926a40efe5531db9fe7c6707843c4ff81b5522"
+    },
+    {
+      "path": "docs/engineering/sbx002/D1_D5_SECURITY_PRECODE_REVIEW_V1.md",
+      "checkout_sha256": "dad62426ca997a90cd48ca2a31cc4bdb35278d88db81429208cdd3388737a029",
+      "git_blob_sha256": "dad62426ca997a90cd48ca2a31cc4bdb35278d88db81429208cdd3388737a029"
+    },
+    {
+      "path": "docs/engineering/sbx002/S1_CEO_FINAL_VERIFICATION_V1.md",
+      "checkout_sha256": "53d30ab3313557c256a563f125c3e5a760d641d892c50e13fd66f70b041eefc1",
+      "git_blob_sha256": "53d30ab3313557c256a563f125c3e5a760d641d892c50e13fd66f70b041eefc1"
+    },
+    {
+      "path": "docs/engineering/sbx002/S1_CLOSEOUT_V1.md",
+      "checkout_sha256": "d8a9cbb8d630f67be7d7134684b5839e8a9814c3e9d0524cbd4e46d8667a401a",
+      "git_blob_sha256": "d8a9cbb8d630f67be7d7134684b5839e8a9814c3e9d0524cbd4e46d8667a401a"
+    },
+    {
+      "path": "src/company_os/sandbox/test_ledger.py",
+      "checkout_sha256": "4d6db55f18f73396ebd9eda7803058eda27bd65b6e41dddc862621fd674de8e2",
+      "git_blob_sha256": "4d6db55f18f73396ebd9eda7803058eda27bd65b6e41dddc862621fd674de8e2"
+    },
+    {
+      "path": "src/company_os/sandbox/test_ledger_types.py",
+      "checkout_sha256": "1e71d6a2c789e6e8cfb563d3e79d0d726ca4d2a31db3dc06451de6c8bf4c0361",
+      "git_blob_sha256": "1e71d6a2c789e6e8cfb563d3e79d0d726ca4d2a31db3dc06451de6c8bf4c0361"
+    },
+    {
+      "path": "tasks/SBX002_D1_D5_TEST_CONTROL_LEDGER_V1.md",
+      "checkout_sha256": "c8777ae838224ddc5494a223344b2254e26c8ae1554ea9dffcbe533dafc526a7",
+      "git_blob_sha256": "c8777ae838224ddc5494a223344b2254e26c8ae1554ea9dffcbe533dafc526a7"
+    },
+    {
+      "path": "tasks/SBX002_S1_PURE_CORE_IMPLEMENTATION_V1.md",
+      "checkout_sha256": "202ce3deb40b0d62c0db81390e2561f8145898ebde8d3daf0db70055195e523e",
+      "git_blob_sha256": "f5d8a643e1a488f8d387a8357d427871e13c0949573c6a5c34ca7f66313da6cc"
+    },
+    {
+      "path": "tests/test_sandbox_test_ledger.py",
+      "checkout_sha256": "d5159faa3ad9676c5512fcc08885fce2ede6283a93716884ead1a34eaed85bcf",
+      "git_blob_sha256": "d5159faa3ad9676c5512fcc08885fce2ede6283a93716884ead1a34eaed85bcf"
+    },
+    {
+      "path": "tests/test_sandbox_test_ledger_process.py",
+      "checkout_sha256": "54289e095191bc8b8410b80423127791965e78b96a6680b321dc4e2d011a3bdb",
+      "git_blob_sha256": "dcb24ac886d888da21d454e2aaededf7819b85743e9bfd56df7e9876f35c1128"
+    },
+    {
+      "path": "tests/test_sandbox_test_ledger_qa.py",
+      "checkout_sha256": "05b9af7b992088c2ad68df1e88d366d8ec62733d4e78c4ccb7edfe15c156467d",
+      "git_blob_sha256": "05b9af7b992088c2ad68df1e88d366d8ec62733d4e78c4ccb7edfe15c156467d"
+    },
+    {
+      "path": "tests/test_sandbox_test_ledger_security.py",
+      "checkout_sha256": "84e5a144e1bee7bb8ae53f4532a44164b6931b3a8ce58796d8ac03b1e416d564",
+      "git_blob_sha256": "84e5a144e1bee7bb8ae53f4532a44164b6931b3a8ce58796d8ac03b1e416d564"
+    }
+  ]
+}
