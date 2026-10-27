@@ -1272,6 +1272,12 @@ def recover(ledger, *, execution_id, now_ns, uncertain_operation_id):
         operation = None
         if uncertain_operation_id is not None:
             stored = operations.get(uncertain_operation_id)
+            if stored is not None and execution_id is not None:
+                require(
+                    stored[0]["execution_id"] == execution_id
+                    and stored[2].snapshot.execution_id == execution_id,
+                    "OPERATION_CONFLICT",
+                )
             operation = (
                 LookupResult("ABSENT", None)
                 if stored is None

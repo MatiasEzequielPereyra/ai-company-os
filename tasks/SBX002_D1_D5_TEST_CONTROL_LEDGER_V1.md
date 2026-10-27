@@ -1,8 +1,8 @@
 # SBX-002 D1/D5 test control ledger V1
 
 Project: AI_COMPANY_OS
-Revision: 5
-Updated: 2026-10-26T02:44:00Z
+Revision: 6
+Updated: 2026-10-26T22:14:37Z
 Updated by: Engineering Orchestrator A continuing EM coordination
 Task ID: SBX002_D1_D5_TEST_CONTROL_LEDGER_V1
 Owner: backend
@@ -13,6 +13,28 @@ Functional implementation gate: APPROVED_TEST_ONLY
 Base SHA: dc313a01b487018ad27fdfd0591f6bb6dad37e38
 Worktree: Z:/repos/ai-company-os/worktrees/sbx002-d1-d5-test-ledger-v1
 Final target: D1_D5_IMPLEMENTED_READY_FOR_EXTERNAL_B_AUDIT
+
+## Recovery identity corrective authorization successor
+
+Task: SBX002_D1_D5_P1_RECOVERY_IDENTITY_REVIEW_V1.
+Human Project Owner explicitly requested reproduction of recover(A, B1) on two
+executions, then a minimal correction if confirmed, independent CTO/Security/QA
+review, Python 3.11/3.12 regressions and publication to the same draft PR83.
+Audited predecessor: a5843d11670056516c2077b18652f7f91a49ef43. External B decision:
+CHANGES_REQUIRED_PENDING_REPRODUCTION. Existing approvals remain historical;
+they do not approve the new corrective delta. No merge, V1/S1 changes, services,
+providers, VMs, operational writable, Run A or other increment is authorized.
+
+2026-10-26T22:14:37Z: Engineering Orchestrator A continuing EM coordination
+records REVIEW -> READY -> ACTIVE for the assigned backend corrective subtask.
+The root ticket remains REVIEW pending corrected submission and external B.
+Backend /root/recovery_backend owns the isolated reproducer and minimal patch;
+/root/recovery_cto and /root/recovery_security independently selected existing
+OPERATION_CONFLICT for a foreign existing operation, preserving global None,
+actual ABSENT and full bounded validation. QA /root/recovery_qa independently
+verifies the corrected boundary. Functional source remains unchanged until
+the original observable failure is captured. Shared indexes remain outside
+task-local ownership. Successor evidence and result are appended at submission.
 
 ## Authorization receipt
 
@@ -168,3 +190,20 @@ the corrected installed tarball E2E passed. See the immutable successor
 [correction handoff](../docs/engineering/handoffs/ai-company-os/sbx002-d1-d5-continuity-correction-v1.md).
 PR83 stays draft; corrected published-HEAD official CI and B contraaudit remain
 required. No operational authority, merge permission or other increment follows.
+
+## Recovery identity corrected submission
+
+2026-10-26T22:18:30Z: corrective subtask ACTIVE -> REVIEW, Engineering
+Orchestrator A continuing EM coordination. Parent ticket remains REVIEW.
+Original recover(A,B1) mixed A's snapshot with B's FOUND operation; the exact
+unchanged regression gave 2 FAIL / 9 PASS before and 11 PASS after on both
+target runtimes. CTO and Security approve existing OPERATION_CONFLICT before
+constructing a report, retaining explicit global recovery and genuine absence.
+Six source lines only; no public API/schema/V1/S1 changes. Independent QA18 per
+runtime and scoped Security probes approve TEST_ONLY correction. Complete
+ledger/SBX-001/S1: 1175 PASS per runtime; full Python: 1462 PASS / 1 existing
+OS symlink skip per runtime. npm3 and installed package E2E PASS. See immutable
+[recovery identity successor](../docs/engineering/handoffs/ai-company-os/sbx002-d1-d5-recovery-identity-correction-v1.md).
+Exact corrected published-HEAD CI and External B reaudit remain required;
+the prior implementation approvals are historical. No DONE/merge or operational
+acceptance is claimed. All original retained restrictions remain binding.

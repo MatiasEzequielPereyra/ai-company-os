@@ -1,0 +1,97 @@
+{
+  "project": "AI_COMPANY_OS",
+  "task_id": "SBX002_D1_D5_P1_RECOVERY_IDENTITY_REVIEW_V1",
+  "revision": 1,
+  "recorded_utc": "2026-10-26T22:18:54.537888+00:00",
+  "base_sha": "dc313a01b487018ad27fdfd0591f6bb6dad37e38",
+  "audited_predecessor": "a5843d11670056516c2077b18652f7f91a49ef43",
+  "hash_domains": "SHA256 exact checkout vs Git-normalized blob; line endings may differ",
+  "excluded_self_and_delivery_envelope": true,
+  "sources": [
+    {
+      "path": "src/company_os/sandbox/test_ledger.py",
+      "checkout_sha256": "69f01974f67ac454e0a1b37c40d4611e2bf285aa3955b08777fb5838d8bdd44e",
+      "git_blob_sha256": "69f01974f67ac454e0a1b37c40d4611e2bf285aa3955b08777fb5838d8bdd44e"
+    },
+    {
+      "path": "src/company_os/sandbox/test_ledger_types.py",
+      "checkout_sha256": "1e71d6a2c789e6e8cfb563d3e79d0d726ca4d2a31db3dc06451de6c8bf4c0361",
+      "git_blob_sha256": "1e71d6a2c789e6e8cfb563d3e79d0d726ca4d2a31db3dc06451de6c8bf4c0361"
+    },
+    {
+      "path": "tests/test_sandbox_test_ledger_recovery_identity.py",
+      "checkout_sha256": "7351a46c9d6b534c7606dbfc3ae1f8ceddbbe4bcf8721dc86b6ba51b56b71ab3",
+      "git_blob_sha256": "7351a46c9d6b534c7606dbfc3ae1f8ceddbbe4bcf8721dc86b6ba51b56b71ab3"
+    },
+    {
+      "path": "tests/test_sandbox_test_ledger_recovery_identity_qa.py",
+      "checkout_sha256": "8775f90dc07caa37f7272cd494698e972bc4de3e73eb8bb892988ff043102b64",
+      "git_blob_sha256": "8775f90dc07caa37f7272cd494698e972bc4de3e73eb8bb892988ff043102b64"
+    },
+    {
+      "path": "tasks/SBX002_D1_D5_TEST_CONTROL_LEDGER_V1.md",
+      "checkout_sha256": "69db062de445919828f5e8c1f68155e4be68d0c47011b0ee1a4d612a395e4dd1",
+      "git_blob_sha256": "69db062de445919828f5e8c1f68155e4be68d0c47011b0ee1a4d612a395e4dd1"
+    },
+    {
+      "path": "docs/engineering/sbx002/D1_D5_API_CONTRACT_V1.md",
+      "checkout_sha256": "7af03df901c3b0698188a51ac9e8ab30ef4ae70fbd2dc5cec9c2fba7b4871b30",
+      "git_blob_sha256": "7af03df901c3b0698188a51ac9e8ab30ef4ae70fbd2dc5cec9c2fba7b4871b30"
+    },
+    {
+      "path": "docs/engineering/sbx002/D1_D5_RECOVERY_IDENTITY_CTO_V1.md",
+      "checkout_sha256": "a04d2d61f5dd652367ad7dcf018f9249b3ea4a9aa31e59fa71ade9a9e3faa189",
+      "git_blob_sha256": "a04d2d61f5dd652367ad7dcf018f9249b3ea4a9aa31e59fa71ade9a9e3faa189"
+    },
+    {
+      "path": "docs/engineering/sbx002/D1_D5_RECOVERY_IDENTITY_QA_V1.md",
+      "checkout_sha256": "93d0470ce35fe648e3fd5a52c7e807a584e56bf595963347f580f9912d0d2703",
+      "git_blob_sha256": "93d0470ce35fe648e3fd5a52c7e807a584e56bf595963347f580f9912d0d2703"
+    },
+    {
+      "path": "docs/engineering/sbx002/D1_D5_RECOVERY_IDENTITY_SECURITY_V1.md",
+      "checkout_sha256": "88e1fd89a2ab365f5ea53789ff1c59cc732d239b30dfffc674c3de32c15dd077",
+      "git_blob_sha256": "88e1fd89a2ab365f5ea53789ff1c59cc732d239b30dfffc674c3de32c15dd077"
+    },
+    {
+      "path": "docs/engineering/sbx002/recovery-identity-evidence/after-python-3.11.txt",
+      "checkout_sha256": "15ebcb1fa9918975f0c8f89d590cd6c312b623711668761e22ef8a16484b11a6",
+      "git_blob_sha256": "cc3fc3ecb461e0ed9edc080e6effc939f76a91b638bd4b23ec9cb2fa7290bf56"
+    },
+    {
+      "path": "docs/engineering/sbx002/recovery-identity-evidence/after-python-3.12.txt",
+      "checkout_sha256": "dcdc53679e0f7709c5757e4a9178ad03a4fb9d4818ef40d8a22b7b633160a0bd",
+      "git_blob_sha256": "2ae6646f185352d3f36c4340ad971fdf6324f9b675f65fdafd51a759ba6e7d0f"
+    },
+    {
+      "path": "docs/engineering/sbx002/recovery-identity-evidence/before-python-3.11.txt",
+      "checkout_sha256": "6f2977967e3430a37824e5843549411d284496d8f6de752a72fb9220d63669be",
+      "git_blob_sha256": "f848dbd1715d7ec731d37f1e071a1a383c8bef50e8b6eba18c7e295ce0dd2163"
+    },
+    {
+      "path": "docs/engineering/sbx002/recovery-identity-evidence/before-python-3.12.txt",
+      "checkout_sha256": "39d7f2fc1462ef8b88add6b50558cf48aea5e19e1219507665bcb76a7f5f4300",
+      "git_blob_sha256": "9e66e9d263ab57ec67ec3b1214b301e5c3d9a78435ff9bb37a21a6adcc7d2bf1"
+    },
+    {
+      "path": "docs/engineering/sbx002/recovery-identity-evidence/full-python-3.11.txt",
+      "checkout_sha256": "56bbae5254f5b2baf8492c469d381b6582c455f623f24d8c10ca211f5f436f87",
+      "git_blob_sha256": "c022b237a604bff3aada2238b84561ee169ef91f47e9a8328fa2a95a20426356"
+    },
+    {
+      "path": "docs/engineering/sbx002/recovery-identity-evidence/full-python-3.12.txt",
+      "checkout_sha256": "6d9b968b43abf5fb5fc30f99e5b78e17d4ae67414c7cbe148f371b982c4c4947",
+      "git_blob_sha256": "8344cadc97ef22a047a3473abc8141bc3d417fad16e0fbf11261609381d0aec4"
+    },
+    {
+      "path": "docs/engineering/sbx002/recovery-identity-evidence/sbx-python-3.11.txt",
+      "checkout_sha256": "b6e0feb1e8b302436b2c00b3b8bc6290cc4c6a993dc011cf2e9ae2feadaff823",
+      "git_blob_sha256": "3f0bdd35ae392c6f0635a5bffa22d889b4e5a85b623d7971d27f87db02a9505e"
+    },
+    {
+      "path": "docs/engineering/sbx002/recovery-identity-evidence/sbx-python-3.12.txt",
+      "checkout_sha256": "882cda8772e1b5495fa70bb31b3b89f356ff62e741c0e201c0098bb20661819f",
+      "git_blob_sha256": "86de55c7d47ecf239f2fa1d77f0ae9fbdd59246ed18339890f2d21f6da3e4ce0"
+    }
+  ]
+}
