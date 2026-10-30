@@ -1,0 +1,113 @@
+{
+  "project": "AI_COMPANY_OS",
+  "task_id": "SBX002_D1_D5_TEST_CONTROL_LEDGER_V1",
+  "revision": 1,
+  "recorded_utc": "2026-10-26T02:44:39.009945+00:00",
+  "base_sha": "dc313a01b487018ad27fdfd0591f6bb6dad37e38",
+  "predecessor_head": "902d0c7767a2ef96183e83013c77df08fb0c4f3e",
+  "prior_manifest": "D1_D5_SOURCE_MANIFEST_V1.json (historical first draft, preserved)",
+  "hash_domains": "SHA256 exact checkout and Git-normalized blobs; line-ending domains may differ",
+  "excluded_self_and_delivery_envelope": true,
+  "sources": [
+    {
+      "path": "docs/engineering/handoffs/ai-company-os/sbx002-d1-d5-test-control-ledger-v1.md",
+      "checkout_sha256": "5bc9c852a5576a00df1094e29eb8600f41db40a22de7513c25ce322d5ff417cb",
+      "git_blob_sha256": "5bc9c852a5576a00df1094e29eb8600f41db40a22de7513c25ce322d5ff417cb"
+    },
+    {
+      "path": "docs/engineering/sbx002/D1_D5_API_CONTRACT_V1.md",
+      "checkout_sha256": "7af03df901c3b0698188a51ac9e8ab30ef4ae70fbd2dc5cec9c2fba7b4871b30",
+      "git_blob_sha256": "7af03df901c3b0698188a51ac9e8ab30ef4ae70fbd2dc5cec9c2fba7b4871b30"
+    },
+    {
+      "path": "docs/engineering/sbx002/D1_D5_CTO_IMPLEMENTATION_REVIEW_V1.md",
+      "checkout_sha256": "703e3f300388928bdb6085bffcffb9e5f549297f9b76af90e7e9448e9240ffa8",
+      "git_blob_sha256": "703e3f300388928bdb6085bffcffb9e5f549297f9b76af90e7e9448e9240ffa8"
+    },
+    {
+      "path": "docs/engineering/sbx002/D1_D5_CTO_PRECODE_REVIEW_V1.md",
+      "checkout_sha256": "d878ca56124203407a8f10f01cb14f37d443e505ec6e654b0129cc0011709cd7",
+      "git_blob_sha256": "65dc8c3e0ba2fc1c9226f6f8fb3d64689f5230f11c6abbc909beb32b44dfa0f0"
+    },
+    {
+      "path": "docs/engineering/sbx002/D1_D5_DEVOPS_VALIDATION_V1.md",
+      "checkout_sha256": "38fb0b19e1261e7db2cc984f9651a6046bd2382e5fd7b36275428d6a0e967803",
+      "git_blob_sha256": "a3875800fb43af6579dd5e320f8a7aeb92af7383ef2eb76f27cbaaf2b6e1d147"
+    },
+    {
+      "path": "docs/engineering/sbx002/D1_D5_EM_ASSIGNMENT_V1.md",
+      "checkout_sha256": "4e5d6383b8b0071c68eec09165ee7942b37e7b0ea02667e904fc5cdb7f122691",
+      "git_blob_sha256": "4e5d6383b8b0071c68eec09165ee7942b37e7b0ea02667e904fc5cdb7f122691"
+    },
+    {
+      "path": "docs/engineering/sbx002/D1_D5_QA_REPORT_V1.md",
+      "checkout_sha256": "8c6e14623dd83de4494692c28f30861b9e58085a9ba9cf788cf101bf952c5b44",
+      "git_blob_sha256": "8c6e14623dd83de4494692c28f30861b9e58085a9ba9cf788cf101bf952c5b44"
+    },
+    {
+      "path": "docs/engineering/sbx002/D1_D5_SECURITY_IMPLEMENTATION_REVIEW_V1.md",
+      "checkout_sha256": "2fa8f216928c15be6d6fb1f01787cd34b77b7a186a78b1f85e848b4360d042b1",
+      "git_blob_sha256": "a2b98ebadb47af548202aab2c88913e88f877820223c63832242c8b8ae7a9e70"
+    },
+    {
+      "path": "docs/engineering/sbx002/D1_D5_SECURITY_PRECODE_REVIEW_V1.md",
+      "checkout_sha256": "dad62426ca997a90cd48ca2a31cc4bdb35278d88db81429208cdd3388737a029",
+      "git_blob_sha256": "dad62426ca997a90cd48ca2a31cc4bdb35278d88db81429208cdd3388737a029"
+    },
+    {
+      "path": "docs/engineering/sbx002/D1_D5_SOURCE_MANIFEST_V1.json",
+      "checkout_sha256": "d01d3afd3fb88d4a0f79099ad1035de613b8d1a8f6a09d6d282819470dbd5789",
+      "git_blob_sha256": "8cc6157897f44af73258a82898d2b319e8a1e5c9433f214f84956f89ec2a7841"
+    },
+    {
+      "path": "docs/engineering/sbx002/S1_CEO_FINAL_VERIFICATION_V1.md",
+      "checkout_sha256": "53d30ab3313557c256a563f125c3e5a760d641d892c50e13fd66f70b041eefc1",
+      "git_blob_sha256": "53d30ab3313557c256a563f125c3e5a760d641d892c50e13fd66f70b041eefc1"
+    },
+    {
+      "path": "docs/engineering/sbx002/S1_CLOSEOUT_V1.md",
+      "checkout_sha256": "d8a9cbb8d630f67be7d7134684b5839e8a9814c3e9d0524cbd4e46d8667a401a",
+      "git_blob_sha256": "d8a9cbb8d630f67be7d7134684b5839e8a9814c3e9d0524cbd4e46d8667a401a"
+    },
+    {
+      "path": "src/company_os/sandbox/test_ledger.py",
+      "checkout_sha256": "ae7c9de161ed2f56cf0986a3717c95af07f9e7d95a94bfaa04ed75f2af229ed7",
+      "git_blob_sha256": "ae7c9de161ed2f56cf0986a3717c95af07f9e7d95a94bfaa04ed75f2af229ed7"
+    },
+    {
+      "path": "src/company_os/sandbox/test_ledger_types.py",
+      "checkout_sha256": "1e71d6a2c789e6e8cfb563d3e79d0d726ca4d2a31db3dc06451de6c8bf4c0361",
+      "git_blob_sha256": "1e71d6a2c789e6e8cfb563d3e79d0d726ca4d2a31db3dc06451de6c8bf4c0361"
+    },
+    {
+      "path": "tasks/SBX002_D1_D5_TEST_CONTROL_LEDGER_V1.md",
+      "checkout_sha256": "5f323ec1a2cfa583a29193401114c863bef644086cfc0360ed9d3069e2d9c3f0",
+      "git_blob_sha256": "5f323ec1a2cfa583a29193401114c863bef644086cfc0360ed9d3069e2d9c3f0"
+    },
+    {
+      "path": "tasks/SBX002_S1_PURE_CORE_IMPLEMENTATION_V1.md",
+      "checkout_sha256": "202ce3deb40b0d62c0db81390e2561f8145898ebde8d3daf0db70055195e523e",
+      "git_blob_sha256": "f5d8a643e1a488f8d387a8357d427871e13c0949573c6a5c34ca7f66313da6cc"
+    },
+    {
+      "path": "tests/test_sandbox_test_ledger.py",
+      "checkout_sha256": "d5159faa3ad9676c5512fcc08885fce2ede6283a93716884ead1a34eaed85bcf",
+      "git_blob_sha256": "d5159faa3ad9676c5512fcc08885fce2ede6283a93716884ead1a34eaed85bcf"
+    },
+    {
+      "path": "tests/test_sandbox_test_ledger_process.py",
+      "checkout_sha256": "54289e095191bc8b8410b80423127791965e78b96a6680b321dc4e2d011a3bdb",
+      "git_blob_sha256": "dcb24ac886d888da21d454e2aaededf7819b85743e9bfd56df7e9876f35c1128"
+    },
+    {
+      "path": "tests/test_sandbox_test_ledger_qa.py",
+      "checkout_sha256": "05b9af7b992088c2ad68df1e88d366d8ec62733d4e78c4ccb7edfe15c156467d",
+      "git_blob_sha256": "05b9af7b992088c2ad68df1e88d366d8ec62733d4e78c4ccb7edfe15c156467d"
+    },
+    {
+      "path": "tests/test_sandbox_test_ledger_security.py",
+      "checkout_sha256": "4086af2964c43078f6eb4ad6fad54f0dedcfe1fee5b89b0782eb94942ea6da4b",
+      "git_blob_sha256": "4086af2964c43078f6eb4ad6fad54f0dedcfe1fee5b89b0782eb94942ea6da4b"
+    }
+  ]
+}

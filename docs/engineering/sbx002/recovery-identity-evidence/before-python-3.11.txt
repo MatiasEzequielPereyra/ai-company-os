@@ -1,0 +1,84 @@
+CROSS_EXECUTION_REPORT status=VERIFIED snapshot=00000000-0000-0000-0000-000000000001 operation_status=FOUND operation_snapshot=00000000-0000-0000-0000-000000000002
+FCROSS_EXECUTION_REPORT status=VERIFIED snapshot=00000000-0000-0000-0000-000000000002 operation_status=FOUND operation_snapshot=00000000-0000-0000-0000-000000000001
+F.........
+================================== FAILURES ===================================
+_ test_cross_execution_uncertain_operation_rejected[00000000-0000-0000-0000-000000000001-00000000-0000-0000-0000-00000000000c-00000000-0000-0000-0000-000000000002] _
+
+two_executions = (<company_os.sandbox.test_ledger.TestLedger object at 0x0000025AEADE03D0>, <company_os.sandbox.test_ledger_types.FakeS...-0000-0000-000000000020', invalidated=False, last_observation=None, lease_expires_ns=0, last_now_ns=0, generation=0))})
+execution = '00000000-0000-0000-0000-000000000001'
+operation = '00000000-0000-0000-0000-00000000000c'
+other = '00000000-0000-0000-0000-000000000002'
+
+    @pytest.mark.parametrize("execution,operation,other", [(A, B1, B), (B, A1, A)])
+    def test_cross_execution_uncertain_operation_rejected(two_executions, execution, operation, other):
+        handle, sink, results = two_executions
+        assert handle.state == "RECOVERY_REQUIRED"
+        try:
+            report = recover(
+                handle, execution_id=execution, now_ns=0, uncertain_operation_id=operation
+            )
+        except LedgerError as error:
+            assert error.code == "OPERATION_CONFLICT"
+            assert str(error) == "OPERATION_CONFLICT"
+            assert error.scope == "TEST_ONLY"
+            assert error.operational is False
+            assert error.authority_authenticated is False
+            assert error.execution_capability == "NONE"
+        else:
+            print(
+                "CROSS_EXECUTION_REPORT",
+                "status=" + report.status,
+                "snapshot=" + report.snapshot.execution_id,
+                "operation_status=" + report.operation.status,
+                "operation_snapshot=" + report.operation.result.snapshot.execution_id,
+                flush=True,
+            )
+            assert report.snapshot == results[execution].snapshot
+            assert report.operation.status == "FOUND"
+            assert report.operation.result == results[other]
+>           pytest.fail("Expected OPERATION_CONFLICT; received mixed-execution VERIFIED report")
+E           Failed: Expected OPERATION_CONFLICT; received mixed-execution VERIFIED report
+
+tests\test_sandbox_test_ledger_recovery_identity.py:98: Failed
+_ test_cross_execution_uncertain_operation_rejected[00000000-0000-0000-0000-000000000002-00000000-0000-0000-0000-00000000000b-00000000-0000-0000-0000-000000000001] _
+
+two_executions = (<company_os.sandbox.test_ledger.TestLedger object at 0x0000025AE93A7BD0>, <company_os.sandbox.test_ledger_types.FakeS...-0000-0000-000000000020', invalidated=False, last_observation=None, lease_expires_ns=0, last_now_ns=0, generation=0))})
+execution = '00000000-0000-0000-0000-000000000002'
+operation = '00000000-0000-0000-0000-00000000000b'
+other = '00000000-0000-0000-0000-000000000001'
+
+    @pytest.mark.parametrize("execution,operation,other", [(A, B1, B), (B, A1, A)])
+    def test_cross_execution_uncertain_operation_rejected(two_executions, execution, operation, other):
+        handle, sink, results = two_executions
+        assert handle.state == "RECOVERY_REQUIRED"
+        try:
+            report = recover(
+                handle, execution_id=execution, now_ns=0, uncertain_operation_id=operation
+            )
+        except LedgerError as error:
+            assert error.code == "OPERATION_CONFLICT"
+            assert str(error) == "OPERATION_CONFLICT"
+            assert error.scope == "TEST_ONLY"
+            assert error.operational is False
+            assert error.authority_authenticated is False
+            assert error.execution_capability == "NONE"
+        else:
+            print(
+                "CROSS_EXECUTION_REPORT",
+                "status=" + report.status,
+                "snapshot=" + report.snapshot.execution_id,
+                "operation_status=" + report.operation.status,
+                "operation_snapshot=" + report.operation.result.snapshot.execution_id,
+                flush=True,
+            )
+            assert report.snapshot == results[execution].snapshot
+            assert report.operation.status == "FOUND"
+            assert report.operation.result == results[other]
+>           pytest.fail("Expected OPERATION_CONFLICT; received mixed-execution VERIFIED report")
+E           Failed: Expected OPERATION_CONFLICT; received mixed-execution VERIFIED report
+
+tests\test_sandbox_test_ledger_recovery_identity.py:98: Failed
+=========================== short test summary info ===========================
+FAILED tests/test_sandbox_test_ledger_recovery_identity.py::test_cross_execution_uncertain_operation_rejected[00000000-0000-0000-0000-000000000001-00000000-0000-0000-0000-00000000000c-00000000-0000-0000-0000-000000000002]
+FAILED tests/test_sandbox_test_ledger_recovery_identity.py::test_cross_execution_uncertain_operation_rejected[00000000-0000-0000-0000-000000000002-00000000-0000-0000-0000-00000000000b-00000000-0000-0000-0000-000000000001]
+2 failed, 9 passed in 0.29s
